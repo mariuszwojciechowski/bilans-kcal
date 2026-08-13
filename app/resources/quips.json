@@ -4,53 +4,68 @@
     "Zjadłeś dziś tyle, co wróbel na diecie pudełkowej. Krasnal się pyta: kto będzie taszczył te grzyby, jak zdechniesz z głodu?",
     "Kurde, mój kapelusz waży więcej niż Twój dzisiejszy jadłospis. Zjedz coś, bo wiatr Cię zdmuchnie.",
     "Deficyt to ma być deficyt, a nie strajk głodowy. Nawet krasnale jedzą trzy posiłki, cholero jedna.",
-    "Organizm na oparach. Jeszcze chwila i zaczniesz przeżuwać własny pasek od zegarka."
+    "Organizm na oparach. Jeszcze chwila i zaczniesz przeżuwać własny pasek od zegarka.",
+    "Nawet Franz robił sobie przerwy na jedzenie. Ty rób też, bez heroizmu.",
+    "Głodówka to nie inwestycja, to bankructwo energetyczne. Zjedz coś, do diaska."
   ],
   "over": [
     "Bilans wygląda, jakbyś jadł za siebie, za sąsiada i za jego psa. Jutro ścieżka pod górkę, grubasku.",
     "Krasnal widział ten dokładkowy talerz. Nie udawaj, że to była 'tylko sałatka', do diaska.",
     "Nadwyżka kalorii to nie osiągnięcie, to zaliczka na nowy pasek. Większy.",
-    "Zegarek zlicza kroki, nie cuda. Dzisiejszą nadwyżkę trzeba będzie wybiegać, a nie wymodlić."
+    "Zegarek zlicza kroki, nie cuda. Dzisiejszą nadwyżkę trzeba będzie wybiegać, a nie wymodlić.",
+    "Chłopaki nie płaczą, chłopaki tłumaczą nadwyżkę 'wpadką na wesele'.",
+    "Kiedy wchodzisz między wrony, musisz krakać jak i one — ale bufet szwedzki to nie powód do dezercji."
   ],
   "ontrack": [
     "Jesz jak należy. Krasnal uchyla kapelusza — tak trzymaj, cholero jedna.",
     "Bilans jak z podręcznika. Aż podejrzane. Ale dobra, dziś Ci wierzę.",
     "Ani głodówka, ani żarcie na smutno — dokładnie tyle, ile trzeba. Krasnalski szacun.",
-    "Idealnie w celu. Jak tak dalej pójdzie, kupimy Ci mniejsze spodnie i większy medal."
+    "Idealnie w celu. Jak tak dalej pójdzie, kupimy Ci mniejsze spodnie i większy medal.",
+    "Nie ma mocnych na Twój dzisiejszy bilans. Rambo by przybił piątkę.",
+    "Kurs bilansu stabilny jak dobra sesja. Pieniądze to nie wszystko, ale dyscyplina popłaca."
   ],
   "protein_low": [
     "Białka dziś tyle, co w ogórku kiszonym. Mięśnie zaraz się spakują i pójdą w las.",
     "Bez białka nie ma rzeźby, jest rozpacz. Dorzuć jajko, twaróg, cokolwiek — błagam, do diaska.",
-    "Trenujesz czy nie, mięśnie jedzą białko, nie dobre chęci. Dziś dostały głodówkę."
+    "Trenujesz czy nie, mięśnie jedzą białko, nie dobre chęci. Dziś dostały głodówkę.",
+    "Kryminalista czy nie, gnój to gnój — a mięśnie bez białka to też gnój, bez wyjątków."
   ],
   "fiber_low": [
     "Błonnik poniżej normy — Twoje jelita właśnie piszą skargę do zarządu.",
     "Warzywa to nie dekoracja talerza, cholero. Zjedz coś, co kiedyś rosło w ziemi.",
-    "Krasnal mieszka w lesie i wie jedno: bez błonnika daleko w te krzaki nie zajdziesz."
+    "Krasnal mieszka w lesie i wie jedno: bez błonnika daleko w te krzaki nie zajdziesz.",
+    "Pieniądze to nie wszystko, błonnik też się liczy — a dziś go u Ciebie jak na giełdzie w kryzysie."
   ],
   "sugar_high": [
     "Cukru dziś tyle, że pszczoły składają Ci hołd. Wyluzuj ze słodkim, do diaska.",
     "Kolejna słodycz i Garmin zacznie Cię wykrywać jako pączka z lukrem.",
-    "Cukier wolny przekroczony. Wolny był, ale Ty go dogoniłeś i zjadłeś w całości."
+    "Cukier wolny przekroczony. Wolny był, ale Ty go dogoniłeś i zjadłeś w całości.",
+    "System się sypie, cukier też się sypie — do kawy, do herbaty, wszędzie. Zwolnij."
   ],
   "goal_reached": [
     "Cel osiągnięty, do diaska! Krasnal stawia grzybowe piwo. Tylko nie zaczynaj 'świętować jedzeniem', bo za miesiąc znów się spotkamy.",
     "Ciężar na celu. Oficjalnie przestajesz być projektem, a zaczynasz być wzorem. Nie schrzań tego.",
-    "Zrobione! Teraz najtrudniejsze: utrzymać. Krasnal widział wielu, co wracali. Ty nie wracaj."
+    "Zrobione! Teraz najtrudniejsze: utrzymać. Krasnal widział wielu, co wracali. Ty nie wracaj.",
+    "Cel zdobyty. Chłopaki nie płaczą, ale krasnal by uronił łezkę wzruszenia."
   ],
   "goal_close": [
     "Do celu zostało {diff} kg — mniej niż wiadro borówek. Nie odpuszczaj teraz, cholero.",
     "{diff} kg do celu. Krasnal już poleruje medal. Byle nie zapeklować go w smalcu na ostatniej prostej.",
-    "Finisz! {diff} kg i po sprawie. To nie moment na 'jeden pączuszek nie zaszkodzi'."
+    "Finisz! {diff} kg i po sprawie. To nie moment na 'jeden pączuszek nie zaszkodzi'.",
+    "Blisko celu jak Franz blisko emerytury — {diff} kg, ale jeszcze trochę roboty.",
+    "Bliska hossa na wadze — {diff} kg. Pieniądze to nie wszystko, ale ten wynik też się liczy."
   ],
   "goal_far": [
     "Do celu {diff} kg. Dużo? Krasnal nosi cięższe rzeczy przez okrągły rok. Krok po kroku, kurde.",
     "{diff} kg do zrzucenia. Słoń też je się kawałkami… znaczy, wiesz o co chodzi.",
-    "Dystans do celu: {diff} kg. Dobra wiadomość: grawitacja pomaga przy zrzucaniu. Zła: lodówka nie."
+    "Dystans do celu: {diff} kg. Dobra wiadomość: grawitacja pomaga przy zrzucaniu. Zła: lodówka nie.",
+    "{diff} kg. Droga daleka, ale prawdziwy mężczyzna nie mówi 'odpuszczam', tylko 'jeszcze runda'.",
+    "Fortunę się odbudowuje latami, ciężar też — {diff} kg. Cierpliwości, inwestorze."
   ],
   "empty": [
     "Pusty dziennik. Krasnal nie wierzy, że żyjesz powietrzem — wrzuć, co jadłeś, choćby to była zbrodnia.",
     "Zero posiłków w dzienniku? Albo pościsz, albo kręcisz. Krasnal patrzy z ukosa.",
-    "Nic nie zapisałeś. Kalorie niezapisane też się liczą — taka przykra prawda, kurde."
+    "Nic nie zapisałeś. Kalorie niezapisane też się liczą — taka przykra prawda, kurde.",
+    "Pusty dziennik? Chłopaki nie płaczą, ale i nie kręcą — wpisz, co żarłeś."
   ]
 }
