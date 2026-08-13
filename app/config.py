@@ -14,7 +14,11 @@ GARMIN_TOKENS_DIR = Path(
     os.path.expanduser(os.getenv("GARMINTOKENS", "~/.fit-krasnal/garth"))
 )
 
+# Backend LLM do szacowania posiłków: auto | claude | gemini
+# auto = gemini, jeśli jest GEMINI_API_KEY/GOOGLE_API_KEY; w przeciwnym razie claude.
+LLM_BACKEND = os.getenv("FIT_KRASNAL_LLM", "auto")
 VISION_MODEL = os.getenv("FIT_KRASNAL_VISION_MODEL", "claude-opus-5")
+GEMINI_MODEL = os.getenv("FIT_KRASNAL_GEMINI_MODEL", "gemini-2.5-flash")
 
 MAX_PHOTO_BYTES = 15 * 1024 * 1024
 

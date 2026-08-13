@@ -25,8 +25,13 @@ Wymagany [uv](https://docs.astral.sh/uv/) (albo własny Python ≥3.12).
 uv venv --python 3.12 && uv pip install -e . --group dev
 ```
 
-1. **Klucz Claude API** (szacowanie posiłków): `export ANTHROPIC_API_KEY=sk-ant-...`
-   (albo plik `.env` wg `.env.example` i załadowanie go do środowiska).
+1. **Klucz LLM** (szacowanie posiłków) — jeden z dwóch:
+   - **Gemini, darmowy tier** (zalecane do użytku prywatnego):
+     klucz z https://aistudio.google.com → `export GEMINI_API_KEY=...`
+   - Claude API (płatny): `export ANTHROPIC_API_KEY=sk-ant-...`
+
+   Wybór backendu: `FIT_KRASNAL_LLM=auto|claude|gemini` (auto preferuje Gemini,
+   jeśli ma klucz). Szczegóły w `.env.example`.
 2. **Logowanie do Garmina** (jednorazowo, interaktywnie — obsługuje MFA):
 
    ```bash

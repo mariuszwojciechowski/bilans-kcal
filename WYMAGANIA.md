@@ -114,8 +114,10 @@ sumujemy własnego BMR z totalem Garmina (total już zawiera kalorie spoczynkowe
 
 1. Użytkownik **wgrywa zdjęcie z dysku** (JPEG/PNG/HEIC/WebP, limit np. 15 MB;
    HEIC konwertowany po stronie serwera).
-2. **Model wizyjny LLM (Claude, vision)** samodzielnie — bez zewnętrznej bazy
-   żywieniowej — zwraca strukturalny JSON:
+2. **Model wizyjny LLM** samodzielnie — bez zewnętrznej bazy żywieniowej — zwraca
+   strukturalny JSON. Backend wymienny (`FIT_KRASNAL_LLM`): **Gemini** (Google AI
+   Studio, darmowy tier — domyślny dla prywatnego użycia) albo **Claude API**
+   (płatny; do porównań jakości). Schemat wyniku wspólny dla obu:
 
    ```json
    {

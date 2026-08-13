@@ -11,6 +11,7 @@ dependencies = [
     "python-multipart>=0.0.9",
     "garminconnect>=0.3.10",
     "anthropic>=0.60",
+    "google-genai>=1.0",
     "pillow>=10.0",
 ]
 
