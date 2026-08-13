@@ -158,6 +158,14 @@
     <h2>Profil (na tym telefonie)</h2>
     <label>Płeć</label>
     <select id="p-sex"><option value="M">Mężczyzna</option><option value="F">Kobieta</option></select>
+    <label>Styl życia (zakresy makro)</label>
+    <select id="p-lifestyle">
+      <option value="sedentary">mało aktywny</option>
+      <option value="active" selected>rekreacyjnie trenujący</option>
+      <option value="endurance">wytrzymałościowy (rower, bieganie)</option>
+      <option value="strength">siłowy / sylwetkowy</option>
+      <option value="pregnant">ciąża / karmienie</option>
+    </select>
     <label>Data urodzenia</label><input type="date" id="p-birth">
     <label>Wzrost [cm]</label><input type="number" id="p-height" step="0.5">
     <label>Aktualny ciężar [kg] (wpisuj po każdym ważeniu)</label>
@@ -261,13 +269,30 @@ function currentWeight(weights, p, day) {
   return past.length ? past[past.length - 1].weight_kg : (p ? p.weight : null);
 }
 
+/* Style życia — zakresy białka g/kg (ISSN/ACSM), u trenujących też węgle g/kg
+   i tłuszcze 20-35%E. Lustrzana kopia app/resources/who_norms.json. */
+const LIFESTYLES = {
+  sedentary: { label: "mało aktywny", protein: [0.8, 1.0] },
+  active: { label: "rekreacyjnie trenujący", protein: [1.2, 1.6], carbs_kg: [4, 6], fatE: [0.20, 0.35] },
+  endurance: { label: "wytrzymałościowy (rower, bieganie)", protein: [1.2, 1.8], carbs_kg: [5, 8], fatE: [0.20, 0.35] },
+  strength: { label: "siłowy / sylwetkowy", protein: [1.6, 2.0], carbs_kg: [4, 7], fatE: [0.20, 0.35] },
+  pregnant: { label: "ciąża / karmienie", protein: [1.2, 1.4] },
+};
+
 function whoTargets(p, on, eTarget) {
   const senior = ageYears(p.birth, on) >= 65;
+  const st = LIFESTYLES[p.lifestyle] || LIFESTYLES.active;
+  let [plo, phi] = st.protein;
+  if (senior) { plo = Math.max(plo, 1.0); phi = Math.max(phi, 1.2); }
+  const fatE = st.fatE || [0.15, 0.30];
   return {
-    group: (senior ? "seniorzy 65+" : "dorośli 18–64") + ", " + (p.sex === "M" ? "mężczyźni" : "kobiety"),
-    protein_min: (senior ? 1.0 : 0.83) * p.weight,
-    fat: [0.15 * eTarget / 9, 0.30 * eTarget / 9],
-    carbs: [0.55 * eTarget / 4, 0.75 * eTarget / 4],
+    group: (senior ? "seniorzy 65+" : "dorośli 18–64") + ", "
+      + (p.sex === "M" ? "mężczyźni" : "kobiety") + " · " + st.label,
+    protein: [plo * p.weight, phi * p.weight],
+    fat: [fatE[0] * eTarget / 9, fatE[1] * eTarget / 9],
+    carbs: st.carbs_kg
+      ? [st.carbs_kg[0] * p.weight, st.carbs_kg[1] * p.weight]
+      : [0.55 * eTarget / 4, 0.75 * eTarget / 4],
     sugars_max: 0.10 * eTarget / 4,
     fiber_min: 25,
   };
@@ -351,7 +376,7 @@ function renderMacros(p, day, eTarget, meals) {
   document.getElementById("m-group").textContent = t.group;
   const sum = k => meals.reduce((s, m) => s + (m[k] || 0), 0);
   const rows = [
-    ["Białko", sum("protein_g"), t.protein_min, null, "#1A4D3A", `≥ ${t.protein_min.toFixed(0)} g`],
+    ["Białko", sum("protein_g"), t.protein[0], t.protein[1], "#1A4D3A", `${t.protein[0].toFixed(0)}–${t.protein[1].toFixed(0)} g`],
     ["Węglowodany", sum("carbs_g"), t.carbs[0], t.carbs[1], "#8DC63F", `${t.carbs[0].toFixed(0)}–${t.carbs[1].toFixed(0)} g`],
     ["Tłuszcze", sum("fat_g"), t.fat[0], t.fat[1], "#3A7A5C", `${t.fat[0].toFixed(0)}–${t.fat[1].toFixed(0)} g`],
     ["Błonnik", sum("fiber_g"), t.fiber_min, null, "#6C757D", `≥ ${t.fiber_min} g`],
@@ -607,6 +632,7 @@ function loadSettings() {
   const p = profile();
   if (p) {
     document.getElementById("p-sex").value = p.sex;
+    document.getElementById("p-lifestyle").value = p.lifestyle || "active";
     document.getElementById("p-birth").value = p.birth;
     document.getElementById("p-height").value = p.height;
     document.getElementById("p-weight").value = p.weight;
@@ -620,6 +646,7 @@ function loadSettings() {
 function saveProfile() {
   localStorage.setItem("profile", JSON.stringify({
     sex: document.getElementById("p-sex").value,
+    lifestyle: document.getElementById("p-lifestyle").value,
     birth: document.getElementById("p-birth").value,
     height: +document.getElementById("p-height").value,
     weight: +document.getElementById("p-weight").value,
@@ -664,7 +691,7 @@ async function importData(file) {
     localStorage.setItem("profile", JSON.stringify({
       sex: pr.sex, birth: pr.birth_date, height: pr.height_cm,
       weight: pr.last_weight_kg || 0, deficit: pr.target_deficit_kcal || 500,
-      goal: pr.target_weight_kg || null,
+      goal: pr.target_weight_kg || null, lifestyle: pr.lifestyle || "active",
     }));
   }
   const haveW = new Set((await all("weights")).map(w => w.date));

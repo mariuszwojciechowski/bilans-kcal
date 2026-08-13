@@ -36,6 +36,11 @@ def _migrate(engine) -> None:
         if cols and "target_weight_kg" not in cols:
             conn.execute(text("ALTER TABLE user_profile ADD COLUMN target_weight_kg FLOAT"))
             conn.commit()
+        if cols and "lifestyle" not in cols:
+            conn.execute(text(
+                "ALTER TABLE user_profile ADD COLUMN lifestyle VARCHAR DEFAULT 'active' NOT NULL"
+            ))
+            conn.commit()
 
 
 def get_session() -> Session:

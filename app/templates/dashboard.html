@@ -147,7 +147,7 @@
       <div class="row" style="justify-content:space-between">
         <span>{{ label }} — {{ item.consumed_g }} g
           <span class="muted">
-            {% if key == "protein" %}(WHO ≥ {{ item.who_min_g }} g; redukcja {{ item.cut_range_g[0] }}–{{ item.cut_range_g[1] }} g)
+            {% if key == "protein" %}(twój zakres {{ item.range_g[0] }}–{{ item.range_g[1] }} g; WHO min {{ item.who_min_g }} g)
             {% elif key == "fiber" %}(≥ {{ item.min_g }} g)
             {% elif key == "sugars" %}(< {{ item.max_g }} g)
             {% else %}({{ item.range_g[0] }}–{{ item.range_g[1] }} g){% endif %}
@@ -156,7 +156,7 @@
         <span class="{{ 'pos' if item.status == 'ok' else ('mid' if item.status == 'below' else 'neg') }}">
           {{ {'ok':'w normie','below':'poniżej','above':'powyżej'}[item.status] }}</span>
       </div>
-      {% set ref = item.who_min_g if key == 'protein' else (item.min_g if key == 'fiber' else (item.max_g if key == 'sugars' else item.range_g[1])) %}
+      {% set ref = item.min_g if key == 'fiber' else (item.max_g if key == 'sugars' else item.range_g[1]) %}
       <div class="bar"><i style="width: {{ [100, (100 * item.consumed_g / ref) | round] | min if ref else 0 }}%; background: {{ color }}"></i></div>
     </div>
   {% endfor %}

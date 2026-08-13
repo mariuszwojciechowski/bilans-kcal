@@ -7,7 +7,9 @@
       "WHO (2015) Guideline: Sugars intake — cukry wolne <10% energii (silna), preferencyjnie <5% (warunkowa)",
       "WHO/FAO (2003) TRS 916: populacyjne cele — węglowodany 55-75% energii, tłuszcze 15-30% (dolne granice zakresów pasków)",
       "WHO/FAO/UNU (2007) TRS 935: białko — bezpieczne spożycie 0.83 g/kg m.c./d (dorośli, obie płcie)",
-      "PROT-AGE/ESPEN (uzupełnienie, nie WHO): białko ≥1.0 g/kg/d dla 65+"
+      "PROT-AGE/ESPEN (uzupełnienie, nie WHO): białko ≥1.0 g/kg/d dla 65+",
+      "Zakresy białka wg stylu życia (uzupełnienie, nie WHO — normy żywienia sportowego ISSN/ACSM oraz zalecenia dla ciąży/laktacji): mało aktywni 0.8-1.0, rekreacyjnie trenujący 1.2-1.6, wytrzymałościowi 1.2-1.8, siłowi/sylwetkowi 1.6-2.0, ciąża/karmienie 1.2-1.4 g/kg/d",
+      "Węglowodany dla trenujących wg ACSM/ISSN liczone w g/kg m.c. (nie %E): rekreacyjnie 4-6, wytrzymałościowo 5-8 (przy dużych objętościach do 10), siłowo 4-7 g/kg/d; tłuszcze u trenujących 20-35%E (ACSM). Mało aktywni i ciąża: zakresy WHO %E"
     ],
     "notes": [
       "Płeć nie różnicuje w WHO wartości makro per kg ani udziałów energii — wpływa na normy pośrednio przez energię docelową (BMR wg płci) i masę ciała.",
@@ -40,5 +42,34 @@
   "sex_overrides": {
     "M": {},
     "F": {}
-  }
+  },
+  "lifestyles": {
+    "sedentary": {
+      "label": "mało aktywny",
+      "protein_g_per_kg": [0.8, 1.0]
+    },
+    "active": {
+      "label": "rekreacyjnie trenujący",
+      "protein_g_per_kg": [1.2, 1.6],
+      "carbs_g_per_kg": [4, 6],
+      "fat_energy": [0.20, 0.35]
+    },
+    "endurance": {
+      "label": "sportowiec wytrzymałościowy (kolarstwo, bieganie)",
+      "protein_g_per_kg": [1.2, 1.8],
+      "carbs_g_per_kg": [5, 8],
+      "fat_energy": [0.20, 0.35]
+    },
+    "strength": {
+      "label": "sportowiec siłowy / sylwetkowy",
+      "protein_g_per_kg": [1.6, 2.0],
+      "carbs_g_per_kg": [4, 7],
+      "fat_energy": [0.20, 0.35]
+    },
+    "pregnant": {
+      "label": "ciąża / karmienie",
+      "protein_g_per_kg": [1.2, 1.4]
+    }
+  },
+  "senior_protein_floor": [1.0, 1.2]
 }

@@ -86,6 +86,21 @@
 </section>
 
 <section class="card">
+  <h2>Styl życia (zakresy makroskładników)</h2>
+  <form method="post" action="/settings/lifestyle">
+    <select name="lifestyle">
+      {% for id, label in lifestyle_options.items() %}
+      <option value="{{ id }}" {{ "selected" if id == lifestyle else "" }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <button class="primary" style="margin-top:10px">Zapisz styl życia</button>
+    <p class="muted">Wpływa na zakres białka (g/kg m.c.), a u trenujących także na
+    węglowodany (g/kg wg ACSM/ISSN) i tłuszcze (20–35% energii). Seniorzy 65+ mają
+    podbite minimum białka niezależnie od stylu.</p>
+  </form>
+</section>
+
+<section class="card">
   <h2>Cel ciężaru</h2>
   <form method="post" action="/settings/goal">
     <label>Docelowy ciężar [kg] <span class="muted">(rysowany na trendach, używany w tekstach motywacyjnych)</span></label>

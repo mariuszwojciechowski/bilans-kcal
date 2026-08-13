@@ -23,9 +23,13 @@ def _norms() -> dict:
     return json.loads(NORMS_PATH.read_text())
 
 
-def resolve_norms(sex: str, age: int) -> dict:
-    """Wartości norm dla konkretnego profilu: grupa wg wieku + nadpisania per płeć.
-    Wiek poniżej najniższej grupy (aplikacja jest dla dorosłych) -> grupa 'adult'."""
+DEFAULT_LIFESTYLE = "active"
+
+
+def resolve_norms(sex: str, age: int, lifestyle: str = DEFAULT_LIFESTYLE) -> dict:
+    """Wartości norm dla konkretnego profilu: grupa wg wieku + nadpisania per płeć
+    + zakres białka wg stylu życia (senior podbija dolną/górną granicę do floora
+    PROT-AGE). Wiek poniżej najniższej grupy -> grupa 'adult'."""
     data = _norms()
     groups = data["groups"]
     chosen = None
@@ -39,7 +43,25 @@ def resolve_norms(sex: str, age: int) -> dict:
     resolved = {k: v for k, v in chosen.items() if k not in ("id", "match", "note")}
     resolved.update(data.get("sex_overrides", {}).get(sex.upper(), {}))
     resolved["group_id"] = chosen["id"]
+
+    styles = data.get("lifestyles", {})
+    style = styles.get(lifestyle) or styles[DEFAULT_LIFESTYLE]
+    lo, hi = style["protein_g_per_kg"]
+    if chosen["id"] == "senior":
+        floor_lo, floor_hi = data.get("senior_protein_floor", [1.0, 1.2])
+        lo, hi = max(lo, floor_lo), max(hi, floor_hi)
+    resolved["protein_range_g_per_kg"] = [lo, hi]
+    # trenujący: węgle w g/kg (ACSM/ISSN), tłuszcze 20-35%E; inaczej zakresy WHO %E
+    resolved["carbs_g_per_kg"] = style.get("carbs_g_per_kg")
+    if style.get("fat_energy"):
+        resolved["fat_energy"] = style["fat_energy"]
+    resolved["lifestyle_label"] = style["label"]
+    resolved["lifestyle_id"] = lifestyle if lifestyle in styles else DEFAULT_LIFESTYLE
     return resolved
+
+
+def lifestyle_options() -> dict[str, str]:
+    return {k: v["label"] for k, v in _norms().get("lifestyles", {}).items()}
 
 
 @dataclass
@@ -58,37 +80,42 @@ class MacroRange:
 
 @dataclass
 class MacroTargets:
-    protein: MacroRange
-    protein_cut: MacroRange
+    protein_who_min_g: float          # bezpieczne minimum WHO (0.83 g/kg)
+    protein: MacroRange               # zakres wg stylu życia — do oceny statusu
     fat: MacroRange
     carbs: MacroRange
     sugars_max_g: float
     fiber_min_g: float
     group_id: str
+    lifestyle_label: str
 
 
-def who_targets(e_target_kcal: float, weight_kg: float, sex: str = "M", age: int = 40) -> MacroTargets:
-    n = resolve_norms(sex, age)
+def who_targets(e_target_kcal: float, weight_kg: float, sex: str = "M", age: int = 40,
+                lifestyle: str = DEFAULT_LIFESTYLE) -> MacroTargets:
+    n = resolve_norms(sex, age, lifestyle)
+    p_lo, p_hi = n["protein_range_g_per_kg"]
     return MacroTargets(
-        protein=MacroRange("protein", n["protein_g_per_kg_min"] * weight_kg, None),
-        protein_cut=MacroRange(
-            "protein_cut",
-            n["protein_cut_g_per_kg"][0] * weight_kg,
-            n["protein_cut_g_per_kg"][1] * weight_kg,
-        ),
+        protein_who_min_g=n["protein_g_per_kg_min"] * weight_kg,
+        protein=MacroRange("protein", p_lo * weight_kg, p_hi * weight_kg),
         fat=MacroRange(
             "fat",
             n["fat_energy"][0] * e_target_kcal / KCAL_PER_G_FAT,
             n["fat_energy"][1] * e_target_kcal / KCAL_PER_G_FAT,
         ),
-        carbs=MacroRange(
-            "carbs",
-            n["carbs_energy"][0] * e_target_kcal / KCAL_PER_G_CARBS,
-            n["carbs_energy"][1] * e_target_kcal / KCAL_PER_G_CARBS,
+        carbs=(
+            MacroRange("carbs", n["carbs_g_per_kg"][0] * weight_kg,
+                       n["carbs_g_per_kg"][1] * weight_kg)
+            if n.get("carbs_g_per_kg")
+            else MacroRange(
+                "carbs",
+                n["carbs_energy"][0] * e_target_kcal / KCAL_PER_G_CARBS,
+                n["carbs_energy"][1] * e_target_kcal / KCAL_PER_G_CARBS,
+            )
         ),
         sugars_max_g=n["free_sugars_energy_max"] * e_target_kcal / KCAL_PER_G_CARBS,
         fiber_min_g=n["fiber_g_min"],
         group_id=n["group_id"],
+        lifestyle_label=n["lifestyle_label"],
     )
 
 
@@ -96,10 +123,11 @@ def coverage(targets: MacroTargets, protein_g: float, fat_g: float, carbs_g: flo
              fiber_g: float, sugars_g: float) -> dict:
     return {
         "group": targets.group_id,
+        "lifestyle": targets.lifestyle_label,
         "protein": {
             "consumed_g": round(protein_g, 1),
-            "who_min_g": round(targets.protein.min_g, 1),
-            "cut_range_g": [round(targets.protein_cut.min_g, 1), round(targets.protein_cut.max_g, 1)],
+            "who_min_g": round(targets.protein_who_min_g, 1),
+            "range_g": [round(targets.protein.min_g, 1), round(targets.protein.max_g, 1)],
             "status": targets.protein.status(protein_g),
         },
         "fat": {

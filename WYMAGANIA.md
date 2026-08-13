@@ -201,6 +201,21 @@ nie różnią się płcią; płeć wpływa przez BMR i masę ciała, ale plik po
 np. błonnik wg IOM 38/25 g), białko z aktualnej wygładzonej wagi. Zmiana użytkownika
 = inne normy bez zmiany kodu.
 
+**Styl życia (pole profilu)** dobiera zakresy makro (rozszerzenie ponad WHO —
+normy żywienia sportowego ISSN/ACSM, zalecenia dla ciąży/laktacji):
+
+| Styl | Białko [g/kg/d] | Węglowodany | Tłuszcze |
+|---|---|---|---|
+| mało aktywny | 0.8–1.0 | WHO 55–75%E | WHO 15–30%E |
+| rekreacyjnie trenujący | 1.2–1.6 | 4–6 g/kg | 20–35%E |
+| wytrzymałościowy (kolarstwo, bieganie) | 1.2–1.8 | 5–8 g/kg | 20–35%E |
+| siłowy / sylwetkowy | 1.6–2.0 | 4–7 g/kg | 20–35%E |
+| ciąża / karmienie | 1.2–1.4 | WHO %E | WHO %E |
+
+Senior 65+ podbija białko do min. 1.0–1.2 g/kg niezależnie od stylu. Minimum WHO
+(0.83 g/kg) zawsze prezentowane obok jako punkt odniesienia. *Przyszłość:* pola
+FTP/VO2max w profilu (np. FTP do doboru MET jazd rowerowych w modelu wydatku).
+
 Punkt odniesienia energetyczny: `E_cel = zapotrzebowanie skalibrowane + cel deficytu`
 (normy % liczone od energii docelowej, nie od faktycznego spożycia).
 

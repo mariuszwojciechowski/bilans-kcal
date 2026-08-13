@@ -21,7 +21,7 @@ from .services import settings as settings_service
 from .services.balance import day_balance, deficit_warning, projected_weekly_change_kg
 from .services.charts import Series, bar_chart, line_chart
 from .services.energy import age_years, smoothed_weight, tdee_theoretical
-from .services.macros import coverage, who_targets
+from .services.macros import coverage, lifestyle_options, who_targets
 from .services.sync import mark_attempt, maybe_sync, sync_range
 
 app = FastAPI(title="Fit Krasnal")
@@ -89,6 +89,7 @@ class ProfileIn(BaseModel):
     height_cm: float
     target_deficit_kcal: int = 500
     target_weight_kg: float | None = None  # cel ciężaru
+    lifestyle: str = "active"
     tz: str = "Europe/Warsaw"
 
 
@@ -117,6 +118,8 @@ def put_profile(data: ProfileIn, db: Session = Depends(db_session)):
     profile.target_deficit_kcal = data.target_deficit_kcal
     if data.target_weight_kg is not None:
         profile.target_weight_kg = data.target_weight_kg
+    if data.lifestyle in lifestyle_options():
+        profile.lifestyle = data.lifestyle
     profile.tz = data.tz
     db.commit()
     return {"ok": True}
@@ -188,7 +191,8 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
     )
     e_target = bal.kcal_out - profile.target_deficit_kcal
     targets = who_targets(e_target, weight, sex=profile.sex,
-                          age=age_years(profile.birth_date, day))
+                          age=age_years(profile.birth_date, day),
+                          lifestyle=profile.lifestyle or "active")
     macros = coverage(
         targets,
         protein_g=sum(m.protein_g for m in meals),
@@ -234,6 +238,7 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
                 targets.group_id, targets.group_id
             )
             + ", " + {"M": "mężczyźni", "F": "kobiety"}.get(profile.sex, profile.sex)
+            + " · " + targets.lifestyle_label
         ),
         "pending_meals": [
             {
@@ -456,6 +461,8 @@ def settings_page(request: Request, db: Session = Depends(db_session),
             "pending_count": pending_count or 0,
             "retention_days": meal_queue.RETENTION_DAYS,
             "target_weight_kg": profile.target_weight_kg if profile else None,
+            "lifestyle": (profile.lifestyle if profile else None) or "active",
+            "lifestyle_options": lifestyle_options(),
             "saved": saved, "mfa": mfa, "error": error,
             "has_logo": (STATIC_DIR / "logo.png").exists(),
         },
@@ -477,6 +484,20 @@ def settings_llm(
         settings_service.set_setting(db, user.id, "anthropic_api_key", anthropic_api_key.strip())
     settings_service.apply_llm_env(db, user.id)
     background.add_task(meal_queue.process_queue, user.id)
+    return RedirectResponse("/settings?saved=1", status_code=303)
+
+
+@app.post("/settings/lifestyle")
+def settings_lifestyle(lifestyle: str = Form(...), db: Session = Depends(db_session)):
+    """Styl życia — zmienia zakresy makro (białko g/kg, węgle g/kg u trenujących)."""
+    user = local_user(db)
+    profile = db.get(UserProfile, user.id)
+    if profile is None:
+        raise HTTPException(409, "Najpierw skonfiguruj profil na dashboardzie")
+    if lifestyle not in lifestyle_options():
+        raise HTTPException(422, "Nieznany styl życia")
+    profile.lifestyle = lifestyle
+    db.commit()
     return RedirectResponse("/settings?saved=1", status_code=303)
 
 
