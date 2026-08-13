@@ -113,10 +113,10 @@ def test_quips_film_references_present():
 def test_quips_more_film_quotes_present():
     all_quips = quips._quips()
     flat = [t for cat in all_quips.values() for t in cat]
-    assert any("Wiosna, panie sierżancie" in t for t in flat)
-    assert any("Royale z serem" in t for t in flat)
-    assert any("Dżizus, kurwa, ja pierdolę" in t for t in flat)
-    assert any("Wyrwałem chwasta" in t for t in flat)
+    assert any("Forma, panie trenerze, forma" in t for t in flat)
+    assert any("Zrujnowane makro" in t for t in flat)
+    assert any("Dżizus, znowu leg day" in t for t in flat)
+    assert any("Spaliłem pączka" in t for t in flat)
 
 
 def test_quips_goal_texts_all_have_diff_placeholder():
