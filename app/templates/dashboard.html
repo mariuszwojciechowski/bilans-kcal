@@ -93,7 +93,10 @@
     <div class="stat"><b>{{ report.kcal_out }}</b><span>kcal spalone</span></div>
     <div class="stat"><b class="{{ 'pos' if report.balance <= -report.target_deficit_kcal else ('mid' if report.balance <= 0 else 'neg') }}">{{ report.balance }}</b><span>bilans</span></div>
     <div class="stat"><b class="{{ 'pos' if report.remaining_kcal >= 0 else 'neg' }}">{{ report.remaining_kcal }}</b><span>zostało do celu</span></div>
-    <div class="stat"><b>{{ report.weight_smoothed_kg }}</b><span>waga (śr. 7 dni) kg</span></div>
+    <div class="stat"><b>{{ report.weight_smoothed_kg }}</b><span>ciężar (śr. 7 dni) [kg]</span></div>
+    {% if report.to_goal_kg is not none %}
+    <div class="stat"><b class="{{ 'pos' if report.to_goal_kg <= 0 else '' }}">{{ report.to_goal_kg }}</b><span>do celu {{ report.target_weight_kg }} kg</span></div>
+    {% endif %}
     <div class="stat"><b>{{ report.steps or "—" }}</b><span>kroki</span></div>
   </div>
   {% if report.deficit_warning %}<p class="warn">⚠ {{ report.deficit_warning }}</p>{% endif %}
@@ -107,6 +110,7 @@
 
 <section class="card">
   <h2>Dodaj posiłek</h2>
+  <p style="font-style:italic;margin:4px 0 12px">🍄 {{ report.quip }}</p>
   <div class="row">
     <input type="file" id="photo" accept="image/*">
     <input type="text" id="note" placeholder="uwaga do zdjęcia (opcjonalnie)" size="28">

@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .config import DB_PATH, ensure_dirs
@@ -24,7 +24,18 @@ def get_engine():
 def init_db() -> None:
     from . import models  # noqa: F401 — rejestracja tabel
 
-    Base.metadata.create_all(get_engine())
+    engine = get_engine()
+    Base.metadata.create_all(engine)
+    _migrate(engine)
+
+
+def _migrate(engine) -> None:
+    """Proste migracje addytywne (create_all nie dodaje kolumn do istniejących tabel)."""
+    with engine.connect() as conn:
+        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(user_profile)"))]
+        if cols and "target_weight_kg" not in cols:
+            conn.execute(text("ALTER TABLE user_profile ADD COLUMN target_weight_kg FLOAT"))
+            conn.commit()
 
 
 def get_session() -> Session:

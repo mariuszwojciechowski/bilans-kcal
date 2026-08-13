@@ -35,7 +35,12 @@ Etap 1: web app (weryfikacja pomysłu, single-user). Etap 2: aplikacja mobilna
 | M6 Makroskładniki | Zapotrzebowanie wg WHO i pokrycie z dziennika posiłków |
 | M7 Ustawienia | Podłączenie konta Garmin (z obsługą MFA), klucze LLM z instrukcją, stan kolejki offline |
 | M8 Kolejka offline | Posiłki bez klucza LLM/internetu czekają (opis + zdjęcie zredukowane do ≤1280 px JPEG); auto-przetworzenie po podaniu klucza; retencja nieprzetworzonych: **21 dni**; przetworzone zdjęcia są kasowane (use case: wakacje z drogim roamingiem) |
-| M9 Historia | Widok dowolnego dnia (kalendarz) + trendy (waga, energia, bilans) w zakresach tydzień/miesiąc/kwartał/pół roku |
+| M9 Historia | Widok dowolnego dnia (kalendarz) + trendy (ciężar, energia, bilans) w zakresach tydzień/miesiąc/kwartał/pół roku |
+| M10 Transfer | „Przygotuj dane do przeniesienia" / „Wczytaj dane z innego urządzenia" (plik JSON; nośnik dowolny, np. Google Drive) + paczka mobilna: strona HTML bez instalacji (IndexedDB, zdjęcia zmniejszane w telefonie) do zbierania posiłków offline |
+| M11 Motywacja | Cel ciężaru (ustawienia): linia celu na trendach, licznik „do celu" i żartobliwe teksty krasnala w panelu „Dodaj posiłek" dobierane do sytuacji dnia i dystansu do celu, losowane przy każdym odświeżeniu |
+
+**Terminologia UI:** wielkość mierzona to **ciężar** (nie „waga" — waga to przyrząd);
+nazwy techniczne w kodzie/DB pozostają `weight_*`.
 
 Poza zakresem MVP: rejestracja wielu użytkowników (ale schemat danych gotowy), powiadomienia, integracje inne niż Garmin, wersje mobilne.
 

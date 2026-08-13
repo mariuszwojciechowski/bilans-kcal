@@ -25,6 +25,7 @@ class UserProfile(Base):
     sex: Mapped[str] = mapped_column(String(1))  # 'M' | 'F'
     height_cm: Mapped[float] = mapped_column(Float)
     target_deficit_kcal: Mapped[int] = mapped_column(Integer, default=500)
+    target_weight_kg: Mapped[float | None] = mapped_column(Float)  # cel ciężaru
     tz: Mapped[str] = mapped_column(String, default="Europe/Warsaw")
 
 
