@@ -13,33 +13,79 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageOps
 
 STATIC = Path(__file__).resolve().parent.parent / "app" / "static"
-BG_THRESHOLD = 242  # piksele jaśniejsze niż to traktujemy jako tło (kanwa off-white)
+# Piksele jaśniejsze niż próg traktujemy jako tło. 235 odcina zarówno kanwę
+# off-white (~245-250), jak i delikatną winietę wokół znaku (~236-241).
+BG_THRESHOLD = 235
+
+
+def flatten_on_white(img: Image.Image) -> Image.Image:
+    """Przezroczystość -> białe tło (inaczej alfa czernieje w skali szarości)."""
+    white = Image.new("RGBA", img.size, (255, 255, 255, 255))
+    return Image.alpha_composite(white, img)
+
+
+def _row_widths(mask: Image.Image) -> list[int]:
+    d = mask.load()
+    w, h = mask.size
+    widths = []
+    for y in range(h):
+        xs = [x for x in range(0, w, 4) if d[x, y]]
+        widths.append(xs[-1] - xs[0] if xs else 0)
+    return widths
 
 
 def find_badge_bbox(img: Image.Image) -> tuple[int, int, int, int]:
-    """Bounding box największego skupiska nie-tłowych pikseli w górnych ~72% obrazu
-    (poniżej zwykle leży wordmark, który pomijamy)."""
-    gray = ImageOps.grayscale(img)
-    w, h = gray.size
-    top_area = gray.crop((0, 0, w, int(h * 0.72)))
-    mask = top_area.point(lambda p: 255 if p < BG_THRESHOLD else 0)
-    bbox = mask.getbbox()
-    if bbox is None:
+    """Bounding box znaku (koła) z pominięciem wordmarku pod nim.
+
+    Znak zwęża się ku dołowi jak koło; wordmark pod spodem jest szeroki.
+    Idziemy po profilu szerokości wierszy od góry i tniemy w miejscu,
+    gdzie szerokość spada poniżej 5% maksimum — to dół znaku."""
+    gray = ImageOps.grayscale(flatten_on_white(img).convert("RGB"))
+    mask = gray.point(lambda p: 255 if p < BG_THRESHOLD else 0)
+    widths = _row_widths(mask)
+
+    content_rows = [y for y, wd in enumerate(widths) if wd > 0]
+    if not content_rows:
         raise SystemExit("Nie znalazłem znaku — obraz wygląda na pusty/jednolity.")
-    return bbox
+    top = content_rows[0]
+    max_width = max(widths)
+    # znak (koło) leży NAD wordmarkiem, który bywa równie szeroki — dlatego
+    # idziemy od góry: wejście w szeroką część koła, potem pierwszy zapad
+    wide_from = next(y for y in content_rows if widths[y] >= 0.6 * max_width)
+    bottom = content_rows[-1]
+    for y in range(wide_from, content_rows[-1] + 1):
+        if widths[y] < 0.05 * max_width:
+            bottom = y
+            break
+
+    badge_area = mask.crop((0, top, mask.width, bottom))
+    left, _, right, _ = badge_area.getbbox()
+    return left, top, right, bottom
 
 
 def main() -> None:
     if len(sys.argv) != 2:
         raise SystemExit(__doc__)
     src = Path(sys.argv[1]).expanduser()
-    img = Image.open(src).convert("RGBA")
+    img = flatten_on_white(Image.open(src).convert("RGBA"))
 
     left, top, right, bottom = find_badge_bbox(img)
-    # kwadrat wokół znaku z małym marginesem
-    cx, cy = (left + right) // 2, (top + bottom) // 2
-    r = int(max(right - left, bottom - top) / 2 * 1.02)
-    square = img.crop((cx - r, cy - r, cx + r, cy + r))
+
+    # wybiel wszystko poniżej znaku (wordmark), żeby nie wszedł w kolisty kadr
+    ImageDraw.Draw(img).rectangle((0, bottom, img.width, img.height),
+                                  fill=(255, 255, 255, 255))
+
+    diameter = max(right - left, bottom - top)
+    r = diameter // 2
+    cx = (left + right) // 2
+    cy = (top + bottom) // 2
+
+    # kadr dopełniany bielą (crop poza obraz doklejałby czerń)
+    canvas = Image.new("RGBA", (2 * r, 2 * r), (255, 255, 255, 255))
+    sx0, sy0 = max(0, cx - r), max(0, cy - r)
+    sx1, sy1 = min(img.width, cx + r), min(img.height, cy + r)
+    canvas.paste(img.crop((sx0, sy0, sx1, sy1)), (sx0 - (cx - r), sy0 - (cy - r)))
+    square = canvas
 
     # maska kołowa -> przezroczystość poza znakiem
     size = square.size[0]
