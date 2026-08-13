@@ -57,6 +57,8 @@
                    border: none; cursor: pointer; }
   button.ghost { background: var(--green-med); color: #fff; border: none; cursor: pointer; }
   .muted { color: var(--stone); font-size: 13px; }
+  img.quip-icon { width: 24px; height: 24px; vertical-align: -6px; margin-right: 6px; }
+  @media (prefers-color-scheme: dark) { img.quip-icon { filter: invert(1); } }
   h2 { font-size: 15px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .05em;
        color: var(--stone); }
   #draft { display: none; }
@@ -115,7 +117,7 @@
 
 <section class="card">
   <h2>Dodaj posiłek</h2>
-  <p style="font-style:italic;margin:4px 0 12px">🍄 {{ report.quip }}</p>
+  <p style="font-style:italic;margin:4px 0 12px"><img class="quip-icon" src="/static/krasnal-icon.png" alt="">{{ report.quip }}</p>
   <div class="row">
     <input type="file" id="photo" accept="image/*">
     <input type="text" id="note" placeholder="uwaga do zdjęcia (opcjonalnie)" size="28">
