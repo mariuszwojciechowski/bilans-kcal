@@ -1,8 +1,9 @@
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import (BackgroundTasks, Depends, FastAPI, File, Form, HTTPException,
+                     Query, Request, UploadFile)
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -16,9 +17,10 @@ from .models import Activity, DailySummary, Meal, User, UserProfile, WeightLog
 from .providers.garmin import GarminNotLoggedIn, GarminProvider
 from .services import meal_vision
 from .services.balance import day_balance, deficit_warning, projected_weekly_change_kg
+from .services.charts import Series, bar_chart, line_chart
 from .services.energy import age_years, smoothed_weight, tdee_theoretical
 from .services.macros import coverage, who_targets
-from .services.sync import sync_range
+from .services.sync import mark_attempt, maybe_sync, sync_range
 
 app = FastAPI(title="Fit Krasnal")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -95,7 +97,9 @@ def put_profile(data: ProfileIn, db: Session = Depends(db_session)):
 
 @app.post("/api/sync")
 def sync(days: int = 7, db: Session = Depends(db_session)):
+    """Ręczna synchronizacja — bez throttla, synchronicznie, zwraca liczniki."""
     user = local_user(db)
+    mark_attempt(user.id)
     try:
         return sync_range(db, GarminProvider(), user.id, days=days)
     except GarminNotLoggedIn as exc:
@@ -209,10 +213,13 @@ def get_day(day: date, db: Session = Depends(db_session)):
 
 @app.post("/api/meals/photo")
 async def estimate_meal_photo(
+    background: BackgroundTasks,
     photo: UploadFile = File(...),
     note: str | None = Form(None),
+    db: Session = Depends(db_session),
 ):
     """Krok 1: zdjęcie → szacunek (draft do korekty; nic nie zapisujemy)."""
+    background.add_task(maybe_sync, local_user(db).id)
     data = await photo.read()
     if len(data) > MAX_PHOTO_BYTES:
         raise HTTPException(413, "Zdjęcie za duże (limit 15 MB)")
@@ -229,8 +236,13 @@ async def estimate_meal_photo(
 
 
 @app.post("/api/meals/text")
-def estimate_meal_text(description: str = Form(...)):
+def estimate_meal_text(
+    background: BackgroundTasks,
+    description: str = Form(...),
+    db: Session = Depends(db_session),
+):
     """Krok 1 (wariant tekstowy): opis → szacunek."""
+    background.add_task(maybe_sync, local_user(db).id)
     try:
         estimate = meal_vision.estimate_from_text(description)
     except meal_vision.MealVisionNotConfigured as exc:
@@ -257,9 +269,10 @@ class MealIn(BaseModel):
 
 
 @app.post("/api/meals")
-def save_meal(data: MealIn, db: Session = Depends(db_session)):
+def save_meal(data: MealIn, background: BackgroundTasks, db: Session = Depends(db_session)):
     """Krok 2: zapis posiłku (po ewentualnej korekcie użytkownika)."""
     user = local_user(db)
+    background.add_task(maybe_sync, user.id)
     meal = Meal(
         user_id=user.id,
         date=data.date,
@@ -297,14 +310,21 @@ def delete_meal(meal_id: int, db: Session = Depends(db_session)):
 # ── Dashboard (server-rendered) ───────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
-def dashboard(request: Request, db: Session = Depends(db_session)):
+def dashboard(
+    request: Request,
+    background: BackgroundTasks,
+    view: date | None = Query(None, alias="date"),
+    db: Session = Depends(db_session),
+):
     user = local_user(db)
+    background.add_task(maybe_sync, user.id)  # auto-odświeżenie przy wejściu (throttle 10 min)
+    view_day = min(view or date.today(), date.today())
     profile = db.get(UserProfile, user.id)
     report = None
     error = None
     if profile is not None:
         try:
-            report = day_report(db, user.id, date.today())
+            report = day_report(db, user.id, view_day)
         except HTTPException as exc:
             error = exc.detail
     return templates.TemplateResponse(
@@ -315,6 +335,99 @@ def dashboard(request: Request, db: Session = Depends(db_session)):
             "report": report,
             "error": error,
             "today": date.today().isoformat(),
+            "view_date": view_day.isoformat(),
+            "is_today": view_day == date.today(),
+            "has_logo": (STATIC_DIR / "logo.png").exists(),
+        },
+    )
+
+
+# ── Trendy ────────────────────────────────────────────────────────────────
+
+TREND_RANGES = [(7, "Tydzień"), (30, "Miesiąc"), (90, "Kwartał"), (180, "Pół roku")]
+
+
+@app.get("/trends", response_class=HTMLResponse)
+def trends(
+    request: Request,
+    background: BackgroundTasks,
+    days: int = 30,
+    db: Session = Depends(db_session),
+):
+    user = local_user(db)
+    background.add_task(maybe_sync, user.id)
+    days = max(2, min(days, 366))
+    today = date.today()
+    start = today - timedelta(days=days - 1)
+
+    weights = [
+        (w.date, w.weight_kg)
+        for w in db.scalars(
+            select(WeightLog).where(WeightLog.user_id == user.id, WeightLog.date >= start)
+        ).all()
+    ]
+    smoothed = []
+    all_weights = sorted(
+        (w.date, w.weight_kg)
+        for w in db.scalars(select(WeightLog).where(WeightLog.user_id == user.id)).all()
+    )
+    for d, _ in weights:
+        window = [kg for wd, kg in all_weights if 0 <= (d - wd).days < 7]
+        if window:
+            smoothed.append((d, sum(window) / len(window)))
+
+    summaries = db.scalars(
+        select(DailySummary).where(DailySummary.user_id == user.id, DailySummary.date >= start)
+    ).all()
+    kcal_out = [(s.date, float(s.kcal_total_garmin)) for s in summaries if s.kcal_total_garmin]
+
+    meals = db.scalars(
+        select(Meal).where(Meal.user_id == user.id, Meal.date >= start)
+    ).all()
+    kcal_in_by_day: dict[date, float] = {}
+    for m in meals:
+        kcal_in_by_day[m.date] = kcal_in_by_day.get(m.date, 0) + m.kcal
+    kcal_in = sorted(kcal_in_by_day.items())
+
+    out_by_day = dict(kcal_out)
+    balance = [
+        (d, kcal - out_by_day[d]) for d, kcal in kcal_in if d in out_by_day
+    ]
+
+    chart_weight = line_chart(
+        [
+            Series("pomiary", "#8DC63F", weights, dots=True, width=1.5),
+            Series("średnia 7 dni", "#1A4D3A", smoothed),
+        ],
+        start, today, y_fmt="{:.1f}",
+    )
+    chart_energy = line_chart(
+        [
+            Series("spożyte", "#8DC63F", kcal_in, dots=True),
+            Series("spalone (Garmin)", "#3A7A5C", kcal_out, dots=True),
+        ],
+        start, today,
+    )
+    chart_balance = bar_chart(balance, start, today)
+
+    period_change = None
+    if len(smoothed) >= 2:
+        period_change = round(smoothed[-1][1] - smoothed[0][1], 1)
+    avg_balance = round(sum(v for _, v in balance) / len(balance)) if balance else None
+
+    return templates.TemplateResponse(
+        request,
+        "trends.html",
+        {
+            "days": days,
+            "ranges": TREND_RANGES,
+            "chart_weight": chart_weight,
+            "chart_energy": chart_energy,
+            "chart_balance": chart_balance,
+            "period_change": period_change,
+            "avg_balance": avg_balance,
+            "balance_days": len(balance),
+            "today": today.isoformat(),
             "has_logo": (STATIC_DIR / "logo.png").exists(),
         },
     )
