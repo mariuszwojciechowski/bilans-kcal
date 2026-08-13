@@ -262,31 +262,56 @@ ilustracji, maskotek i dziecięcej kreski. Krasnal obecny **symbolicznie**, nie 
 
 ### 9.1 Identyfikacja
 
-- **Logo/znak:** minimalistyczny, geometryczny sygnet **spiczastej czapki** (trójkąt
-  z lekkim załamaniem) — czytelne nawiązanie bez rysowania postaci. Działa jako
-  favicon i ikona aplikacji mobilnej.
+- **Logo/znak:** okrągły badge z biegnącym krasnalem (ciemna czapka, zielony strój
+  z literą „F", liście dębu, góry i jasnozielona ścieżka) — dostarczony przez
+  właściciela projektu 2026-08-13. Znak (bez wordmarku „KRASNAL") działa jako favicon
+  i ikona aplikacji; ekstrakcja: `scripts/extract_logo.py`. Fallback do czasu
+  wgrania pliku: geometryczny trójkąt w `brand_green_light`.
 - **Typografia:** nowoczesny grotesk (Inter / Manrope); nagłówki semibold, cyfry
   tabelaryczne w statystykach.
 - **Ton komunikatów:** rzeczowy, z suchym humorem w mikrocopy ("Krasnal odnotował
   nadwyżkę 320 kcal"), nigdy wykrzykniki i emotki w danych. Powaga > żart, żart
   tylko w tle.
 
-### 9.2 Paleta ("las i czapka")
+### 9.2 Paleta (v2, 2026-08-13 — profesjonalna, sportowa, inspirowana naturą)
 
-| Rola | Kolor | Hex |
+**Kolory marki:**
+
+| Rola | Hex | Użycie |
 |---|---|---|
-| Primary (akcje, nagłówki) | zieleń leśna | `#1B5E4A` |
-| Primary dark / tło dark mode | las nocą | `#0F3D2E` |
-| Akcent CTA / logo | czerwień czapki (cegła, stonowana) | `#B3402A` |
-| Wyróżnienia, ostrzeżenia miękkie | bursztyn/miód | `#D9982B` |
-| Tło jasne | pergamin | `#F5F1E8` |
-| Tekst główny | atrament ciepły | `#23201B` |
-| Tekst wtórny / linie | kamień | `#6B6459` |
+| `brand_green_dark` | `#1A4D3A` | kolor główny: logotyp, nagłówki, stany aktywne, przyciski, kluczowe elementy UI, tekst na jasnym tle |
+| `brand_green_medium` | `#3A7A5C` | kolor drugorzędny: przyciski wtórne, wskaźniki postępu, wybrane ikony |
+| `brand_green_light` | `#8DC63F` | akcent energii i postępu (ze ścieżki krasnala w logo): przyciski CTA, wyróżnienia osiągnięć, ukończenia |
 
-Semantyka danych: **deficyt / w normie = zieleń `#1B5E4A`**, **nadwyżka / powyżej
-normy = cegła `#B3402A`**, **blisko granicy = bursztyn `#D9982B`**.
-Makro: białko `#B3402A` · węglowodany `#D9982B` · tłuszcze `#6B8E4E` (oliwka) ·
-błonnik `#8A7357` (kora). Tryb ciemny od MVP (tła `#0F3D2E`/`#14261F`, tekst `#EDE8DC`).
+**Neutralne:**
+
+| Rola | Hex | Użycie |
+|---|---|---|
+| `background_main` | `#F9FAF8` | domyślne tło ekranu (jak kanwa logo) |
+| `background_card` | `#FFFFFF` | karty, modale, pola formularzy |
+| `text_primary` | `#212529` | tekst główny |
+| `text_secondary` | `#6C757D` | podpisy, podpowiedzi, tekst nieaktywny |
+
+**Feedback:**
+
+| Rola | Hex | Użycie |
+|---|---|---|
+| `danger` | `#DC3545` | błędy, ostrzeżenia, akcje destrukcyjne |
+| `success` | `#28A745` | potwierdzenia sukcesu, poprawne stany (odrębny od zieleni marki) |
+
+**Kontrast:** wszystkie teksty ≥ 4.5:1 (WCAG AA); duży tekst docelowo 7:1 (AAA).
+Konsekwencja AA: na `brand_green_light` (#8DC63F) tekst ciemny (`#1A4D3A`/`#212529`),
+nigdy biały.
+
+Semantyka danych: **deficyt osiągnięty / w normie = `success`**, **nadwyżka /
+powyżej normy = `danger`**, **stan pośredni = `brand_green_medium`**.
+Makro (paski): białko `brand_green_dark` · węglowodany `brand_green_light` ·
+tłuszcze `brand_green_medium` · błonnik `text_secondary` · cukry `danger`.
+
+*Luka do decyzji:* paleta nie definiuje koloru ostrzeżeń miękkich (dawny bursztyn) —
+MVP używa `brand_green_medium` dla stanów pośrednich, a `danger` wyłącznie dla realnych
+przekroczeń. Tryb ciemny: paleta v2 definiuje tylko motyw jasny; wariant ciemny w MVP
+zachowany jako pochodna (neutralne ciemne tła, te same kolory marki).
 
 ---
 

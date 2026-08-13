@@ -4,39 +4,46 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fit Krasnal</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><polygon points='50,8 78,80 22,80' fill='%23B3402A'/></svg>">
-<style>
+{% if has_logo %}<link rel="icon" href="/static/favicon-32.png">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+{% else %}<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><polygon points='50,8 78,80 22,80' fill='%238DC63F'/></svg>">
+{% endif %}<style>
   :root {
-    --green: #1B5E4A; --green-dark: #0F3D2E; --red: #B3402A; --amber: #D9982B;
-    --bg: #F5F1E8; --ink: #23201B; --stone: #6B6459; --olive: #6B8E4E; --bark: #8A7357;
-    --card: #FFFFFF;
+    /* paleta v2: brand_green dark/medium/light + neutralne + feedback (WCAG AA) */
+    --green: #1A4D3A; --green-med: #3A7A5C; --lime: #8DC63F;
+    --bg: #F9FAF8; --card: #FFFFFF; --ink: #212529; --stone: #6C757D;
+    --danger: #DC3545; --success: #28A745;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #14261F; --ink: #EDE8DC; --stone: #A39B8B; --card: #0F3D2E; }
+    :root { --bg: #131715; --card: #1B211D; --ink: #E8ECE9; --stone: #9AA39D; }
   }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: -apple-system, "Segoe UI", Inter, sans-serif;
          background: var(--bg); color: var(--ink); }
-  header { background: var(--green-dark); color: #EDE8DC; padding: 14px 24px;
+  header { background: var(--green); color: #F9FAF8; padding: 14px 24px;
            display: flex; align-items: center; gap: 12px; }
   header .cap { width: 0; height: 0; border-left: 11px solid transparent;
-                border-right: 11px solid transparent; border-bottom: 20px solid var(--red); }
+                border-right: 11px solid transparent; border-bottom: 20px solid var(--lime); }
+  header img.logo { width: 34px; height: 34px; }
   header h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: .02em; }
   main { max-width: 860px; margin: 24px auto; padding: 0 16px; display: grid; gap: 16px; }
   .card { background: var(--card); border-radius: 10px; padding: 18px 20px;
-          box-shadow: 0 1px 3px rgba(35,32,27,.12); }
+          box-shadow: 0 1px 3px rgba(33,37,41,.12); }
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 12px; }
   .stat b { display: block; font-size: 26px; font-variant-numeric: tabular-nums; }
   .stat span { color: var(--stone); font-size: 13px; }
-  .pos { color: var(--green); } .neg { color: var(--red); } .warn { color: var(--amber); }
-  .bar { background: rgba(107,100,89,.18); border-radius: 6px; height: 10px; overflow: hidden; margin-top: 4px; }
+  .pos { color: var(--success); } .neg { color: var(--danger); }
+  .warn { color: var(--danger); } .mid { color: var(--green-med); }
+  .bar { background: rgba(108,117,125,.18); border-radius: 6px; height: 10px; overflow: hidden; margin-top: 4px; }
   .bar i { display: block; height: 100%; border-radius: 6px; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  td, th { padding: 6px 8px; text-align: left; border-bottom: 1px solid rgba(107,100,89,.2); }
+  td, th { padding: 6px 8px; text-align: left; border-bottom: 1px solid rgba(108,117,125,.25); }
   button, input, select { font: inherit; padding: 8px 10px; border-radius: 6px;
     border: 1px solid var(--stone); background: var(--card); color: var(--ink); }
-  button.primary { background: var(--red); color: #fff; border: none; cursor: pointer; }
-  button.ghost { background: var(--green); color: #fff; border: none; cursor: pointer; }
+  /* CTA: brand_green_light z ciemnym tekstem (kontrast WCAG AA) */
+  button.primary { background: var(--lime); color: var(--green); font-weight: 600;
+                   border: none; cursor: pointer; }
+  button.ghost { background: var(--green-med); color: #fff; border: none; cursor: pointer; }
   .muted { color: var(--stone); font-size: 13px; }
   h2 { font-size: 15px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .05em;
        color: var(--stone); }
@@ -45,8 +52,8 @@
 </style>
 </head>
 <body>
-<header><div class="cap"></div><h1>Fit Krasnal</h1>
-  <span class="muted" style="margin-left:auto">{{ today }}</span></header>
+<header>{% if has_logo %}<img class="logo" src="/static/logo.png" alt="Fit Krasnal">{% else %}<div class="cap"></div>{% endif %}<h1>Fit Krasnal</h1>
+  <span style="margin-left:auto;color:#C9D3CC;font-size:13px">{{ today }}</span></header>
 <main>
 
 {% if not profile %}
@@ -73,7 +80,7 @@
   <div class="stats">
     <div class="stat"><b>{{ report.kcal_in }}</b><span>kcal spożyte</span></div>
     <div class="stat"><b>{{ report.kcal_out }}</b><span>kcal spalone</span></div>
-    <div class="stat"><b class="{{ 'pos' if report.balance <= -report.target_deficit_kcal else ('warn' if report.balance <= 0 else 'neg') }}">{{ report.balance }}</b><span>bilans</span></div>
+    <div class="stat"><b class="{{ 'pos' if report.balance <= -report.target_deficit_kcal else ('mid' if report.balance <= 0 else 'neg') }}">{{ report.balance }}</b><span>bilans</span></div>
     <div class="stat"><b class="{{ 'pos' if report.remaining_kcal >= 0 else 'neg' }}">{{ report.remaining_kcal }}</b><span>zostało do celu</span></div>
     <div class="stat"><b>{{ report.weight_smoothed_kg }}</b><span>waga (śr. 7 dni) kg</span></div>
     <div class="stat"><b>{{ report.steps or "—" }}</b><span>kroki</span></div>
@@ -89,7 +96,7 @@
 <section class="card">
   <h2>Makroskładniki (normy WHO)</h2>
   {% set m = report.macros %}
-  {% for key, label, color in [("protein","Białko","#B3402A"),("carbs","Węglowodany","#D9982B"),("fat","Tłuszcze","#6B8E4E"),("fiber","Błonnik","#8A7357"),("sugars","Cukry wolne","#B3402A")] %}
+  {% for key, label, color in [("protein","Białko","#1A4D3A"),("carbs","Węglowodany","#8DC63F"),("fat","Tłuszcze","#3A7A5C"),("fiber","Błonnik","#6C757D"),("sugars","Cukry wolne","#DC3545")] %}
     {% set item = m[key] %}
     <div style="margin-bottom:10px">
       <div class="row" style="justify-content:space-between">
@@ -101,7 +108,7 @@
             {% else %}({{ item.range_g[0] }}–{{ item.range_g[1] }} g){% endif %}
           </span>
         </span>
-        <span class="{{ 'pos' if item.status == 'ok' else ('warn' if item.status == 'below' else 'neg') }}">
+        <span class="{{ 'pos' if item.status == 'ok' else ('mid' if item.status == 'below' else 'neg') }}">
           {{ {'ok':'w normie','below':'poniżej','above':'powyżej'}[item.status] }}</span>
       </div>
       {% set ref = item.who_min_g if key == 'protein' else (item.min_g if key == 'fiber' else (item.max_g if key == 'sugars' else item.range_g[1])) %}
@@ -123,7 +130,7 @@
   </div>
   <p class="muted" id="est-status"></p>
 
-  <div id="draft" class="card" style="background:rgba(217,152,43,.08)">
+  <div id="draft" class="card" style="background:rgba(141,198,63,.10)">
     <h2>Szacunek — sprawdź i popraw przed zapisem</h2>
     <p id="draft-desc"></p>
     <table id="draft-items"></table>

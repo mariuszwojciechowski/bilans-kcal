@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -21,6 +22,10 @@ from .services.sync import sync_range
 
 app = FastAPI(title="Fit Krasnal")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+
+STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 LOCAL_USER_EMAIL = "local@fit-krasnal"
 
@@ -304,7 +309,13 @@ def dashboard(request: Request, db: Session = Depends(db_session)):
     return templates.TemplateResponse(
         request,
         "dashboard.html",
-        {"profile": profile, "report": report, "error": error, "today": date.today().isoformat()},
+        {
+            "profile": profile,
+            "report": report,
+            "error": error,
+            "today": date.today().isoformat(),
+            "has_logo": (STATIC_DIR / "logo.png").exists(),
+        },
     )
 
 
