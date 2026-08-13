@@ -80,6 +80,12 @@
       <div class="stat"><b id="t-goal">—</b><span>do celu ciężaru [kg]</span></div>
     </div>
     <input type="date" id="t-date" onchange="renderToday()">
+    <div class="row2">
+      <span><label>kroki dziś (z aplikacji Zdrowie)</label>
+        <input type="number" id="t-steps" step="500" onchange="saveDaySteps()"></span>
+      <span><label>pomiar ciężaru dziś [kg]</label>
+        <input type="number" id="t-newweight" step="0.1" placeholder="—" onchange="saveWeighIn()"></span>
+    </div>
   </section>
   <section class="card">
     <h2>Makroskładniki (normy WHO — <span id="m-group"></span>)</h2>
@@ -135,6 +141,11 @@
 <!-- ── TRENDY ───────────────────────────────────────────────────────── -->
 <div class="page" id="page-trends">
   <section class="card">
+    <h2>Ciężar — ostatnie 30 dni [kg]</h2>
+    <div id="chart-weight"></div>
+    <p class="muted">Czerwona linia przerywana: cel ciężaru.</p>
+  </section>
+  <section class="card">
     <h2>Energia — ostatnie 14 dni [kcal]</h2>
     <div id="chart-kcal"></div>
     <p class="muted">Linia przerywana: dzienny cel energii.</p>
@@ -187,15 +198,18 @@
 
 <script>
 /* ── magazyn: IndexedDB (meals, queue) + localStorage (profil, klucz) ── */
-const DB_NAME = "fitkrasnal", STORES = ["meals", "queue"];
+const DB_NAME = "fitkrasnal", STORES = ["meals", "queue", "weights", "days"];
 let db;
 function openDb() {
   return new Promise((res, rej) => {
-    const req = indexedDB.open(DB_NAME, 2);
+    const req = indexedDB.open(DB_NAME, 3);
     req.onupgradeneeded = () => {
-      for (const s of STORES)
-        if (!req.result.objectStoreNames.contains(s))
-          req.result.createObjectStore(s, { keyPath: "id", autoIncrement: true });
+      const d = req.result;
+      // meals/queue: autoinkrement; weights/days: klucz = data (upsert per dzień)
+      if (!d.objectStoreNames.contains("meals")) d.createObjectStore("meals", { keyPath: "id", autoIncrement: true });
+      if (!d.objectStoreNames.contains("queue")) d.createObjectStore("queue", { keyPath: "id", autoIncrement: true });
+      if (!d.objectStoreNames.contains("weights")) d.createObjectStore("weights", { keyPath: "date" });
+      if (!d.objectStoreNames.contains("days")) d.createObjectStore("days", { keyPath: "date" });
     };
     req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error);
   });
@@ -203,6 +217,7 @@ function openDb() {
 const tx = (store, mode) => db.transaction(store, mode).objectStore(store);
 const all = (store) => new Promise((res) => { const r = tx(store, "readonly").getAll(); r.onsuccess = () => res(r.result); });
 const put = (store, v) => new Promise((res) => { const r = tx(store, "readwrite").add(v); r.onsuccess = () => res(r.result); });
+const ups = (store, v) => new Promise((res) => { const r = tx(store, "readwrite").put(v); r.onsuccess = () => res(r.result); });
 const del = (store, id) => new Promise((res) => { tx(store, "readwrite").delete(id).onsuccess = () => res(); });
 
 const profile = () => JSON.parse(localStorage.getItem("profile") || "null");
@@ -230,13 +245,20 @@ function ageYears(birth, on) {
 function bmr(p, on) {
   return 10 * p.weight + 6.25 * p.height - 5 * ageYears(p.birth, on) + (p.sex === "M" ? 5 : -161);
 }
-/* Wydatek jak w wersji desktopowej, ale kroki z profilu zamiast z Garmina:
+/* Wydatek jak w wersji desktopowej, ale kroki wpisywane ręcznie (PWA nie ma
+   dostępu do Apple Health/Google Fit — to domena aplikacji natywnych):
    BMR × 1.2 (podstawa siedząca, zawiera ~3.5 tys. kroków) + NEAT z nadwyżki kroków.
-   Wakacyjne zwiedzanie 15-20 tys. kroków daje realny narzut ~500-800 kcal. */
+   Kroki dnia: wpis z widoku Dziś (przepisany z aplikacji Zdrowie), inaczej typowe z profilu. */
 const KCAL_PER_STEP_PER_KG = 0.00057, BASE_STEPS = 3500;
-function tdee(p, on) {
-  const steps = p.steps || 15000;
-  return bmr(p, on) * 1.2 + Math.max(steps - BASE_STEPS, 0) * p.weight * KCAL_PER_STEP_PER_KG;
+function tdee(p, on, steps) {
+  const s = steps ?? p.steps ?? 15000;
+  return bmr(p, on) * 1.2 + Math.max(s - BASE_STEPS, 0) * p.weight * KCAL_PER_STEP_PER_KG;
+}
+
+/* ciężar: najnowszy pomiar z dziennika ważeń <= dnia, inaczej z profilu */
+function currentWeight(weights, p, day) {
+  const past = weights.filter(w => w.date <= day).sort((a, b) => a.date < b.date ? -1 : 1);
+  return past.length ? past[past.length - 1].weight_kg : (p ? p.weight : null);
 }
 
 function whoTargets(p, on, eTarget) {
@@ -290,19 +312,25 @@ async function renderToday() {
   const p = profile();
   const meals = (await all("meals")).filter(m => m.date === day);
   const queue = (await all("queue")).filter(q => q.date === day);
+  const weights = await all("weights");
+  const dayRec = (await all("days")).find(d => d.date === day);
   const kcalIn = meals.reduce((s, m) => s + m.kcal, 0);
   document.getElementById("t-in").textContent = Math.round(kcalIn);
+  document.getElementById("t-steps").value = dayRec?.steps ?? (p?.steps ?? "");
+  document.getElementById("t-newweight").value =
+    weights.find(w => w.date === day)?.weight_kg ?? "";
 
   if (p) {
-    const out = tdee(p, day), eTarget = out - (p.deficit || 500);
+    const eff = { ...p, weight: currentWeight(weights, p, day) || p.weight };
+    const out = tdee(eff, day, dayRec?.steps), eTarget = out - (p.deficit || 500);
     const bal = kcalIn - out;
     set("t-out", Math.round(out));
     setC("t-bal", Math.round(bal), bal <= -(p.deficit || 500) ? "pos" : (bal <= 0 ? "mid" : "neg"));
     setC("t-left", Math.round(eTarget - kcalIn), eTarget - kcalIn >= 0 ? "pos" : "neg");
-    set("t-weight", p.weight ?? "—");
-    if (p.goal && p.weight) setC("t-goal", (p.weight - p.goal).toFixed(1), p.weight <= p.goal ? "pos" : "");
-    document.getElementById("quip").textContent = "🍄 " + pickQuip(kcalIn, eTarget, p);
-    renderMacros(p, day, eTarget, meals);
+    set("t-weight", eff.weight ?? "—");
+    if (p.goal && eff.weight) setC("t-goal", (eff.weight - p.goal).toFixed(1), eff.weight <= p.goal ? "pos" : "");
+    document.getElementById("quip").textContent = "🍄 " + pickQuip(kcalIn, eTarget, eff);
+    renderMacros(eff, day, eTarget, meals);
   } else {
     document.getElementById("quip").innerHTML =
       '🍄 Krasnal nie wie, kim jesteś. Uzupełnij <a href="#" onclick="show(\'settings\')">profil</a>.';
@@ -496,16 +524,32 @@ async function renderQueueCount() {
 }
 async function delMeal(id) { await del("meals", id); renderToday(); }
 
+async function saveDaySteps() {
+  const v = +document.getElementById("t-steps").value;
+  const day = document.getElementById("t-date").value || todayIso();
+  if (v > 0) await ups("days", { date: day, steps: v });
+  renderToday();
+}
+async function saveWeighIn() {
+  const v = +document.getElementById("t-newweight").value;
+  const day = document.getElementById("t-date").value || todayIso();
+  if (v > 0) await ups("weights", { date: day, weight_kg: v });
+  renderToday();
+}
+
 /* ── trendy ── */
 async function renderTrends() {
   const meals = await all("meals");
   const p = profile();
+  renderWeightChart(p);
   const days = [...Array(14)].map((_, i) => {
     const d = new Date(); d.setDate(d.getDate() - 13 + i);
     return d.toISOString().slice(0, 10);
   });
   const sums = days.map(d => meals.filter(m => m.date === d).reduce((s, m) => s + m.kcal, 0));
-  const eTarget = p ? tdee(p, todayIso()) - (p.deficit || 500) : null;
+  const weightsAll = await all("weights");
+  const eff = p ? { ...p, weight: currentWeight(weightsAll, p, todayIso()) || p.weight } : null;
+  const eTarget = eff ? tdee(eff, todayIso()) - (p.deficit || 500) : null;
   const W = 520, H = 200, pad = 34;
   const vmax = Math.max(...sums, eTarget || 0, 500) * 1.1;
   const bw = (W - 2 * pad) / 14 * 0.7;
@@ -523,6 +567,37 @@ async function renderTrends() {
   svg += `<text x="${pad}" y="${H - 8}" font-size="10" fill="#6C757D">${days[0].slice(5)}</text>
     <text x="${W - pad}" y="${H - 8}" font-size="10" fill="#6C757D" text-anchor="end">${days[13].slice(5)}</text></svg>`;
   document.getElementById("chart-kcal").innerHTML = svg;
+}
+
+async function renderWeightChart(p) {
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 30);
+  const from = cutoff.toISOString().slice(0, 10);
+  const pts = (await all("weights")).filter(w => w.date >= from)
+    .sort((a, b) => a.date < b.date ? -1 : 1);
+  const box = document.getElementById("chart-weight");
+  if (!pts.length) {
+    box.innerHTML = '<p class="muted">Brak pomiarów — wpisuj ciężar w widoku Dziś.</p>';
+    return;
+  }
+  const W = 520, H = 180, pad = 34;
+  const goal = p?.goal || null;
+  const vals = pts.map(w => w.weight_kg).concat(goal ? [goal] : []);
+  let vmin = Math.min(...vals), vmax = Math.max(...vals);
+  const m = Math.max((vmax - vmin) * 0.15, 0.5); vmin -= m; vmax += m;
+  const d0 = new Date(pts[0].date), d1 = new Date(pts[pts.length - 1].date);
+  const span = Math.max((d1 - d0) / 86400000, 1);
+  const X = (d) => pad + (new Date(d) - d0) / 86400000 / span * (W - 2 * pad);
+  const Y = (v) => H - pad - (v - vmin) / (vmax - vmin) * (H - 2 * pad);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+  if (goal) svg += `<line x1="${pad}" y1="${Y(goal)}" x2="${W - pad}" y2="${Y(goal)}" stroke="#DC3545" stroke-width="1.5" stroke-dasharray="5,4"/>`;
+  if (pts.length > 1)
+    svg += `<polyline points="${pts.map(w => `${X(w.date).toFixed(1)},${Y(w.weight_kg).toFixed(1)}`).join(" ")}" fill="none" stroke="#1A4D3A" stroke-width="2.5"/>`;
+  for (const w of pts)
+    svg += `<circle cx="${X(w.date).toFixed(1)}" cy="${Y(w.weight_kg).toFixed(1)}" r="3" fill="#8DC63F"/>`;
+  svg += `<text x="${pad - 4}" y="${Y(pts[pts.length - 1].weight_kg) + 4}" font-size="10" fill="#6C757D" text-anchor="end">${pts[pts.length - 1].weight_kg}</text>
+    <text x="${pad}" y="${H - 6}" font-size="10" fill="#6C757D">${pts[0].date.slice(5)}</text>
+    <text x="${W - pad}" y="${H - 6}" font-size="10" fill="#6C757D" text-anchor="end">${pts[pts.length - 1].date.slice(5)}</text></svg>`;
+  box.innerHTML = svg;
 }
 
 /* ── ustawienia / profil / transfer ── */
@@ -561,9 +636,11 @@ function saveKey() {
 async function exportData() {
   const meals = await all("meals");
   const queue = await all("queue");
+  const weights = await all("weights");
   const payload = {
     format: "fit-krasnal-transfer", version: 1, source: "mobile",
     exported_at: new Date().toISOString(),
+    weights: weights.map(w => ({ date: w.date, weight_kg: w.weight_kg, source: "mobile" })),
     meals: meals.map(({ id, items, assumptions, ...m }) => ({
       ...m, items_json: JSON.stringify(items || []),
       assumptions_json: JSON.stringify(assumptions || []),
@@ -588,6 +665,9 @@ async function importData(file) {
       goal: pr.target_weight_kg || null,
     }));
   }
+  const haveW = new Set((await all("weights")).map(w => w.date));
+  for (const w of (payload.weights || []))
+    if (!haveW.has(w.date)) await ups("weights", { date: w.date, weight_kg: w.weight_kg });
   let added = 0;
   const existing = await all("meals");
   const seen = new Set(existing.map(m => `${m.date}|${m.time}|${m.kcal}|${m.description}`));
@@ -604,7 +684,8 @@ async function importData(file) {
 }
 async function clearAll() {
   if (!confirm("Usunąć WSZYSTKIE dane Fit Krasnal z tego telefonu?")) return;
-  for (const s of STORES) for (const e of await all(s)) await del(s, e.id);
+  for (const s of STORES)
+    await new Promise((res) => { tx(s, "readwrite").clear().onsuccess = () => res(); });
   localStorage.removeItem("profile");
   show("today");
 }
