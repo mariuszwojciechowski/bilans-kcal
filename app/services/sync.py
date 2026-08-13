@@ -32,7 +32,8 @@ def sync_range(db: Session, provider: DataProvider, user_id: int, days: int = 7)
         row.complete = day < today
         synced_days += 1
 
-    weights = provider.get_weights(start, today)
+    # wagę pobieramy z szerszego okna — pomiary bywają rzadsze niż codzienne
+    weights = provider.get_weights(today - timedelta(days=60), today)
     for w in weights:
         row = db.scalar(
             select(WeightLog).where(WeightLog.user_id == user_id, WeightLog.date == w.date)
