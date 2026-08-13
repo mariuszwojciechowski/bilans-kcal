@@ -155,6 +155,12 @@
     <div id="chart-kcal"></div>
     <p class="muted">Linia przerywana: dzienny cel energii.</p>
   </section>
+  <section class="card">
+    <h2>Bilans dzienny [kcal] — deficyt na zielono</h2>
+    <div id="chart-balance"></div>
+    <p class="muted">Tylko dni z zapisanymi posiłkami. Wydatek: szacunek
+      (BMR + kroki dnia, jeśli wpisane).</p>
+  </section>
 </div>
 
 <!-- ── USTAWIENIA ───────────────────────────────────────────────────── -->
@@ -643,6 +649,41 @@ async function renderTrends() {
   svg += `<text x="${pad}" y="${H - 8}" font-size="10" fill="#6C757D">${days[0].slice(5)}</text>
     <text x="${W - pad}" y="${H - 8}" font-size="10" fill="#6C757D" text-anchor="end">${days[13].slice(5)}</text></svg>`;
   document.getElementById("chart-kcal").innerHTML = svg;
+
+  renderBalanceChart(days, sums, eff, await all("days"), weightsAll, p);
+}
+
+function renderBalanceChart(days, sums, eff, dayRecs, weightsAll, p) {
+  const box = document.getElementById("chart-balance");
+  if (!eff) { box.innerHTML = '<p class="muted">Brak profilu.</p>'; return; }
+  // bilans = spożyte − wydatek (szacunek z krokami dnia i ciężarem z tamtego dnia)
+  const bals = days.map((d, i) => {
+    if (sums[i] === 0) return null; // dzień bez zapisanych posiłków — brak danych
+    const steps = dayRecs.find(r => r.date === d)?.steps;
+    const w = currentWeight(weightsAll, p, d) || eff.weight;
+    return sums[i] - tdee({ ...eff, weight: w }, d, steps);
+  });
+  const vals = bals.filter(v => v !== null);
+  if (!vals.length) { box.innerHTML = '<p class="muted">Brak dni z zapisanymi posiłkami.</p>'; return; }
+  const W = 520, H = 200, pad = 34;
+  let vmin = Math.min(...vals, 0), vmax = Math.max(...vals, 0);
+  const m = (vmax - vmin) * 0.1 || 50; vmin -= m; vmax += m;
+  const Y = (v) => H - pad - (v - vmin) / (vmax - vmin) * (H - 2 * pad);
+  const bw = (W - 2 * pad) / 14 * 0.7, y0 = Y(0);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+  svg += `<line x1="${pad}" y1="${y0.toFixed(1)}" x2="${W - pad}" y2="${y0.toFixed(1)}" stroke="#6C757D" stroke-width="1.5"/>`;
+  bals.forEach((v, i) => {
+    if (v === null) return;
+    const x = pad + (W - 2 * pad) * i / 13 - bw / 2;
+    const y = Y(v);
+    const top = v >= 0 ? y : y0, hgt = Math.abs(y0 - y);
+    svg += `<rect x="${x.toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(hgt, 1).toFixed(1)}" fill="${v > 0 ? "#DC3545" : "#28A745"}" rx="2"/>`;
+  });
+  svg += `<text x="${pad - 4}" y="${Y(vmax) + 8}" font-size="10" fill="#6C757D" text-anchor="end">${Math.round(vmax)}</text>
+    <text x="${pad - 4}" y="${Y(vmin)}" font-size="10" fill="#6C757D" text-anchor="end">${Math.round(vmin)}</text>
+    <text x="${pad}" y="${H - 8}" font-size="10" fill="#6C757D">${days[0].slice(5)}</text>
+    <text x="${W - pad}" y="${H - 8}" font-size="10" fill="#6C757D" text-anchor="end">${days[13].slice(5)}</text></svg>`;
+  box.innerHTML = svg;
 }
 
 async function renderWeightChart(p) {
