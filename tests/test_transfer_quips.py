@@ -101,3 +101,16 @@ def test_quips_texts_exist_for_all_categories():
         assert quips._quips()[cat], cat
         if text:
             assert isinstance(text, str) and len(text) > 10
+
+
+def test_quips_film_references_present():
+    all_quips = quips._quips()
+    assert any("Chłopaki nie płaczą" in t for cat in all_quips.values() for t in cat)
+    assert any("Kiedy wchodzisz między wrony" in t for cat in all_quips.values() for t in cat)
+    assert any("Pieniądze to nie wszystko" in t for cat in all_quips.values() for t in cat)
+
+
+def test_quips_goal_texts_all_have_diff_placeholder():
+    for cat in ("goal_close", "goal_far"):
+        for text in quips._quips()[cat]:
+            assert "{diff}" in text, text
