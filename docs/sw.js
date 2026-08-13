@@ -1,7 +1,7 @@
 /* Service worker Fit Krasnal — offline dla PWA.
    Strona (nawigacja): najpierw sieć (świeże aktualizacje), fallback cache (offline).
    Assety: cache-first. Przy zmianie index.html podbij wersję CACHE. */
-const CACHE = "fitkrasnal-v2";
+const CACHE = "fitkrasnal-v3";
 const ASSETS = ["./", "./index.html", "./manifest.webmanifest", "./logo.png",
                 "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 
