@@ -1,5 +1,12 @@
-"""Synchronizacja danych z providera (Garmin) do lokalnej bazy — upsert idempotentny."""
+"""Synchronizacja danych z providera (Garmin) do lokalnej bazy — upsert idempotentny.
 
+`maybe_sync` — wariant z throttlem do automatycznych odświeżeń (refresh strony,
+szacowanie/zapis posiłku): synchronizuje najwyżej raz na SYNC_MIN_INTERVAL_S,
+żeby nie hammerować nieoficjalnego API Garmina (znane limity 429). Czas ostatniej
+PRÓBY (także nieudanej) trzymany w pamięci procesu."""
+
+import logging
+import threading
 from datetime import date, datetime, timedelta
 
 from sqlalchemy import select
@@ -7,6 +14,13 @@ from sqlalchemy.orm import Session
 
 from ..models import Activity, DailySummary, WeightLog
 from ..providers import DataProvider
+
+logger = logging.getLogger(__name__)
+
+SYNC_MIN_INTERVAL_S = 600  # 10 minut
+
+_last_attempt: dict[int, datetime] = {}
+_lock = threading.Lock()
 
 
 def sync_range(db: Session, provider: DataProvider, user_id: int, days: int = 7) -> dict:
@@ -61,3 +75,34 @@ def sync_range(db: Session, provider: DataProvider, user_id: int, days: int = 7)
 
     db.commit()
     return {"days": synced_days, "weights": len(weights), "activities": len(activities)}
+
+
+def mark_attempt(user_id: int) -> None:
+    _last_attempt[user_id] = datetime.utcnow()
+
+
+def sync_is_due(user_id: int, min_interval_s: int = SYNC_MIN_INTERVAL_S) -> bool:
+    last = _last_attempt.get(user_id)
+    return last is None or (datetime.utcnow() - last).total_seconds() >= min_interval_s
+
+
+def maybe_sync(user_id: int, days: int = 7, force: bool = False) -> None:
+    """Synchronizacja z throttlem, do wywołań automatycznych (również w tle).
+    Otwiera własną sesję DB. Błędy loguje zamiast rzucać — automatyczne
+    odświeżenie nie może wywracać akcji użytkownika."""
+    with _lock:
+        if not force and not sync_is_due(user_id):
+            return
+        _last_attempt[user_id] = datetime.utcnow()  # liczy się próba, nie sukces
+
+    from ..db import get_session
+    from ..providers.garmin import GarminProvider
+
+    db = get_session()
+    try:
+        result = sync_range(db, GarminProvider(), user_id, days=days)
+        logger.info("Auto-sync Garmin: %s", result)
+    except Exception as exc:
+        logger.warning("Auto-sync Garmin nieudany: %s", exc)
+    finally:
+        db.close()

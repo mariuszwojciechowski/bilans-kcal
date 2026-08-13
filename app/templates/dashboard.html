@@ -24,7 +24,14 @@
            display: flex; align-items: center; gap: 12px; }
   header .cap { width: 0; height: 0; border-left: 11px solid transparent;
                 border-right: 11px solid transparent; border-bottom: 20px solid var(--lime); }
-  header img.logo { width: 52px; height: 52px; }
+  header img.logo { width: 52px; height: 52px; transition: transform .18s ease;
+                    transform-origin: left center; }
+  header img.logo:hover { transform: scale(2); }
+  header a.nav { color: #C9D3CC; font-size: 14px; text-decoration: none;
+                 padding: 6px 10px; border-radius: 6px; }
+  header a.nav:hover { background: rgba(255,255,255,.12); }
+  header input[type=date] { background: transparent; color: #C9D3CC;
+                            border: 1px solid rgba(201,211,204,.4); }
   header h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: .02em; }
   main { max-width: 860px; margin: 24px auto; padding: 0 16px; display: grid; gap: 16px; }
   .card { background: var(--card); border-radius: 10px; padding: 18px 20px;
@@ -52,8 +59,11 @@
 </style>
 </head>
 <body>
-<header>{% if has_logo %}<img class="logo" src="/static/logo-navbar.png" alt="Fit Krasnal">{% else %}<div class="cap"></div>{% endif %}<h1>Fit Krasnal</h1>
-  <span style="margin-left:auto;color:#C9D3CC;font-size:13px">{{ today }}</span></header>
+<header>{% if has_logo %}<img class="logo" src="/static/logo-bw.png" alt="Fit Krasnal">{% else %}<div class="cap"></div>{% endif %}<h1>Fit Krasnal</h1>
+  <span style="margin-left:auto"></span>
+  <a class="nav" href="/trends?days=30">Trendy</a>
+  <input type="date" value="{{ view_date }}" max="{{ today }}"
+         onchange="location = '/?date=' + this.value"></header>
 <main>
 
 {% if not profile %}
@@ -76,7 +86,7 @@
 {% else %}
 
 <section class="card">
-  <h2>Dziś — bilans <span class="muted">(wydatek: {{ report.out_source }}{% if report.estimated %}, dzień w toku — szacunek{% endif %})</span></h2>
+  <h2>{{ "Dziś" if is_today else view_date }} — bilans <span class="muted">(wydatek: {{ report.out_source }}{% if report.estimated %}{{ ", dzień w toku — szacunek" if is_today else ", dane niepełne — szacunek" }}{% endif %})</span></h2>
   <div class="stats">
     <div class="stat"><b>{{ report.kcal_in }}</b><span>kcal spożyte</span></div>
     <div class="stat"><b>{{ report.kcal_out }}</b><span>kcal spalone</span></div>
@@ -147,16 +157,18 @@
 </section>
 
 <section class="card">
-  <h2>Posiłki dziś</h2>
+  <h2>Posiłki — {{ "dziś" if is_today else view_date }}</h2>
   {% if report.meals %}
   <table>
-    <tr><th>Godz.</th><th>Opis</th><th>kcal</th><th>B/T/W [g]</th><th></th></tr>
+    <tr><th>Godz.</th><th>Opis</th>
+        <th style="min-width:150px">kcal</th>
+        <th style="min-width:110px">B/T/W [g]</th><th></th></tr>
     {% for meal in report.meals %}
     <tr>
       <td>{{ meal.time[:5] if meal.time else "" }}</td>
       <td>{{ meal.description }}</td>
-      <td>{{ meal.kcal }}{% if meal.kcal_range[0] %} <span class="muted">({{ meal.kcal_range[0] }}–{{ meal.kcal_range[1] }})</span>{% endif %}</td>
-      <td>{{ meal.protein_g|round(0)|int }}/{{ meal.fat_g|round(0)|int }}/{{ meal.carbs_g|round(0)|int }}</td>
+      <td style="white-space:nowrap">{{ meal.kcal }}{% if meal.kcal_range[0] %} <span class="muted">({{ meal.kcal_range[0] }}–{{ meal.kcal_range[1] }})</span>{% endif %}</td>
+      <td style="white-space:nowrap">{{ meal.protein_g|round(0)|int }} / {{ meal.fat_g|round(0)|int }} / {{ meal.carbs_g|round(0)|int }}</td>
       <td><button onclick="delMeal({{ meal.id }})">✕</button></td>
     </tr>
     {% endfor %}
@@ -227,7 +239,7 @@ async function estimateText() {
 async function saveMeal() {
   const now = new Date();
   const body = {
-    date: "{{ today }}",
+    date: "{{ view_date }}",
     time: now.toTimeString().slice(0, 5),
     description: draft.description,
     photo_path: draft.photo_path,
@@ -245,6 +257,8 @@ async function saveMeal() {
     headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (r.ok) location.reload();
 }
+
+// przegladanie dnia wstecz: posilek zapisuje sie pod ogladana date ({{ view_date }})
 
 async function delMeal(id) {
   await fetch(`/api/meals/${id}`, { method: "DELETE" });

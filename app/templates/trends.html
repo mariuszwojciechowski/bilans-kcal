@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fit Krasnal — trendy</title>
+{% if has_logo %}<link rel="icon" href="/static/favicon-32.png">
+{% endif %}<style>
+  :root {
+    --green: #1A4D3A; --green-med: #3A7A5C; --lime: #8DC63F;
+    --bg: #F9FAF8; --card: #FFFFFF; --ink: #212529; --stone: #6C757D;
+    --danger: #DC3545; --success: #28A745;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #131715; --card: #1B211D; --ink: #E8ECE9; --stone: #9AA39D; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Inter, sans-serif;
+         background: var(--bg); color: var(--ink); }
+  header { background: var(--green); color: #F9FAF8; padding: 14px 24px;
+           display: flex; align-items: center; gap: 12px; }
+  header img.logo { width: 52px; height: 52px; transition: transform .18s ease;
+                    transform-origin: left center; }
+  header img.logo:hover { transform: scale(2); }
+  header h1 { font-size: 18px; font-weight: 600; margin: 0; }
+  header a.nav { color: #C9D3CC; font-size: 14px; text-decoration: none;
+                 padding: 6px 10px; border-radius: 6px; }
+  header a.nav:hover { background: rgba(255,255,255,.12); }
+  main { max-width: 900px; margin: 24px auto; padding: 0 16px; display: grid; gap: 16px; }
+  .card { background: var(--card); border-radius: 10px; padding: 18px 20px;
+          box-shadow: 0 1px 3px rgba(33,37,41,.12); }
+  h2 { font-size: 15px; margin: 0 0 10px; text-transform: uppercase;
+       letter-spacing: .05em; color: var(--stone); }
+  .ranges { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ranges a { padding: 8px 14px; border-radius: 6px; text-decoration: none;
+              color: var(--ink); border: 1px solid var(--stone); font-size: 14px; }
+  .ranges a.active { background: var(--green); color: #fff; border-color: var(--green); }
+  .muted { color: var(--stone); font-size: 13px; }
+  .stats { display: flex; gap: 28px; flex-wrap: wrap; }
+  .stat b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--stone); font-size: 13px; }
+  .pos { color: var(--success); } .neg { color: var(--danger); }
+  svg text { fill: var(--stone); }
+</style>
+</head>
+<body>
+<header>{% if has_logo %}<img class="logo" src="/static/logo-bw.png" alt="Fit Krasnal">{% endif %}<h1>Fit Krasnal — trendy</h1>
+  <span style="margin-left:auto"></span>
+  <a class="nav" href="/">← Dashboard</a></header>
+<main>
+
+<section class="card">
+  <div class="ranges">
+    {% for d, label in ranges %}
+    <a href="/trends?days={{ d }}" class="{{ 'active' if d == days else '' }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+  <div class="stats" style="margin-top:14px">
+    <div class="stat">
+      <b class="{{ 'pos' if period_change is not none and period_change <= 0 else 'neg' }}">
+        {{ ('%+.1f'|format(period_change)) if period_change is not none else "—" }}</b>
+      <span>zmiana wagi w okresie [kg] (śr. 7 dni)</span>
+    </div>
+    <div class="stat">
+      <b class="{{ 'pos' if avg_balance is not none and avg_balance <= 0 else 'neg' }}">
+        {{ avg_balance if avg_balance is not none else "—" }}</b>
+      <span>średni bilans [kcal/d] ({{ balance_days }} dni z danymi)</span>
+    </div>
+  </div>
+</section>
+
+<section class="card"><h2>Waga [kg]</h2>{{ chart_weight | safe }}</section>
+<section class="card"><h2>Energia [kcal/d]</h2>{{ chart_energy | safe }}</section>
+<section class="card"><h2>Bilans dzienny [kcal] — deficyt na zielono</h2>{{ chart_balance | safe }}
+  <p class="muted">Tylko dni z zapisanymi posiłkami i pomiarem Garmina.</p></section>
+
+</main>
+</body>
+</html>
