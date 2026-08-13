@@ -110,6 +110,15 @@ def test_quips_film_references_present():
     assert any("Pieniądze to nie wszystko" in t for cat in all_quips.values() for t in cat)
 
 
+def test_quips_more_film_quotes_present():
+    all_quips = quips._quips()
+    flat = [t for cat in all_quips.values() for t in cat]
+    assert any("Wiosna, panie sierżancie" in t for t in flat)
+    assert any("Royale z serem" in t for t in flat)
+    assert any("Dżizus, kurwa, ja pierdolę" in t for t in flat)
+    assert any("Wyrwałem chwasta" in t for t in flat)
+
+
 def test_quips_goal_texts_all_have_diff_placeholder():
     for cat in ("goal_close", "goal_far"):
         for text in quips._quips()[cat]:
