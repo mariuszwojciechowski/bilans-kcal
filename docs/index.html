@@ -42,6 +42,8 @@
   button.ghost { background: var(--green-med); color: #fff; border: none; }
   button.danger { background: none; border: 1px solid var(--danger); color: var(--danger); }
   .muted { color: var(--stone); font-size: 13px; }
+  img.quip-icon { width: 22px; height: 22px; vertical-align: -5px; margin-right: 6px; }
+  @media (prefers-color-scheme: dark) { img.quip-icon { filter: invert(1); } }
   .pos { color: var(--success); } .neg { color: var(--danger); } .mid { color: var(--green-med); }
   nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex;
         background: var(--green); z-index: 5; }
@@ -204,7 +206,7 @@
 <div id="profile-popup" style="display:none; position:fixed; inset:0; z-index:20;
      background:rgba(0,0,0,.55); align-items:center; justify-content:center; padding:20px">
   <div class="card" style="max-width:420px">
-    <h2>🍄 Krasnal prosi o uzupełnienie profilu</h2>
+    <h2><img class="quip-icon" src="krasnal-icon.png" alt="">Krasnal prosi o uzupełnienie profilu</h2>
     <p>Bez tych danych obliczenia są niepełne lub oparte na założeniach:</p>
     <ul id="popup-missing" class="muted"></ul>
     <button class="primary" onclick="document.getElementById('profile-popup').style.display='none'; show('settings')">Uzupełnij teraz</button>
@@ -399,11 +401,13 @@ async function renderToday() {
     setC("t-left", Math.round(eTarget - kcalIn), eTarget - kcalIn >= 0 ? "pos" : "neg");
     set("t-weight", eff.weight ?? "—");
     if (p.goal && eff.weight) setC("t-goal", (eff.weight - p.goal).toFixed(1), eff.weight <= p.goal ? "pos" : "");
-    document.getElementById("quip").textContent = "🍄 " + pickQuip(kcalIn, eTarget, eff);
+    document.getElementById("quip").innerHTML =
+      '<img class="quip-icon" src="krasnal-icon.png" alt="">' + esc(pickQuip(kcalIn, eTarget, eff));
     renderMacros(eff, day, eTarget, meals);
   } else {
     document.getElementById("quip").innerHTML =
-      '🍄 Krasnal nie wie, kim jesteś. Uzupełnij <a href="#" onclick="show(\'settings\')">profil</a>.';
+      '<img class="quip-icon" src="krasnal-icon.png" alt="">' +
+      'Krasnal nie wie, kim jesteś. Uzupełnij <a href="#" onclick="show(\'settings\')">profil</a>.';
     document.getElementById("macros").innerHTML = '<p class="muted">Brak profilu.</p>';
   }
 
