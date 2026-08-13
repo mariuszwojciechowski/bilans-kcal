@@ -59,8 +59,14 @@
     <div class="stat">
       <b class="{{ 'pos' if period_change is not none and period_change <= 0 else 'neg' }}">
         {{ ('%+.1f'|format(period_change)) if period_change is not none else "—" }}</b>
-      <span>zmiana wagi w okresie [kg] (śr. 7 dni)</span>
+      <span>zmiana ciężaru w okresie [kg] (śr. 7 dni)</span>
     </div>
+    {% if to_goal_kg is not none %}
+    <div class="stat">
+      <b class="{{ 'pos' if to_goal_kg <= 0 else '' }}">{{ to_goal_kg }}</b>
+      <span>do celu [kg]</span>
+    </div>
+    {% endif %}
     <div class="stat">
       <b class="{{ 'pos' if avg_balance is not none and avg_balance <= 0 else 'neg' }}">
         {{ avg_balance if avg_balance is not none else "—" }}</b>
@@ -69,7 +75,7 @@
   </div>
 </section>
 
-<section class="card"><h2>Waga [kg]</h2>{{ chart_weight | safe }}</section>
+<section class="card"><h2>Ciężar [kg]</h2>{{ chart_weight | safe }}</section>
 <section class="card"><h2>Energia [kcal/d]</h2>{{ chart_energy | safe }}</section>
 <section class="card"><h2>Bilans dzienny [kcal] — deficyt na zielono</h2>{{ chart_balance | safe }}
   <p class="muted">Tylko dni z zapisanymi posiłkami i pomiarem Garmina.</p></section>

@@ -82,6 +82,16 @@
 </section>
 
 <section class="card">
+  <h2>Cel ciężaru</h2>
+  <form method="post" action="/settings/goal">
+    <label>Docelowy ciężar [kg] <span class="muted">(rysowany na trendach, używany w tekstach motywacyjnych)</span></label>
+    <input name="target_weight_kg" type="number" step="0.1" min="30" max="250" required
+           value="{{ target_weight_kg or '' }}">
+    <button class="primary" style="margin-top:10px">Zapisz cel</button>
+  </form>
+</section>
+
+<section class="card">
   <h2>Klucz LLM (szacowanie posiłków)</h2>
   <p class="muted">Wystarczy jeden z kluczy. Aktywny backend:
     {% if backend %}<b class="ok">{{ backend }}</b>{% else %}<b class="bad">brak — posiłki trafiają do kolejki</b>{% endif %}</p>
@@ -107,6 +117,20 @@
 </section>
 
 <section class="card">
+  <h2>Przenoszenie danych między urządzeniami</h2>
+  <p><a href="/mobile/package"><button class="primary">Pobierz paczkę na telefon (zip)</button></a></p>
+  <p class="muted">W paczce: strona-zbieracz do otwarcia w przeglądarce telefonu (bez
+  instalacji — działa na służbowych komórkach) + instrukcja. Na wakacjach zbierasz
+  posiłki offline, po powrocie przenosisz je plikiem.</p>
+  <p><a href="/api/transfer/export"><button>Przygotuj dane do przeniesienia na inne urządzenie</button></a></p>
+  <label class="muted">Wczytaj dane z innego urządzenia (plik .json — z telefonu lub innego komputera;
+    nośnikiem może być np. Google Drive):</label>
+  <input type="file" id="transfer-file" accept=".json,application/json">
+  <button onclick="importTransfer()" style="margin-top:6px">Wczytaj</button>
+  <p class="muted" id="transfer-status"></p>
+</section>
+
+<section class="card">
   <h2>Kolejka posiłków offline</h2>
   <p>Oczekujące: <b>{{ pending_count }}</b>
     {% if pending_count %}<button style="margin-left:10px" onclick="processQueue()">Przetwórz teraz</button>{% endif %}</p>
@@ -121,6 +145,24 @@
 async function processQueue() {
   await fetch("/api/queue/process", { method: "POST" });
   setTimeout(() => location.reload(), 1500);
+}
+
+async function importTransfer() {
+  const f = document.getElementById("transfer-file").files[0];
+  const el = document.getElementById("transfer-status");
+  if (!f) { el.textContent = "Wybierz plik."; return; }
+  el.textContent = "Wczytuję…";
+  const fd = new FormData();
+  fd.append("file", f);
+  const r = await fetch("/api/transfer/import", { method: "POST", body: fd });
+  if (r.ok) {
+    const c = await r.json();
+    el.textContent = `Wczytano: posiłki ${c.meals}, do kolejki ${c.pending}, ` +
+      `wagi ${c.weights}, pominięte duplikaty ${c.skipped}. Kolejka przetwarza się w tle.`;
+    setTimeout(() => location.reload(), 3000);
+  } else {
+    el.textContent = (await r.json()).detail || "Błąd importu";
+  }
 }
 </script>
 </body>

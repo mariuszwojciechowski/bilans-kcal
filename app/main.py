@@ -1,10 +1,12 @@
+import io
 import json
+import zipfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from fastapi import (BackgroundTasks, Depends, FastAPI, File, Form, HTTPException,
                      Query, Request, UploadFile)
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -16,7 +18,7 @@ from .db import get_session, init_db
 from .models import Activity, DailySummary, Meal, PendingMeal, User, UserProfile, WeightLog
 from .providers import garmin as garmin_provider
 from .providers.garmin import GarminNotLoggedIn, GarminProvider
-from .services import meal_queue, meal_vision
+from .services import meal_queue, meal_vision, quips, transfer
 from .services import settings as settings_service
 from .services.balance import day_balance, deficit_warning, projected_weekly_change_kg
 from .services.charts import Series, bar_chart, line_chart
@@ -88,6 +90,7 @@ class ProfileIn(BaseModel):
     sex: str  # 'M' | 'F'
     height_cm: float
     target_deficit_kcal: int = 500
+    target_weight_kg: float | None = None  # cel ciężaru
     tz: str = "Europe/Warsaw"
 
 
@@ -114,6 +117,8 @@ def put_profile(data: ProfileIn, db: Session = Depends(db_session)):
     profile.sex = data.sex.upper()
     profile.height_cm = data.height_cm
     profile.target_deficit_kcal = data.target_deficit_kcal
+    if data.target_weight_kg is not None:
+        profile.target_weight_kg = data.target_weight_kg
     profile.tz = data.tz
     db.commit()
     return {"ok": True}
@@ -216,8 +221,21 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
         "steps": summary.steps if summary else None,
         "last_sync_ago": humanize_ago(last_sync),
         "macros": macros,
-        "norms_group_label": {"adult": "dorośli 18–64 lat", "senior": "seniorzy 65+"}.get(
-            targets.group_id, targets.group_id
+        "target_weight_kg": profile.target_weight_kg,
+        "to_goal_kg": (
+            round(weight - profile.target_weight_kg, 1)
+            if profile.target_weight_kg else None
+        ),
+        "quip": quips.pick(
+            kcal_in, e_target, bal.balance, macros,
+            weight_to_goal_kg=(round(weight - profile.target_weight_kg, 1)
+                               if profile.target_weight_kg else None),
+        ),
+        "norms_group_label": (
+            {"adult": "dorośli 18–64 lat", "senior": "seniorzy 65+"}.get(
+                targets.group_id, targets.group_id
+            )
+            + ", " + {"M": "mężczyźni", "F": "kobiety"}.get(profile.sex, profile.sex)
         ),
         "pending_meals": [
             {
@@ -421,6 +439,7 @@ def settings_page(request: Request, db: Session = Depends(db_session),
                   error: str | None = None):
     user = local_user(db)
     stored = settings_service.all_settings(db, user.id)
+    profile = db.get(UserProfile, user.id)
     last_sync = db.scalar(
         select(func.max(DailySummary.sync_ts)).where(DailySummary.user_id == user.id)
     )
@@ -438,6 +457,7 @@ def settings_page(request: Request, db: Session = Depends(db_session),
             "backend": meal_vision.pick_backend() if meal_vision.llm_configured() else None,
             "pending_count": pending_count or 0,
             "retention_days": meal_queue.RETENTION_DAYS,
+            "target_weight_kg": profile.target_weight_kg if profile else None,
             "saved": saved, "mfa": mfa, "error": error,
             "has_logo": (STATIC_DIR / "logo.png").exists(),
         },
@@ -462,6 +482,18 @@ def settings_llm(
     return RedirectResponse("/settings?saved=1", status_code=303)
 
 
+@app.post("/settings/goal")
+def settings_goal(target_weight_kg: float = Form(...), db: Session = Depends(db_session)):
+    """Cel ciężaru — rysowany na trendach, używany w tekstach motywacyjnych."""
+    user = local_user(db)
+    profile = db.get(UserProfile, user.id)
+    if profile is None:
+        raise HTTPException(409, "Najpierw skonfiguruj profil na dashboardzie")
+    profile.target_weight_kg = target_weight_kg
+    db.commit()
+    return RedirectResponse("/settings?saved=1", status_code=303)
+
+
 @app.post("/settings/garmin")
 def settings_garmin(email: str = Form(...), password: str = Form(...)):
     """Logowanie do Garmina z ustawień. Hasło idzie tylko do biblioteki Garmina."""
@@ -481,6 +513,54 @@ def settings_garmin_mfa(code: str = Form(...)):
     except Exception as exc:
         return RedirectResponse(f"/settings?error={exc.__class__.__name__}", status_code=303)
     return RedirectResponse("/settings?saved=1", status_code=303)
+
+
+# ── Przenoszenie danych między urządzeniami ───────────────────────────────
+
+@app.get("/api/transfer/export")
+def transfer_export(db: Session = Depends(db_session)):
+    """'Przygotuj dane do przeniesienia na inne urządzenie' — plik JSON do pobrania."""
+    user = local_user(db)
+    payload = transfer.export_payload(db, user.id)
+    return Response(
+        json.dumps(payload, ensure_ascii=False),
+        media_type="application/json",
+        headers={"Content-Disposition":
+                 f'attachment; filename="fit-krasnal-{date.today().isoformat()}.json"'},
+    )
+
+
+@app.post("/api/transfer/import")
+async def transfer_import(
+    background: BackgroundTasks,
+    file: UploadFile = File(...),
+    db: Session = Depends(db_session),
+):
+    """'Wczytaj dane z innego urządzenia' — scala plik transferu (desktop lub telefon)."""
+    user = local_user(db)
+    try:
+        payload = json.loads(await file.read())
+        counts = transfer.import_payload(db, user.id, payload)
+    except (ValueError, KeyError, json.JSONDecodeError) as exc:
+        raise HTTPException(422, f"Nieprawidłowy plik transferu: {exc}")
+    background.add_task(meal_queue.process_queue, user.id)
+    return counts
+
+
+@app.get("/mobile/package")
+def mobile_package():
+    """Paczka na telefon: zip ze stroną-zbieraczem (bez instalacji, offline)."""
+    mobile_dir = Path(__file__).resolve().parent.parent / "mobile"
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in mobile_dir.iterdir():
+            if f.is_file():
+                zf.write(f, f"fit-krasnal-mobilny/{f.name}")
+    return Response(
+        buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="fit-krasnal-mobilny.zip"'},
+    )
 
 
 @app.post("/api/queue/process")
@@ -506,6 +586,8 @@ def trends(
     days = max(2, min(days, 366))
     today = date.today()
     start = today - timedelta(days=days - 1)
+    profile = db.get(UserProfile, user.id)
+    target_weight = profile.target_weight_kg if profile else None
 
     weights = [
         (w.date, w.weight_kg)
@@ -541,13 +623,16 @@ def trends(
         (d, kcal - out_by_day[d]) for d, kcal in kcal_in if d in out_by_day
     ]
 
-    chart_weight = line_chart(
-        [
-            Series("pomiary", "#8DC63F", weights, dots=True, width=1.5),
-            Series("średnia 7 dni", "#1A4D3A", smoothed),
-        ],
-        start, today, y_fmt="{:.1f}",
-    )
+    weight_series = [
+        Series("pomiary", "#8DC63F", weights, dots=True, width=1.5),
+        Series("średnia 7 dni", "#1A4D3A", smoothed),
+    ]
+    if target_weight and weights:
+        weight_series.append(
+            Series("cel", "#DC3545", [(start, target_weight), (today, target_weight)],
+                   dash=True, width=1.5)
+        )
+    chart_weight = line_chart(weight_series, start, today, y_fmt="{:.1f}")
     chart_energy = line_chart(
         [
             Series("spożyte", "#8DC63F", kcal_in, dots=True),
@@ -574,6 +659,8 @@ def trends(
             "period_change": period_change,
             "avg_balance": avg_balance,
             "balance_days": len(balance),
+            "to_goal_kg": (round(smoothed[-1][1] - target_weight, 1)
+                           if target_weight and smoothed else None),
             "today": today.isoformat(),
             "has_logo": (STATIC_DIR / "logo.png").exists(),
         },

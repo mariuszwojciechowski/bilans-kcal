@@ -1,0 +1,34 @@
+Fit Krasnal — zbieracz wakacyjny (wersja na telefon, bez instalacji)
+====================================================================
+
+Do czego to jest
+----------------
+Zbieranie posiłków (zdjęcia + opisy), gdy nie masz dostępu do aplikacji
+na komputerze — np. na wakacjach. Nic się nie instaluje: to jedna strona
+HTML otwierana w przeglądarce telefonu. Dane zostają w telefonie.
+
+Jak uruchomić (raz)
+-------------------
+1. Rozpakuj to archiwum w telefonie (np. do folderu Pobrane).
+2. Otwórz plik index.html w Chrome (Menedżer plików -> index.html -> Chrome).
+3. Dodaj kartę do ekranu głównego (Chrome -> menu ⋮ -> "Dodaj do ekranu głównego"),
+   żeby mieć ikonę jak z aplikacji.
+
+WAŻNE: zawsze otwieraj ten sam plik (ta sama lokalizacja = te same dane).
+
+Codziennie na wakacjach
+-----------------------
+Zrób zdjęcie posiłku albo wpisz opis -> "Zapisz posiłek". Tyle.
+Zdjęcia są automatycznie zmniejszane, dwa tygodnie posiłków spokojnie się mieści.
+
+Po powrocie
+-----------
+1. Na telefonie: "Przygotuj dane do przeniesienia" -> zapisz plik .json
+   (najprościej na Google Drive).
+2. Na komputerze: otwórz Fit Krasnal -> Ustawienia -> Przenoszenie danych ->
+   "Wczytaj dane z innego urządzenia" -> wskaż plik.
+3. Aplikacja przetworzy wszystkie posiłki przez LLM (daty i godziny zachowane)
+   i pokaże je w historii oraz trendach.
+
+Uwaga: retencja nieprzetworzonych danych w aplikacji to 21 dni od importu,
+więc wczytaj plik niedługo po powrocie.
