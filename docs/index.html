@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Fit Krasnal — zbieracz</title>
+<title>Fit Krasnal</title>
 <style>
   :root {
     --green: #1A4D3A; --green-med: #3A7A5C; --lime: #8DC63F;
@@ -15,111 +15,363 @@
   }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
-         background: var(--bg); color: var(--ink); }
+         background: var(--bg); color: var(--ink); padding-bottom: 64px; }
   header { background: var(--green); color: #F9FAF8; padding: 12px 16px;
            display: flex; align-items: center; gap: 10px; }
   header .cap { width: 0; height: 0; border-left: 9px solid transparent;
                 border-right: 9px solid transparent; border-bottom: 16px solid var(--lime); }
   header h1 { font-size: 16px; margin: 0; }
-  main { max-width: 560px; margin: 14px auto; padding: 0 12px; display: grid; gap: 12px; }
+  header .muted { margin-left: auto; color: #C9D3CC; font-size: 12px; }
+  main { max-width: 560px; margin: 12px auto; padding: 0 12px; display: grid; gap: 12px; }
   .card { background: var(--card); border-radius: 10px; padding: 14px 16px;
           box-shadow: 0 1px 3px rgba(33,37,41,.15); }
   h2 { font-size: 13px; margin: 0 0 8px; text-transform: uppercase;
        letter-spacing: .05em; color: var(--stone); }
-  input, textarea, button { font: inherit; padding: 10px; border-radius: 8px; width: 100%;
+  input, textarea, select, button { font: inherit; padding: 10px; border-radius: 8px; width: 100%;
     border: 1px solid var(--stone); background: var(--card); color: var(--ink); margin: 4px 0; }
   button.primary { background: var(--lime); color: var(--green); font-weight: 700; border: none; }
   button.ghost { background: var(--green-med); color: #fff; border: none; }
   button.danger { background: none; border: 1px solid var(--danger); color: var(--danger); }
   .muted { color: var(--stone); font-size: 13px; }
+  .pos { color: var(--success); } .neg { color: var(--danger); } .mid { color: var(--green-med); }
+  nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex;
+        background: var(--green); z-index: 5; }
+  nav button { flex: 1; background: none; border: none; color: #C9D3CC; padding: 12px 4px;
+               border-radius: 0; font-size: 13px; margin: 0; }
+  nav button.active { color: #fff; font-weight: 700; background: rgba(255,255,255,.12); }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--stone); font-size: 12px; }
+  .bar { background: rgba(108,117,125,.18); border-radius: 6px; height: 8px;
+         overflow: hidden; margin: 3px 0 8px; }
+  .bar i { display: block; height: 100%; border-radius: 6px; }
   .entry { display: flex; gap: 10px; align-items: center; padding: 8px 0;
            border-bottom: 1px solid rgba(108,117,125,.25); }
-  .entry img { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; }
+  .entry img { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; }
   .entry .x { width: auto; padding: 6px 10px; margin: 0; }
   .row2 { display: flex; gap: 8px; }
-  #msg { min-height: 18px; }
+  .page { display: none; } .page.visible { display: grid; gap: 12px; }
+  #draft { background: rgba(141,198,63,.10); }
+  svg { max-width: 100%; height: auto; }
+  label { font-size: 13px; color: var(--stone); margin-top: 6px; display: block; }
 </style>
 </head>
 <body>
-<header><div class="cap"></div><h1>Fit Krasnal — zbieracz wakacyjny</h1></header>
+<header><div class="cap"></div><h1>Fit Krasnal</h1><span class="muted" id="hdr-date"></span></header>
 <main>
 
-<section class="card">
-  <h2>Dodaj posiłek (offline)</h2>
-  <div class="row2">
-    <input type="date" id="f-date">
-    <input type="time" id="f-time">
-  </div>
-  <input type="file" id="f-photo" accept="image/*" capture="environment">
-  <input type="text" id="f-note" placeholder="uwaga do zdjęcia (opcjonalnie)">
-  <textarea id="f-desc" rows="2" placeholder="albo opisz posiłek: 2 jajka sadzone i kromka żytniego"></textarea>
-  <button class="primary" onclick="addEntry()">Zapisz posiłek</button>
-  <p class="muted" id="msg"></p>
-  <p class="muted">Dane zostają w telefonie (ta przeglądarka). Zdjęcia są zmniejszane.
-  Po powrocie: „Przygotuj dane" → zapisz plik (np. na Google Drive) → wczytaj go
-  w aplikacji na komputerze (Ustawienia → Przenoszenie danych).</p>
-</section>
+<!-- ── DZIŚ ─────────────────────────────────────────────────────────── -->
+<div class="page visible" id="page-today">
+  <section class="card">
+    <h2>Bilans — <span id="t-day"></span> <span class="muted">(wydatek: szacunek z modelu)</span></h2>
+    <p class="muted" id="quip" style="font-style:italic"></p>
+    <div class="stats">
+      <div class="stat"><b id="t-in">0</b><span>kcal spożyte</span></div>
+      <div class="stat"><b id="t-out">—</b><span>kcal spalone (szac.)</span></div>
+      <div class="stat"><b id="t-bal">—</b><span>bilans (szac.)</span></div>
+      <div class="stat"><b id="t-left">—</b><span>zostało do celu dnia</span></div>
+      <div class="stat"><b id="t-weight">—</b><span>ciężar [kg] (z profilu)</span></div>
+      <div class="stat"><b id="t-goal">—</b><span>do celu ciężaru [kg]</span></div>
+    </div>
+    <input type="date" id="t-date" onchange="renderToday()">
+  </section>
+  <section class="card">
+    <h2>Makroskładniki (normy WHO — <span id="m-group"></span>)</h2>
+    <div id="macros"></div>
+  </section>
+  <section class="card">
+    <h2>Posiłki</h2>
+    <div id="t-meals"></div>
+    <div id="t-queue"></div>
+  </section>
+</div>
 
-<section class="card">
-  <h2>Zebrane posiłki (<span id="count">0</span>)</h2>
-  <div id="list"></div>
-</section>
+<!-- ── DODAJ ────────────────────────────────────────────────────────── -->
+<div class="page" id="page-add">
+  <section class="card">
+    <h2>Dodaj posiłek</h2>
+    <div class="row2">
+      <input type="date" id="f-date">
+      <input type="time" id="f-time">
+    </div>
+    <input type="file" id="f-photo" accept="image/*" capture="environment">
+    <input type="text" id="f-note" placeholder="uwaga do zdjęcia (opcjonalnie)">
+    <textarea id="f-desc" rows="2" placeholder="albo opisz posiłek: 2 jajka sadzone i kromka żytniego"></textarea>
+    <button class="primary" onclick="estimate()">Szacuj (Gemini)</button>
+    <button class="ghost" onclick="queueOnly()">Zapisz do kolejki (offline)</button>
+    <p class="muted" id="msg"></p>
+  </section>
+  <section class="card" id="draft" style="display:none">
+    <h2>Szacunek — sprawdź i popraw przed zapisem</h2>
+    <p id="d-desc"></p>
+    <div id="d-items" class="muted"></div>
+    <ul id="d-assumptions" class="muted"></ul>
+    <div class="row2">
+      <span><label>kcal</label><input type="number" id="d-kcal"></span>
+      <span><label>białko g</label><input type="number" step="0.1" id="d-protein"></span>
+    </div>
+    <div class="row2">
+      <span><label>tłuszcz g</label><input type="number" step="0.1" id="d-fat"></span>
+      <span><label>węgle g</label><input type="number" step="0.1" id="d-carbs"></span>
+    </div>
+    <p class="muted" id="d-range"></p>
+    <button class="primary" onclick="saveDraft()">Zapisz posiłek</button>
+  </section>
+  <section class="card">
+    <h2>Kolejka offline (<span id="q-count">0</span>)</h2>
+    <p class="muted">Posiłki bez internetu/klucza. Przetworzą się tu, na telefonie,
+      gdy będzie internet — albo po przeniesieniu na komputer.</p>
+    <button onclick="processQueue()">Przetwórz kolejkę teraz</button>
+    <p class="muted" id="q-status"></p>
+  </section>
+</div>
 
-<section class="card">
-  <h2>Przenoszenie danych</h2>
-  <button class="ghost" onclick="exportData()">Przygotuj dane do przeniesienia (pobierz plik)</button>
-  <label class="muted">Wczytaj dane z innego urządzenia (scalanie):</label>
-  <input type="file" id="f-import" accept=".json,application/json" onchange="importData(this.files[0])">
-  <button class="danger" onclick="clearAll()">Wyczyść wszystkie zebrane dane</button>
-</section>
+<!-- ── TRENDY ───────────────────────────────────────────────────────── -->
+<div class="page" id="page-trends">
+  <section class="card">
+    <h2>Energia — ostatnie 14 dni [kcal]</h2>
+    <div id="chart-kcal"></div>
+    <p class="muted">Linia przerywana: dzienny cel energii.</p>
+  </section>
+</div>
+
+<!-- ── USTAWIENIA ───────────────────────────────────────────────────── -->
+<div class="page" id="page-settings">
+  <section class="card">
+    <h2>Profil (na tym telefonie)</h2>
+    <label>Płeć</label>
+    <select id="p-sex"><option value="M">Mężczyzna</option><option value="F">Kobieta</option></select>
+    <label>Data urodzenia</label><input type="date" id="p-birth">
+    <label>Wzrost [cm]</label><input type="number" id="p-height" step="0.5">
+    <label>Aktualny ciężar [kg] (do obliczeń; normalnie z Garmina)</label>
+    <input type="number" id="p-weight" step="0.1">
+    <label>Cel deficytu [kcal/d]</label><input type="number" id="p-deficit" value="500">
+    <label>Cel ciężaru [kg]</label><input type="number" id="p-goal" step="0.1">
+    <button class="primary" onclick="saveProfile()">Zapisz profil</button>
+  </section>
+  <section class="card">
+    <h2>Klucz Gemini</h2>
+    <input type="password" id="p-key" placeholder="klucz z aistudio.google.com" autocomplete="off">
+    <button class="ghost" onclick="saveKey()">Zapisz klucz</button>
+    <p class="muted" id="key-status"></p>
+    <p class="muted">Darmowy klucz: aistudio.google.com → „Get API key". Klucz zostaje
+      w tej przeglądarce. Każdy domownik może użyć własnego albo wspólnego.</p>
+  </section>
+  <section class="card">
+    <h2>Przenoszenie danych</h2>
+    <button class="ghost" onclick="exportData()">Przygotuj dane do przeniesienia (pobierz plik)</button>
+    <label>Wczytaj dane z innego urządzenia (np. profil z komputera):</label>
+    <input type="file" id="f-import" accept=".json,application/json" onchange="importData(this.files[0])">
+    <p class="muted">Plik zapisz np. na Google Drive, a na komputerze wczytaj w
+      Ustawienia → Przenoszenie danych. Posiłki oszacowane tutaj wchodzą od razu
+      do historii, te z kolejki przetworzy komputer.</p>
+    <button class="danger" onclick="clearAll()">Wyczyść wszystkie dane na tym telefonie</button>
+  </section>
+</div>
 
 </main>
+<nav>
+  <button id="nav-today" class="active" onclick="show('today')">Dziś</button>
+  <button id="nav-add" onclick="show('add')">Dodaj</button>
+  <button id="nav-trends" onclick="show('trends')">Trendy</button>
+  <button id="nav-settings" onclick="show('settings')">Ustawienia</button>
+</nav>
+
 <script>
-const DB_NAME = "fitkrasnal", STORE = "pending";
+/* ── magazyn: IndexedDB (meals, queue) + localStorage (profil, klucz) ── */
+const DB_NAME = "fitkrasnal", STORES = ["meals", "queue"];
 let db;
-
 function openDb() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-function tx(mode) { return db.transaction(STORE, mode).objectStore(STORE); }
-function all() {
   return new Promise((res, rej) => {
-    const r = tx("readonly").getAll();
-    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    const req = indexedDB.open(DB_NAME, 2);
+    req.onupgradeneeded = () => {
+      for (const s of STORES)
+        if (!req.result.objectStoreNames.contains(s))
+          req.result.createObjectStore(s, { keyPath: "id", autoIncrement: true });
+    };
+    req.onsuccess = () => res(req.result); req.onerror = () => rej(req.error);
   });
 }
-function put(entry) {
-  return new Promise((res, rej) => {
-    const r = tx("readwrite").add(entry);
-    r.onsuccess = () => res(); r.onerror = () => rej(r.error);
-  });
-}
-function del(id) {
-  return new Promise((res) => { tx("readwrite").delete(id).onsuccess = () => res(); });
+const tx = (store, mode) => db.transaction(store, mode).objectStore(store);
+const all = (store) => new Promise((res) => { const r = tx(store, "readonly").getAll(); r.onsuccess = () => res(r.result); });
+const put = (store, v) => new Promise((res) => { const r = tx(store, "readwrite").add(v); r.onsuccess = () => res(r.result); });
+const del = (store, id) => new Promise((res) => { tx(store, "readwrite").delete(id).onsuccess = () => res(); });
+
+const profile = () => JSON.parse(localStorage.getItem("profile") || "null");
+const geminiKey = () => localStorage.getItem("gemini_key") || "";
+
+/* ── nawigacja ── */
+function show(page) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("visible"));
+  document.getElementById("page-" + page).classList.add("visible");
+  document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+  document.getElementById("nav-" + page).classList.add("active");
+  if (page === "today") renderToday();
+  if (page === "trends") renderTrends();
+  if (page === "settings") loadSettings();
+  if (page === "add") { renderQueueCount(); }
 }
 
-function nowDefaults() {
-  const d = new Date();
-  document.getElementById("f-date").value = d.toISOString().slice(0, 10);
-  document.getElementById("f-time").value = d.toTimeString().slice(0, 5);
+/* ── model energetyczny (uproszczony, bez Garmina) ── */
+function ageYears(birth, on) {
+  const b = new Date(birth), d = new Date(on);
+  let a = d.getFullYear() - b.getFullYear();
+  if (d.getMonth() < b.getMonth() || (d.getMonth() === b.getMonth() && d.getDate() < b.getDate())) a--;
+  return a;
+}
+function bmr(p, on) {
+  return 10 * p.weight + 6.25 * p.height - 5 * ageYears(p.birth, on) + (p.sex === "M" ? 5 : -161);
+}
+const ACTIVITY_FACTOR = 1.4; // lekka aktywność — bez danych z zegarka
+const tdee = (p, on) => bmr(p, on) * ACTIVITY_FACTOR;
+
+function whoTargets(p, on, eTarget) {
+  const senior = ageYears(p.birth, on) >= 65;
+  return {
+    group: (senior ? "seniorzy 65+" : "dorośli 18–64") + ", " + (p.sex === "M" ? "mężczyźni" : "kobiety"),
+    protein_min: (senior ? 1.0 : 0.83) * p.weight,
+    fat: [0.15 * eTarget / 9, 0.30 * eTarget / 9],
+    carbs: [0.55 * eTarget / 4, 0.75 * eTarget / 4],
+    sugars_max: 0.10 * eTarget / 4,
+    fiber_min: 25,
+  };
+}
+
+/* ── teksty krasnala (skrót wersji desktopowej) ── */
+const QUIPS = {
+  under: ["Zjadłeś tyle, co wróbel na diecie pudełkowej. Zjedz coś, bo wiatr Cię zdmuchnie.",
+          "Deficyt to ma być deficyt, a nie strajk głodowy, cholero jedna."],
+  over: ["Bilans wygląda, jakbyś jadł za siebie i za sąsiada. Jutro ścieżka pod górkę, grubasku.",
+         "Nadwyżka to zaliczka na nowy pasek. Większy."],
+  ontrack: ["Jesz jak należy. Krasnal uchyla kapelusza.",
+            "Ani głodówka, ani żarcie na smutno. Krasnalski szacun."],
+  empty: ["Pusty dziennik. Krasnal nie wierzy, że żyjesz powietrzem.",
+          "Nic nie zapisałeś. Niezapisane kalorie też się liczą, kurde."],
+  goal_close: ["Do celu {diff} kg — mniej niż wiadro borówek. Nie odpuszczaj.",
+               "{diff} kg do celu. Krasnal poleruje medal."],
+  goal_far: ["Do celu {diff} kg. Krok po kroku, kurde.", "{diff} kg. Słoń też je się kawałkami."],
+  goal_reached: ["Cel osiągnięty, do diaska! Tylko nie świętuj jedzeniem."],
+};
+function pickQuip(kcalIn, eTarget, p) {
+  let cats = [];
+  if (kcalIn === 0) cats.push("empty");
+  else if (kcalIn > eTarget * 1.05) cats.push("over");
+  else if (kcalIn < eTarget * 0.45) cats.push("under");
+  else cats.push("ontrack");
+  let diff = null;
+  if (p && p.goal && p.weight) {
+    diff = Math.round((p.weight - p.goal) * 10) / 10;
+    if (diff <= 0) cats = ["goal_reached"];
+    else cats.push(diff <= 2 ? "goal_close" : "goal_far");
+  }
+  const cat = cats[Math.floor(Math.random() * cats.length)];
+  const t = QUIPS[cat][Math.floor(Math.random() * QUIPS[cat].length)];
+  return t.replace("{diff}", diff === null ? "?" : Math.max(diff, 0).toFixed(1));
+}
+
+/* ── widok DZIŚ ── */
+async function renderToday() {
+  const day = document.getElementById("t-date").value || todayIso();
+  document.getElementById("t-day").textContent = day === todayIso() ? "dziś" : day;
+  const p = profile();
+  const meals = (await all("meals")).filter(m => m.date === day);
+  const queue = (await all("queue")).filter(q => q.date === day);
+  const kcalIn = meals.reduce((s, m) => s + m.kcal, 0);
+  document.getElementById("t-in").textContent = Math.round(kcalIn);
+
+  if (p) {
+    const out = tdee(p, day), eTarget = out - (p.deficit || 500);
+    const bal = kcalIn - out;
+    set("t-out", Math.round(out));
+    setC("t-bal", Math.round(bal), bal <= -(p.deficit || 500) ? "pos" : (bal <= 0 ? "mid" : "neg"));
+    setC("t-left", Math.round(eTarget - kcalIn), eTarget - kcalIn >= 0 ? "pos" : "neg");
+    set("t-weight", p.weight ?? "—");
+    if (p.goal && p.weight) setC("t-goal", (p.weight - p.goal).toFixed(1), p.weight <= p.goal ? "pos" : "");
+    document.getElementById("quip").textContent = "🍄 " + pickQuip(kcalIn, eTarget, p);
+    renderMacros(p, day, eTarget, meals);
+  } else {
+    document.getElementById("quip").innerHTML =
+      '🍄 Krasnal nie wie, kim jesteś. Uzupełnij <a href="#" onclick="show(\'settings\')">profil</a>.';
+    document.getElementById("macros").innerHTML = '<p class="muted">Brak profilu.</p>';
+  }
+
+  document.getElementById("t-meals").innerHTML = meals.map(m => `
+    <div class="entry">
+      <div style="flex:1"><div>${esc(m.description)}</div>
+        <div class="muted">${m.time || ""} · ${m.kcal} kcal · B/T/W ${r0(m.protein_g)}/${r0(m.fat_g)}/${r0(m.carbs_g)} g</div></div>
+      <button class="x" onclick="delMeal(${m.id})">✕</button>
+    </div>`).join("") || '<p class="muted">Brak posiłków.</p>';
+  document.getElementById("t-queue").innerHTML = queue.length
+    ? `<p class="muted">W kolejce offline: ${queue.length} (przetwórz w zakładce „Dodaj")</p>` : "";
+}
+function renderMacros(p, day, eTarget, meals) {
+  const t = whoTargets(p, day, eTarget);
+  document.getElementById("m-group").textContent = t.group;
+  const sum = k => meals.reduce((s, m) => s + (m[k] || 0), 0);
+  const rows = [
+    ["Białko", sum("protein_g"), t.protein_min, null, "#1A4D3A", `≥ ${t.protein_min.toFixed(0)} g`],
+    ["Węglowodany", sum("carbs_g"), t.carbs[0], t.carbs[1], "#8DC63F", `${t.carbs[0].toFixed(0)}–${t.carbs[1].toFixed(0)} g`],
+    ["Tłuszcze", sum("fat_g"), t.fat[0], t.fat[1], "#3A7A5C", `${t.fat[0].toFixed(0)}–${t.fat[1].toFixed(0)} g`],
+    ["Błonnik", sum("fiber_g"), t.fiber_min, null, "#6C757D", `≥ ${t.fiber_min} g`],
+    ["Cukry wolne", sum("sugars_g"), null, t.sugars_max, "#DC3545", `< ${t.sugars_max.toFixed(0)} g`],
+  ];
+  document.getElementById("macros").innerHTML = rows.map(([n, v, lo, hi, c, range]) => {
+    const status = (lo !== null && v < lo) ? ["poniżej", "mid"] :
+                   (hi !== null && v > hi) ? ["powyżej", "neg"] : ["w normie", "pos"];
+    const ref = hi ?? lo ?? 1;
+    return `<div style="display:flex;justify-content:space-between">
+        <span>${n} — ${v.toFixed(1)} g <span class="muted">(${range})</span></span>
+        <span class="${status[1]}">${status[0]}</span></div>
+      <div class="bar"><i style="width:${Math.min(100, 100 * v / ref)}%;background:${c}"></i></div>`;
+  }).join("");
+}
+
+/* ── dodawanie / Gemini ── */
+const SYSTEM = `Jesteś ekspertem dietetykiem szacującym wartości odżywcze posiłków. Analizujesz zdjęcie lub opis posiłku i zwracasz strukturalne oszacowanie.
+Zasady: identyfikuj składniki osobno z masą w gramach; uwzględniaj tłuszcz niewidoczny (olej, masło, dressing) i odnotuj w assumptions; kcal_min/kcal_max to realistyczny przedział niepewności (±25-40%); kcal ≈ 4*białko + 9*tłuszcz + 4*węglowodany; odpowiadaj po polsku.`;
+const SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    description: { type: "STRING" },
+    items: { type: "ARRAY", items: { type: "OBJECT", properties: {
+      name: { type: "STRING" }, mass_g: { type: "NUMBER" }, kcal: { type: "NUMBER" },
+      protein_g: { type: "NUMBER" }, fat_g: { type: "NUMBER" }, carbs_g: { type: "NUMBER" },
+      fiber_g: { type: "NUMBER" }, sugars_g: { type: "NUMBER" },
+      confidence: { type: "STRING", enum: ["low", "medium", "high"] } },
+      required: ["name", "mass_g", "kcal", "protein_g", "fat_g", "carbs_g", "confidence"] } },
+    assumptions: { type: "ARRAY", items: { type: "STRING" } },
+    kcal_min: { type: "NUMBER" }, kcal_max: { type: "NUMBER" },
+  },
+  required: ["description", "items", "assumptions", "kcal_min", "kcal_max"],
+};
+
+async function callGemini(prompt, photoB64) {
+  const parts = [];
+  if (photoB64) parts.push({ inlineData: { mimeType: "image/jpeg", data: photoB64 } });
+  parts.push({ text: prompt });
+  const resp = await fetch(
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=" +
+    encodeURIComponent(geminiKey()),
+    { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM }] },
+        contents: [{ role: "user", parts }],
+        generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA },
+      }) });
+  if (!resp.ok) throw new Error("Gemini HTTP " + resp.status);
+  const data = await resp.json();
+  return JSON.parse(data.candidates[0].content.parts[0].text);
 }
 
 function downscale(file) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      const MAX = 1280;
-      let { width: w, height: h } = img;
-      const scale = Math.min(1, MAX / Math.max(w, h));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(w * scale); canvas.height = Math.round(h * scale);
-      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", 0.82).split(",")[1]); // base64 bez prefiksu
+      const MAX = 1280, s = Math.min(1, MAX / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL("image/jpeg", 0.82).split(",")[1]);
       URL.revokeObjectURL(img.src);
     };
     img.onerror = reject;
@@ -127,83 +379,240 @@ function downscale(file) {
   });
 }
 
-async function addEntry() {
+let draft = null;
+async function estimate() {
   const msg = document.getElementById("msg");
   const file = document.getElementById("f-photo").files[0];
   const desc = document.getElementById("f-desc").value.trim();
   if (!file && !desc) { msg.textContent = "Dodaj zdjęcie albo opis."; return; }
-  msg.textContent = "Zapisuję…";
-  const entry = {
-    date: document.getElementById("f-date").value,
-    time: document.getElementById("f-time").value,
+  if (!geminiKey()) { msg.textContent = "Brak klucza Gemini (Ustawienia) — użyj „Zapisz do kolejki”."; return; }
+  msg.textContent = "Krasnal przygląda się posiłkowi…";
+  try {
+    const photoB64 = file ? await downscale(file) : null;
+    const note = document.getElementById("f-note").value.trim();
+    const prompt = photoB64
+      ? "Oszacuj wartości odżywcze posiłku ze zdjęcia." + (note ? " Uwaga: " + note : "")
+      : "Oszacuj wartości odżywcze posiłku: " + desc;
+    const e = await callGemini(prompt, photoB64);
+    draft = e;
+    msg.textContent = "";
+    showDraft(e);
+  } catch (err) {
+    msg.textContent = "Nie udało się (" + err.message + ") — zapisuję do kolejki.";
+    await queueOnly(true);
+  }
+}
+function showDraft(e) {
+  document.getElementById("draft").style.display = "block";
+  document.getElementById("d-desc").textContent = e.description;
+  document.getElementById("d-items").innerHTML = e.items.map(i =>
+    `${esc(i.name)} — ${Math.round(i.mass_g)} g, ${Math.round(i.kcal)} kcal (${i.confidence})`).join("<br>");
+  document.getElementById("d-assumptions").innerHTML = e.assumptions.map(a => `<li>${esc(a)}</li>`).join("");
+  const sum = k => e.items.reduce((s, i) => s + (i[k] || 0), 0);
+  document.getElementById("d-kcal").value = Math.round(sum("kcal"));
+  document.getElementById("d-protein").value = sum("protein_g").toFixed(1);
+  document.getElementById("d-fat").value = sum("fat_g").toFixed(1);
+  document.getElementById("d-carbs").value = sum("carbs_g").toFixed(1);
+  document.getElementById("d-range").textContent =
+    `Przedział: ${Math.round(e.kcal_min)}–${Math.round(e.kcal_max)} kcal`;
+}
+async function saveDraft() {
+  const sum = k => draft.items.reduce((s, i) => s + (i[k] || 0), 0);
+  await put("meals", {
+    date: document.getElementById("f-date").value, time: document.getElementById("f-time").value,
+    description: draft.description,
+    kcal: +document.getElementById("d-kcal").value,
+    kcal_min: Math.round(draft.kcal_min), kcal_max: Math.round(draft.kcal_max),
+    protein_g: +document.getElementById("d-protein").value,
+    fat_g: +document.getElementById("d-fat").value,
+    carbs_g: +document.getElementById("d-carbs").value,
+    fiber_g: +sum("fiber_g").toFixed(1), sugars_g: +sum("sugars_g").toFixed(1),
+    items: draft.items, assumptions: draft.assumptions,
+    source: document.getElementById("f-photo").files[0] ? "photo" : "text",
+  });
+  draft = null;
+  document.getElementById("draft").style.display = "none";
+  resetForm("Zapisano ✓");
+  show("today");
+}
+async function queueOnly(silent) {
+  const file = document.getElementById("f-photo").files[0];
+  const desc = document.getElementById("f-desc").value.trim();
+  if (!file && !desc) { document.getElementById("msg").textContent = "Dodaj zdjęcie albo opis."; return; }
+  await put("queue", {
+    date: document.getElementById("f-date").value, time: document.getElementById("f-time").value,
     description: desc || null,
     note: document.getElementById("f-note").value.trim() || null,
     photo_b64: file ? await downscale(file) : null,
     created_at: new Date().toISOString(),
-  };
-  await put(entry);
-  document.getElementById("f-photo").value = "";
-  document.getElementById("f-desc").value = "";
-  document.getElementById("f-note").value = "";
-  nowDefaults();
-  msg.textContent = "Zapisano ✓";
-  render();
+  });
+  if (!silent) resetForm("W kolejce ✓ (przetworzy się, gdy będzie internet/klucz)");
+  renderQueueCount();
+}
+async function processQueue() {
+  const el = document.getElementById("q-status");
+  if (!geminiKey()) { el.textContent = "Brak klucza Gemini (Ustawienia)."; return; }
+  const queue = await all("queue");
+  let ok = 0, fail = 0;
+  for (const q of queue) {
+    el.textContent = `Przetwarzam ${ok + fail + 1}/${queue.length}…`;
+    try {
+      const prompt = q.photo_b64
+        ? "Oszacuj wartości odżywcze posiłku ze zdjęcia." + (q.note ? " Uwaga: " + q.note : "")
+        : "Oszacuj wartości odżywcze posiłku: " + q.description;
+      const e = await callGemini(prompt, q.photo_b64);
+      const sum = k => e.items.reduce((s, i) => s + (i[k] || 0), 0);
+      await put("meals", {
+        date: q.date, time: q.time, description: e.description,
+        kcal: Math.round(sum("kcal")), kcal_min: Math.round(e.kcal_min), kcal_max: Math.round(e.kcal_max),
+        protein_g: +sum("protein_g").toFixed(1), fat_g: +sum("fat_g").toFixed(1),
+        carbs_g: +sum("carbs_g").toFixed(1), fiber_g: +sum("fiber_g").toFixed(1),
+        sugars_g: +sum("sugars_g").toFixed(1), items: e.items, assumptions: e.assumptions,
+        source: q.photo_b64 ? "photo" : "text",
+      });
+      await del("queue", q.id);
+      ok++;
+    } catch (err) { fail++; }
+  }
+  el.textContent = `Przetworzono: ${ok}, nieudane: ${fail}.`;
+  renderQueueCount();
+}
+async function renderQueueCount() {
+  document.getElementById("q-count").textContent = (await all("queue")).length;
+}
+async function delMeal(id) { await del("meals", id); renderToday(); }
+
+/* ── trendy ── */
+async function renderTrends() {
+  const meals = await all("meals");
+  const p = profile();
+  const days = [...Array(14)].map((_, i) => {
+    const d = new Date(); d.setDate(d.getDate() - 13 + i);
+    return d.toISOString().slice(0, 10);
+  });
+  const sums = days.map(d => meals.filter(m => m.date === d).reduce((s, m) => s + m.kcal, 0));
+  const eTarget = p ? tdee(p, todayIso()) - (p.deficit || 500) : null;
+  const W = 520, H = 200, pad = 34;
+  const vmax = Math.max(...sums, eTarget || 0, 500) * 1.1;
+  const bw = (W - 2 * pad) / 14 * 0.7;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+  sums.forEach((v, i) => {
+    const x = pad + (W - 2 * pad) * i / 13 - bw / 2;
+    const h = (H - 2 * pad) * v / vmax;
+    const color = eTarget === null ? "#3A7A5C" : (v === 0 ? "#6C757D" : (v <= eTarget ? "#28A745" : "#DC3545"));
+    svg += `<rect x="${x.toFixed(1)}" y="${(H - pad - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(h, 1).toFixed(1)}" fill="${color}" rx="2"/>`;
+  });
+  if (eTarget) {
+    const y = H - pad - (H - 2 * pad) * eTarget / vmax;
+    svg += `<line x1="${pad}" y1="${y}" x2="${W - pad}" y2="${y}" stroke="#1A4D3A" stroke-width="1.5" stroke-dasharray="5,4"/>`;
+  }
+  svg += `<text x="${pad}" y="${H - 8}" font-size="10" fill="#6C757D">${days[0].slice(5)}</text>
+    <text x="${W - pad}" y="${H - 8}" font-size="10" fill="#6C757D" text-anchor="end">${days[13].slice(5)}</text></svg>`;
+  document.getElementById("chart-kcal").innerHTML = svg;
 }
 
-async function render() {
-  const entries = await all();
-  document.getElementById("count").textContent = entries.length;
-  document.getElementById("list").innerHTML = entries.map(e => `
-    <div class="entry">
-      ${e.photo_b64 ? `<img src="data:image/jpeg;base64,${e.photo_b64}">` : ""}
-      <div style="flex:1">
-        <div>${e.description || e.note || "zdjęcie"}</div>
-        <div class="muted">${e.date} ${e.time || ""}</div>
-      </div>
-      <button class="x" onclick="removeEntry(${e.id})">✕</button>
-    </div>`).join("") || '<p class="muted">Pusto. Krasnal czeka na pierwszy posiłek.</p>';
+/* ── ustawienia / profil / transfer ── */
+function loadSettings() {
+  const p = profile();
+  if (p) {
+    document.getElementById("p-sex").value = p.sex;
+    document.getElementById("p-birth").value = p.birth;
+    document.getElementById("p-height").value = p.height;
+    document.getElementById("p-weight").value = p.weight;
+    document.getElementById("p-deficit").value = p.deficit;
+    document.getElementById("p-goal").value = p.goal || "";
+  }
+  document.getElementById("key-status").textContent =
+    geminiKey() ? "Klucz zapisany (…" + geminiKey().slice(-4) + ")" : "Brak klucza.";
 }
-async function removeEntry(id) { await del(id); render(); }
+function saveProfile() {
+  localStorage.setItem("profile", JSON.stringify({
+    sex: document.getElementById("p-sex").value,
+    birth: document.getElementById("p-birth").value,
+    height: +document.getElementById("p-height").value,
+    weight: +document.getElementById("p-weight").value,
+    deficit: +document.getElementById("p-deficit").value || 500,
+    goal: +document.getElementById("p-goal").value || null,
+  }));
+  show("today");
+}
+function saveKey() {
+  const v = document.getElementById("p-key").value.trim();
+  if (v) localStorage.setItem("gemini_key", v);
+  loadSettings();
+}
 
 async function exportData() {
-  const entries = await all();
+  const meals = await all("meals");
+  const queue = await all("queue");
   const payload = {
     format: "fit-krasnal-transfer", version: 1, source: "mobile",
     exported_at: new Date().toISOString(),
-    pending: entries.map(({ id, created_at, ...rest }) => rest),
+    meals: meals.map(({ id, items, assumptions, ...m }) => ({
+      ...m, items_json: JSON.stringify(items || []),
+      assumptions_json: JSON.stringify(assumptions || []),
+    })),
+    pending: queue.map(({ id, created_at, ...q }) => q),
   };
   const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `fit-krasnal-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `fit-krasnal-${todayIso()}.json`;
   a.click();
 }
-
 async function importData(file) {
   if (!file) return;
   const payload = JSON.parse(await file.text());
   if (payload.format !== "fit-krasnal-transfer") { alert("To nie jest plik Fit Krasnal."); return; }
-  const existing = await all();
-  const seen = new Set(existing.map(e => `${e.date}|${e.time}|${e.description}|${e.note}`));
+  if (payload.profile && !profile()) {
+    const pr = payload.profile;
+    localStorage.setItem("profile", JSON.stringify({
+      sex: pr.sex, birth: pr.birth_date, height: pr.height_cm,
+      weight: pr.last_weight_kg || 0, deficit: pr.target_deficit_kcal || 500,
+      goal: pr.target_weight_kg || null,
+    }));
+  }
   let added = 0;
-  for (const p of (payload.pending || [])) {
-    const key = `${p.date}|${p.time}|${p.description}|${p.note}`;
+  const existing = await all("meals");
+  const seen = new Set(existing.map(m => `${m.date}|${m.time}|${m.kcal}|${m.description}`));
+  for (const m of (payload.meals || [])) {
+    const key = `${m.date}|${m.time ? m.time.slice(0,5) : m.time}|${Math.round(m.kcal)}|${m.description}`;
     if (seen.has(key)) continue;
-    await put({ ...p, created_at: new Date().toISOString() });
+    await put("meals", { ...m, time: m.time ? m.time.slice(0, 5) : null,
+      items: m.items_json ? JSON.parse(m.items_json) : [],
+      assumptions: m.assumptions_json ? JSON.parse(m.assumptions_json) : [] });
     added++;
   }
-  alert(`Wczytano ${added} posiłków.`);
-  render();
+  alert(`Wczytano. Nowych posiłków: ${added}${payload.profile ? ", profil zaimportowany" : ""}.`);
+  show("today");
 }
-
 async function clearAll() {
-  if (!confirm("Na pewno usunąć wszystkie zebrane posiłki z tego telefonu?")) return;
-  const entries = await all();
-  for (const e of entries) await del(e.id);
-  render();
+  if (!confirm("Usunąć WSZYSTKIE dane Fit Krasnal z tego telefonu?")) return;
+  for (const s of STORES) for (const e of await all(s)) await del(s, e.id);
+  localStorage.removeItem("profile");
+  show("today");
 }
 
-openDb().then(d => { db = d; nowDefaults(); render(); });
+/* ── util ── */
+const todayIso = () => new Date().toISOString().slice(0, 10);
+const esc = (s) => (s || "").replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
+const r0 = (v) => Math.round(v || 0);
+function set(id, v) { document.getElementById(id).textContent = v; }
+function setC(id, v, cls) { const el = document.getElementById(id); el.textContent = v; el.className = cls; }
+function resetForm(m) {
+  ["f-photo", "f-note", "f-desc"].forEach(i => document.getElementById(i).value = "");
+  nowDefaults();
+  document.getElementById("msg").textContent = m || "";
+}
+function nowDefaults() {
+  const d = new Date();
+  document.getElementById("f-date").value = todayIso();
+  document.getElementById("f-time").value = d.toTimeString().slice(0, 5);
+  document.getElementById("t-date").value = todayIso();
+  document.getElementById("hdr-date").textContent = todayIso();
+}
+
+openDb().then(d => { db = d; nowDefaults(); renderToday(); });
 </script>
 </body>
 </html>

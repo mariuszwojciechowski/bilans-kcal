@@ -1,6 +1,4 @@
-import io
 import json
-import zipfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -545,22 +543,6 @@ async def transfer_import(
         raise HTTPException(422, f"Nieprawidłowy plik transferu: {exc}")
     background.add_task(meal_queue.process_queue, user.id)
     return counts
-
-
-@app.get("/mobile/package")
-def mobile_package():
-    """Paczka na telefon: zip ze stroną-zbieraczem (bez instalacji, offline)."""
-    mobile_dir = Path(__file__).resolve().parent.parent / "mobile"
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in mobile_dir.iterdir():
-            if f.is_file():
-                zf.write(f, f"fit-krasnal-mobilny/{f.name}")
-    return Response(
-        buf.getvalue(),
-        media_type="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="fit-krasnal-mobilny.zip"'},
-    )
 
 
 @app.post("/api/queue/process")
