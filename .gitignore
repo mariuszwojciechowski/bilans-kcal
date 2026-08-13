@@ -8,6 +8,7 @@ data/
 # Sekrety i konfiguracja lokalna (loginy, tokeny, profil użytkownika)
 .env
 .env.*
+!.env.example
 *.secret
 secrets/
 
