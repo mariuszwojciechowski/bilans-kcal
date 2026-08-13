@@ -3,7 +3,12 @@
 Uruchom samodzielnie w terminalu:  .venv/bin/python scripts/garmin_login.py
 Poprosi o e-mail, hasło i (jeśli włączone) kod MFA. Tokeny sesji (ważne ~rok)
 zapisze w ~/.fit-krasnal/garth — POZA repozytorium. Hasło nie jest nigdzie
-zapisywane."""
+zapisywane.
+
+Uwaga: Garmin limituje próby logowania nieoficjalnymi metodami (błędy 429).
+Biblioteka próbuje kilku strategii po kolei — pojedyncze komunikaty 429 po
+drodze są normalne, dopóki całość kończy się sukcesem. Po kilku nieudanych
+próbach odczekaj kilkanaście minut."""
 
 import getpass
 import sys
@@ -17,14 +22,14 @@ from app.config import GARMIN_TOKENS_DIR  # noqa: E402
 
 
 def main() -> None:
+    GARMIN_TOKENS_DIR.mkdir(parents=True, exist_ok=True)
     tokens = str(GARMIN_TOKENS_DIR)
 
     # najpierw spróbuj wznowić istniejącą sesję
     try:
         api = Garmin()
         api.login(tokens)
-        name = api.get_full_name()
-        print(f"Sesja aktywna — zalogowano jako: {name}. Nic do zrobienia.")
+        print(f"Sesja aktywna — zalogowano jako: {api.get_full_name()}. Nic do zrobienia.")
         return
     except Exception:
         pass
@@ -33,14 +38,15 @@ def main() -> None:
     email = input("E-mail: ").strip()
     password = getpass.getpass("Hasło: ")
 
-    api = Garmin(email=email, password=password, return_on_mfa=True)
-    result, state = api.login()
-    if result == "needs_mfa":
-        code = input("Kod MFA: ").strip()
-        api.resume_login(state, code)
+    # prompt_mfa: biblioteka sama zapyta o kod, dokończy logowanie
+    # i zapisze tokeny do tokenstore.
+    api = Garmin(
+        email=email,
+        password=password,
+        prompt_mfa=lambda: input("Kod MFA: ").strip(),
+    )
+    api.login(tokens)
 
-    GARMIN_TOKENS_DIR.mkdir(parents=True, exist_ok=True)
-    api.garth.dump(tokens)
     print(f"Zalogowano jako: {api.get_full_name()}")
     print(f"Tokeny zapisane w: {tokens}")
 
