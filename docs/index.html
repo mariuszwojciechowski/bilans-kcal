@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fit Krasnal — zbieracz</title>
+<style>
+  :root {
+    --green: #1A4D3A; --green-med: #3A7A5C; --lime: #8DC63F;
+    --bg: #F9FAF8; --card: #FFFFFF; --ink: #212529; --stone: #6C757D;
+    --danger: #DC3545; --success: #28A745;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #131715; --card: #1B211D; --ink: #E8ECE9; --stone: #9AA39D; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+         background: var(--bg); color: var(--ink); }
+  header { background: var(--green); color: #F9FAF8; padding: 12px 16px;
+           display: flex; align-items: center; gap: 10px; }
+  header .cap { width: 0; height: 0; border-left: 9px solid transparent;
+                border-right: 9px solid transparent; border-bottom: 16px solid var(--lime); }
+  header h1 { font-size: 16px; margin: 0; }
+  main { max-width: 560px; margin: 14px auto; padding: 0 12px; display: grid; gap: 12px; }
+  .card { background: var(--card); border-radius: 10px; padding: 14px 16px;
+          box-shadow: 0 1px 3px rgba(33,37,41,.15); }
+  h2 { font-size: 13px; margin: 0 0 8px; text-transform: uppercase;
+       letter-spacing: .05em; color: var(--stone); }
+  input, textarea, button { font: inherit; padding: 10px; border-radius: 8px; width: 100%;
+    border: 1px solid var(--stone); background: var(--card); color: var(--ink); margin: 4px 0; }
+  button.primary { background: var(--lime); color: var(--green); font-weight: 700; border: none; }
+  button.ghost { background: var(--green-med); color: #fff; border: none; }
+  button.danger { background: none; border: 1px solid var(--danger); color: var(--danger); }
+  .muted { color: var(--stone); font-size: 13px; }
+  .entry { display: flex; gap: 10px; align-items: center; padding: 8px 0;
+           border-bottom: 1px solid rgba(108,117,125,.25); }
+  .entry img { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; }
+  .entry .x { width: auto; padding: 6px 10px; margin: 0; }
+  .row2 { display: flex; gap: 8px; }
+  #msg { min-height: 18px; }
+</style>
+</head>
+<body>
+<header><div class="cap"></div><h1>Fit Krasnal — zbieracz wakacyjny</h1></header>
+<main>
+
+<section class="card">
+  <h2>Dodaj posiłek (offline)</h2>
+  <div class="row2">
+    <input type="date" id="f-date">
+    <input type="time" id="f-time">
+  </div>
+  <input type="file" id="f-photo" accept="image/*" capture="environment">
+  <input type="text" id="f-note" placeholder="uwaga do zdjęcia (opcjonalnie)">
+  <textarea id="f-desc" rows="2" placeholder="albo opisz posiłek: 2 jajka sadzone i kromka żytniego"></textarea>
+  <button class="primary" onclick="addEntry()">Zapisz posiłek</button>
+  <p class="muted" id="msg"></p>
+  <p class="muted">Dane zostają w telefonie (ta przeglądarka). Zdjęcia są zmniejszane.
+  Po powrocie: „Przygotuj dane" → zapisz plik (np. na Google Drive) → wczytaj go
+  w aplikacji na komputerze (Ustawienia → Przenoszenie danych).</p>
+</section>
+
+<section class="card">
+  <h2>Zebrane posiłki (<span id="count">0</span>)</h2>
+  <div id="list"></div>
+</section>
+
+<section class="card">
+  <h2>Przenoszenie danych</h2>
+  <button class="ghost" onclick="exportData()">Przygotuj dane do przeniesienia (pobierz plik)</button>
+  <label class="muted">Wczytaj dane z innego urządzenia (scalanie):</label>
+  <input type="file" id="f-import" accept=".json,application/json" onchange="importData(this.files[0])">
+  <button class="danger" onclick="clearAll()">Wyczyść wszystkie zebrane dane</button>
+</section>
+
+</main>
+<script>
+const DB_NAME = "fitkrasnal", STORE = "pending";
+let db;
+
+function openDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+function tx(mode) { return db.transaction(STORE, mode).objectStore(STORE); }
+function all() {
+  return new Promise((res, rej) => {
+    const r = tx("readonly").getAll();
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+function put(entry) {
+  return new Promise((res, rej) => {
+    const r = tx("readwrite").add(entry);
+    r.onsuccess = () => res(); r.onerror = () => rej(r.error);
+  });
+}
+function del(id) {
+  return new Promise((res) => { tx("readwrite").delete(id).onsuccess = () => res(); });
+}
+
+function nowDefaults() {
+  const d = new Date();
+  document.getElementById("f-date").value = d.toISOString().slice(0, 10);
+  document.getElementById("f-time").value = d.toTimeString().slice(0, 5);
+}
+
+function downscale(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1280;
+      let { width: w, height: h } = img;
+      const scale = Math.min(1, MAX / Math.max(w, h));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(w * scale); canvas.height = Math.round(h * scale);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.82).split(",")[1]); // base64 bez prefiksu
+      URL.revokeObjectURL(img.src);
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function addEntry() {
+  const msg = document.getElementById("msg");
+  const file = document.getElementById("f-photo").files[0];
+  const desc = document.getElementById("f-desc").value.trim();
+  if (!file && !desc) { msg.textContent = "Dodaj zdjęcie albo opis."; return; }
+  msg.textContent = "Zapisuję…";
+  const entry = {
+    date: document.getElementById("f-date").value,
+    time: document.getElementById("f-time").value,
+    description: desc || null,
+    note: document.getElementById("f-note").value.trim() || null,
+    photo_b64: file ? await downscale(file) : null,
+    created_at: new Date().toISOString(),
+  };
+  await put(entry);
+  document.getElementById("f-photo").value = "";
+  document.getElementById("f-desc").value = "";
+  document.getElementById("f-note").value = "";
+  nowDefaults();
+  msg.textContent = "Zapisano ✓";
+  render();
+}
+
+async function render() {
+  const entries = await all();
+  document.getElementById("count").textContent = entries.length;
+  document.getElementById("list").innerHTML = entries.map(e => `
+    <div class="entry">
+      ${e.photo_b64 ? `<img src="data:image/jpeg;base64,${e.photo_b64}">` : ""}
+      <div style="flex:1">
+        <div>${e.description || e.note || "zdjęcie"}</div>
+        <div class="muted">${e.date} ${e.time || ""}</div>
+      </div>
+      <button class="x" onclick="removeEntry(${e.id})">✕</button>
+    </div>`).join("") || '<p class="muted">Pusto. Krasnal czeka na pierwszy posiłek.</p>';
+}
+async function removeEntry(id) { await del(id); render(); }
+
+async function exportData() {
+  const entries = await all();
+  const payload = {
+    format: "fit-krasnal-transfer", version: 1, source: "mobile",
+    exported_at: new Date().toISOString(),
+    pending: entries.map(({ id, created_at, ...rest }) => rest),
+  };
+  const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `fit-krasnal-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+}
+
+async function importData(file) {
+  if (!file) return;
+  const payload = JSON.parse(await file.text());
+  if (payload.format !== "fit-krasnal-transfer") { alert("To nie jest plik Fit Krasnal."); return; }
+  const existing = await all();
+  const seen = new Set(existing.map(e => `${e.date}|${e.time}|${e.description}|${e.note}`));
+  let added = 0;
+  for (const p of (payload.pending || [])) {
+    const key = `${p.date}|${p.time}|${p.description}|${p.note}`;
+    if (seen.has(key)) continue;
+    await put({ ...p, created_at: new Date().toISOString() });
+    added++;
+  }
+  alert(`Wczytano ${added} posiłków.`);
+  render();
+}
+
+async function clearAll() {
+  if (!confirm("Na pewno usunąć wszystkie zebrane posiłki z tego telefonu?")) return;
+  const entries = await all();
+  for (const e of entries) await del(e.id);
+  render();
+}
+
+openDb().then(d => { db = d; nowDefaults(); render(); });
+</script>
+</body>
+</html>
