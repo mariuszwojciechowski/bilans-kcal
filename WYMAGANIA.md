@@ -33,6 +33,9 @@ Etap 1: web app (weryfikacja pomysłu, single-user). Etap 2: aplikacja mobilna
 | M4 Szacowanie spożycia | Zdjęcie posiłku z dysku → LLM → kcal + makro (+ korekta ręczna) |
 | M5 Bilans dzienny | Spożycie − wydatek (Garmin), cel deficytu, trend wagi |
 | M6 Makroskładniki | Zapotrzebowanie wg WHO i pokrycie z dziennika posiłków |
+| M7 Ustawienia | Podłączenie konta Garmin (z obsługą MFA), klucze LLM z instrukcją, stan kolejki offline |
+| M8 Kolejka offline | Posiłki bez klucza LLM/internetu czekają (opis + zdjęcie zredukowane do ≤1280 px JPEG); auto-przetworzenie po podaniu klucza; retencja nieprzetworzonych: **21 dni**; przetworzone zdjęcia są kasowane (use case: wakacje z drogim roamingiem) |
+| M9 Historia | Widok dowolnego dnia (kalendarz) + trendy (waga, energia, bilans) w zakresach tydzień/miesiąc/kwartał/pół roku |
 
 Poza zakresem MVP: rejestracja wielu użytkowników (ale schemat danych gotowy), powiadomienia, integracje inne niż Garmin, wersje mobilne.
 

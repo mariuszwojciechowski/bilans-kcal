@@ -69,6 +69,32 @@ class Activity(Base):
     avg_hr: Mapped[int | None] = mapped_column(Integer)
 
 
+class AppSetting(Base):
+    """Ustawienia per użytkownik (m.in. klucze LLM). MVP: lokalna baza, plaintext."""
+
+    __tablename__ = "app_setting"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), primary_key=True)
+    key: Mapped[str] = mapped_column(String, primary_key=True)
+    value: Mapped[str] = mapped_column(String)
+
+
+class PendingMeal(Base):
+    """Posiłek czekający na przetworzenie przez LLM (brak klucza / brak internetu).
+    Retencja 21 dni; po przetworzeniu wpis i zdjęcie są kasowane."""
+
+    __tablename__ = "pending_meal"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), index=True)
+    date: Mapped[date] = mapped_column(Date, index=True)
+    time: Mapped[time | None] = mapped_column(Time)
+    description: Mapped[str | None] = mapped_column(Text)   # wariant tekstowy
+    note: Mapped[str | None] = mapped_column(String)        # uwaga do zdjęcia
+    photo_path: Mapped[str | None] = mapped_column(String)  # wariant zdjęciowy (zredukowany JPEG)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Meal(Base):
     __tablename__ = "meal"
 
