@@ -79,6 +79,10 @@
   repozytorium). Jeśli masz włączone MFA, po zatwierdzeniu poprosimy o kod.
   Uwaga: Garmin limituje próby logowania — przy błędzie 429 odczekaj kilkanaście minut.</p>
   {% endif %}
+  {% if garmin_connected %}
+  <button onclick="deepSync()">Synchronizuj 30 dni wstecz (np. po powrocie z wakacji)</button>
+  <span class="muted" id="deep-sync-status"></span>
+  {% endif %}
 </section>
 
 <section class="card">
@@ -142,6 +146,15 @@
 
 </main>
 <script>
+async function deepSync() {
+  const el = document.getElementById("deep-sync-status");
+  el.textContent = "Synchronizuję 30 dni — to potrwa chwilę…";
+  const r = await fetch("/api/sync?days=30", { method: "POST" });
+  el.textContent = r.ok
+    ? "Gotowe: " + JSON.stringify(await r.json())
+    : ((await r.json()).detail || "Błąd");
+}
+
 async function processQueue() {
   await fetch("/api/queue/process", { method: "POST" });
   setTimeout(() => location.reload(), 1500);
