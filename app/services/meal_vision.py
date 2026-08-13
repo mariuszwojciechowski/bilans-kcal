@@ -1,15 +1,20 @@
 """Moduł M4: szacowanie kcal i makroskładników posiłku ze zdjęcia (lub opisu tekstowego)
-przez model wizyjny Claude. Model samodzielnie identyfikuje składniki, masy i wartości
+przez model wizyjny LLM. Model samodzielnie identyfikuje składniki, masy i wartości
 odżywcze (bez zewnętrznej bazy żywieniowej — decyzja D6). Wynik zawsze z przedziałem
-kcal_min–kcal_max i listą założeń do weryfikacji przez użytkownika."""
+kcal_min–kcal_max i listą założeń do weryfikacji przez użytkownika.
+
+Backend wymienny (FIT_KRASNAL_LLM = auto | claude | gemini):
+- claude — Anthropic API (ANTHROPIC_API_KEY),
+- gemini — Google AI Studio (GEMINI_API_KEY / GOOGLE_API_KEY; ma darmowy tier).
+W trybie auto wybierany jest gemini, jeśli jego klucz jest ustawiony, inaczej claude."""
 
 import base64
+import os
 from typing import Literal
 
-import anthropic
 from pydantic import BaseModel, Field
 
-from ..config import VISION_MODEL
+from ..config import GEMINI_MODEL, LLM_BACKEND, VISION_MODEL
 
 MEDIA_TYPES = {
     "jpg": "image/jpeg",
@@ -64,47 +69,68 @@ class MealVisionNotConfigured(RuntimeError):
     pass
 
 
-def _client() -> anthropic.Anthropic:
-    try:
-        client = anthropic.Anthropic()
-        client._validate_headers({}, {})  # wymusza rozwiązanie uwierzytelnienia
-    except TypeError as exc:
-        raise MealVisionNotConfigured(
-            "Brak klucza Claude API — ustaw zmienną ANTHROPIC_API_KEY (patrz .env.example)."
-        ) from exc
-    return client
+def _gemini_key() -> str | None:
+    return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
+
+def pick_backend() -> str:
+    if LLM_BACKEND in ("claude", "gemini"):
+        return LLM_BACKEND
+    return "gemini" if _gemini_key() else "claude"
+
+
+# ── Publiczne API ─────────────────────────────────────────────────────────
 
 def estimate_from_photo(image_bytes: bytes, ext: str, note: str | None = None) -> MealEstimate:
     media_type = MEDIA_TYPES.get(ext.lower().lstrip("."))
     if media_type is None:
         raise ValueError(f"Nieobsługiwany format zdjęcia: {ext}")
-    content: list[dict] = [
-        {
-            "type": "image",
-            "source": {
-                "type": "base64",
-                "media_type": media_type,
-                "data": base64.standard_b64encode(image_bytes).decode(),
-            },
-        },
-        {
-            "type": "text",
-            "text": "Oszacuj wartości odżywcze posiłku ze zdjęcia."
-            + (f" Uwaga użytkownika: {note}" if note else ""),
-        },
-    ]
-    return _estimate(content)
+    prompt = "Oszacuj wartości odżywcze posiłku ze zdjęcia." + (
+        f" Uwaga użytkownika: {note}" if note else ""
+    )
+    if pick_backend() == "gemini":
+        return _estimate_gemini(prompt, image_bytes, media_type)
+    return _estimate_claude(prompt, image_bytes, media_type)
 
 
 def estimate_from_text(description: str) -> MealEstimate:
-    return _estimate(
-        [{"type": "text", "text": f"Oszacuj wartości odżywcze posiłku: {description}"}]
-    )
+    prompt = f"Oszacuj wartości odżywcze posiłku: {description}"
+    if pick_backend() == "gemini":
+        return _estimate_gemini(prompt)
+    return _estimate_claude(prompt)
 
 
-def _estimate(content: list[dict]) -> MealEstimate:
-    response = _client().messages.parse(
+# ── Backend: Claude (Anthropic API) ───────────────────────────────────────
+
+def _estimate_claude(
+    prompt: str, image_bytes: bytes | None = None, media_type: str | None = None
+) -> MealEstimate:
+    import anthropic
+
+    try:
+        client = anthropic.Anthropic()
+        client._validate_headers({}, {})  # wymusza rozwiązanie uwierzytelnienia
+    except TypeError as exc:
+        raise MealVisionNotConfigured(
+            "Brak klucza Claude API — ustaw ANTHROPIC_API_KEY albo klucz Gemini "
+            "(GEMINI_API_KEY; patrz .env.example)."
+        ) from exc
+
+    content: list[dict] = []
+    if image_bytes is not None:
+        content.append(
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": media_type,
+                    "data": base64.standard_b64encode(image_bytes).decode(),
+                },
+            }
+        )
+    content.append({"type": "text", "text": prompt})
+
+    response = client.messages.parse(
         model=VISION_MODEL,
         max_tokens=16000,
         system=SYSTEM,
@@ -116,4 +142,37 @@ def _estimate(content: list[dict]) -> MealEstimate:
     estimate = response.parsed_output
     if estimate is None:
         raise RuntimeError("Nie udało się sparsować odpowiedzi modelu.")
+    return estimate
+
+
+# ── Backend: Gemini (Google AI Studio, darmowy tier) ──────────────────────
+
+def _estimate_gemini(
+    prompt: str, image_bytes: bytes | None = None, media_type: str | None = None
+) -> MealEstimate:
+    if not _gemini_key():
+        raise MealVisionNotConfigured(
+            "Brak klucza Gemini — ustaw GEMINI_API_KEY (darmowy klucz: aistudio.google.com)."
+        )
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client()
+    contents: list = []
+    if image_bytes is not None:
+        contents.append(types.Part.from_bytes(data=image_bytes, mime_type=media_type))
+    contents.append(prompt)
+
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=contents,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM,
+            response_mime_type="application/json",
+            response_schema=MealEstimate,
+        ),
+    )
+    estimate = response.parsed
+    if estimate is None:
+        raise RuntimeError("Nie udało się sparsować odpowiedzi modelu Gemini.")
     return estimate
