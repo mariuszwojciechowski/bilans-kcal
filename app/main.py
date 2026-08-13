@@ -8,14 +8,16 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .config import MAX_PHOTO_BYTES, PHOTOS_DIR, ensure_dirs
 from .db import get_session, init_db
-from .models import Activity, DailySummary, Meal, User, UserProfile, WeightLog
+from .models import Activity, DailySummary, Meal, PendingMeal, User, UserProfile, WeightLog
+from .providers import garmin as garmin_provider
 from .providers.garmin import GarminNotLoggedIn, GarminProvider
-from .services import meal_vision
+from .services import meal_queue, meal_vision
+from .services import settings as settings_service
 from .services.balance import day_balance, deficit_warning, projected_weekly_change_kg
 from .services.charts import Series, bar_chart, line_chart
 from .services.energy import age_years, smoothed_weight, tdee_theoretical
@@ -36,6 +38,30 @@ LOCAL_USER_EMAIL = "local@fit-krasnal"
 def startup() -> None:
     ensure_dirs()
     init_db()
+    db = get_session()
+    try:
+        user = local_user(db)
+        settings_service.apply_llm_env(db, user.id)  # klucze z ustawień -> środowisko
+        meal_queue.purge_expired(db)                 # retencja kolejki: 21 dni
+    finally:
+        db.close()
+
+
+def humanize_ago(dt: datetime | None) -> str | None:
+    """'1d 21h 12m temu' — z dokładnością do minut."""
+    if dt is None:
+        return None
+    seconds = max(int((datetime.utcnow() - dt).total_seconds()), 0)
+    days, rest = divmod(seconds, 86400)
+    hours, rest = divmod(rest, 3600)
+    minutes = rest // 60
+    parts = []
+    if days:
+        parts.append(f"{days}d")
+    if hours or days:
+        parts.append(f"{hours}h")
+    parts.append(f"{minutes}m")
+    return " ".join(parts) + " temu"
 
 
 def db_session():
@@ -130,6 +156,13 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
     meals = db.scalars(
         select(Meal).where(Meal.user_id == user_id, Meal.date == day).order_by(Meal.time)
     ).all()
+    pending = db.scalars(
+        select(PendingMeal).where(PendingMeal.user_id == user_id, PendingMeal.date == day)
+        .order_by(PendingMeal.created_at)
+    ).all()
+    last_sync = db.scalar(
+        select(func.max(DailySummary.sync_ts)).where(DailySummary.user_id == user_id)
+    )
 
     kcal_in = sum(m.kcal for m in meals)
     tdee = tdee_theoretical(
@@ -181,7 +214,20 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
             "total": round(tdee.total),
         },
         "steps": summary.steps if summary else None,
+        "last_sync_ago": humanize_ago(last_sync),
         "macros": macros,
+        "norms_group_label": {"adult": "dorośli 18–64 lat", "senior": "seniorzy 65+"}.get(
+            targets.group_id, targets.group_id
+        ),
+        "pending_meals": [
+            {
+                "id": p.id,
+                "time": p.time.isoformat() if p.time else None,
+                "label": p.description or (p.note or "zdjęcie"),
+                "has_photo": bool(p.photo_path),
+            }
+            for p in pending
+        ],
         "meals": [
             {
                 "id": m.id,
@@ -211,42 +257,67 @@ def get_day(day: date, db: Session = Depends(db_session)):
 
 # ── Posiłki ───────────────────────────────────────────────────────────────
 
+def _queue_meal(db: Session, user_id: int, day: date, reason: str,
+                description: str | None = None, note: str | None = None,
+                photo_bytes: bytes | None = None) -> dict:
+    meal_queue.enqueue(db, user_id, day, datetime.now().time(), description=description,
+                       note=note, photo_bytes=photo_bytes)
+    return {
+        "queued": True,
+        "message": f"Posiłek zapisany do kolejki ({reason}). Zostanie przetworzony "
+                   f"automatycznie, gdy LLM będzie dostępny (retencja: 21 dni).",
+    }
+
+
 @app.post("/api/meals/photo")
 async def estimate_meal_photo(
     background: BackgroundTasks,
     photo: UploadFile = File(...),
     note: str | None = Form(None),
+    day: date | None = Form(None),
     db: Session = Depends(db_session),
 ):
-    """Krok 1: zdjęcie → szacunek (draft do korekty; nic nie zapisujemy)."""
-    background.add_task(maybe_sync, local_user(db).id)
+    """Krok 1: zdjęcie → szacunek (draft do korekty; nic nie zapisujemy).
+    Bez klucza LLM / bez internetu: posiłek trafia do kolejki offline."""
+    user = local_user(db)
+    background.add_task(maybe_sync, user.id)
     data = await photo.read()
     if len(data) > MAX_PHOTO_BYTES:
         raise HTTPException(413, "Zdjęcie za duże (limit 15 MB)")
     ext = (photo.filename or "jpg").rsplit(".", 1)[-1]
+    target_day = day or date.today()
+    if not meal_vision.llm_configured():
+        return _queue_meal(db, user.id, target_day, "brak klucza LLM",
+                           note=note, photo_bytes=data)
     try:
         estimate = meal_vision.estimate_from_photo(data, ext, note)
     except ValueError as exc:
         raise HTTPException(422, str(exc))
-    except meal_vision.MealVisionNotConfigured as exc:
-        raise HTTPException(503, str(exc))
-    photo_name = f"{datetime.now():%Y%m%d_%H%M%S}.{ext.lower()}"
-    (PHOTOS_DIR / photo_name).write_bytes(data)
-    return {"photo_path": photo_name, "kcal": round(estimate.kcal), **estimate.model_dump()}
+    except Exception:
+        return _queue_meal(db, user.id, target_day, "szacowanie nie powiodło się",
+                           note=note, photo_bytes=data)
+    # zdjęcia nie przechowujemy — po przetworzeniu jest niepotrzebne (decyzja: retencja tylko w kolejce)
+    return {"photo_path": None, "kcal": round(estimate.kcal), **estimate.model_dump()}
 
 
 @app.post("/api/meals/text")
 def estimate_meal_text(
     background: BackgroundTasks,
     description: str = Form(...),
+    day: date | None = Form(None),
     db: Session = Depends(db_session),
 ):
-    """Krok 1 (wariant tekstowy): opis → szacunek."""
-    background.add_task(maybe_sync, local_user(db).id)
+    """Krok 1 (wariant tekstowy): opis → szacunek. Fallback: kolejka offline."""
+    user = local_user(db)
+    background.add_task(maybe_sync, user.id)
+    target_day = day or date.today()
+    if not meal_vision.llm_configured():
+        return _queue_meal(db, user.id, target_day, "brak klucza LLM", description=description)
     try:
         estimate = meal_vision.estimate_from_text(description)
-    except meal_vision.MealVisionNotConfigured as exc:
-        raise HTTPException(503, str(exc))
+    except Exception:
+        return _queue_meal(db, user.id, target_day, "szacowanie nie powiodło się",
+                           description=description)
     return {"photo_path": None, "kcal": round(estimate.kcal), **estimate.model_dump()}
 
 
@@ -340,6 +411,82 @@ def dashboard(
             "has_logo": (STATIC_DIR / "logo.png").exists(),
         },
     )
+
+
+# ── Ustawienia ────────────────────────────────────────────────────────────
+
+@app.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request, db: Session = Depends(db_session),
+                  saved: str | None = None, mfa: str | None = None,
+                  error: str | None = None):
+    user = local_user(db)
+    stored = settings_service.all_settings(db, user.id)
+    last_sync = db.scalar(
+        select(func.max(DailySummary.sync_ts)).where(DailySummary.user_id == user.id)
+    )
+    pending_count = db.scalar(
+        select(func.count(PendingMeal.id)).where(PendingMeal.user_id == user.id)
+    )
+    return templates.TemplateResponse(
+        request,
+        "settings.html",
+        {
+            "garmin_connected": garmin_provider.tokens_present(),
+            "last_sync_ago": humanize_ago(last_sync),
+            "gemini_masked": settings_service.masked(stored.get("gemini_api_key")),
+            "claude_masked": settings_service.masked(stored.get("anthropic_api_key")),
+            "backend": meal_vision.pick_backend() if meal_vision.llm_configured() else None,
+            "pending_count": pending_count or 0,
+            "retention_days": meal_queue.RETENTION_DAYS,
+            "saved": saved, "mfa": mfa, "error": error,
+            "has_logo": (STATIC_DIR / "logo.png").exists(),
+        },
+    )
+
+
+@app.post("/settings/llm")
+def settings_llm(
+    background: BackgroundTasks,
+    gemini_api_key: str = Form(""),
+    anthropic_api_key: str = Form(""),
+    db: Session = Depends(db_session),
+):
+    """Zapis kluczy LLM (puste pole = bez zmian). Po zapisie: przetworzenie kolejki."""
+    user = local_user(db)
+    if gemini_api_key.strip():
+        settings_service.set_setting(db, user.id, "gemini_api_key", gemini_api_key.strip())
+    if anthropic_api_key.strip():
+        settings_service.set_setting(db, user.id, "anthropic_api_key", anthropic_api_key.strip())
+    settings_service.apply_llm_env(db, user.id)
+    background.add_task(meal_queue.process_queue, user.id)
+    return RedirectResponse("/settings?saved=1", status_code=303)
+
+
+@app.post("/settings/garmin")
+def settings_garmin(email: str = Form(...), password: str = Form(...)):
+    """Logowanie do Garmina z ustawień. Hasło idzie tylko do biblioteki Garmina."""
+    try:
+        result = garmin_provider.interactive_login_start(email.strip(), password)
+    except Exception as exc:
+        return RedirectResponse(f"/settings?error={exc.__class__.__name__}", status_code=303)
+    if result == "mfa":
+        return RedirectResponse("/settings?mfa=1", status_code=303)
+    return RedirectResponse("/settings?saved=1", status_code=303)
+
+
+@app.post("/settings/garmin/mfa")
+def settings_garmin_mfa(code: str = Form(...)):
+    try:
+        garmin_provider.interactive_login_mfa(code.strip())
+    except Exception as exc:
+        return RedirectResponse(f"/settings?error={exc.__class__.__name__}", status_code=303)
+    return RedirectResponse("/settings?saved=1", status_code=303)
+
+
+@app.post("/api/queue/process")
+def queue_process(background: BackgroundTasks, db: Session = Depends(db_session)):
+    background.add_task(meal_queue.process_queue, local_user(db).id)
+    return {"ok": True}
 
 
 # ── Trendy ────────────────────────────────────────────────────────────────

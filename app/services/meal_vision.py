@@ -79,6 +79,13 @@ def pick_backend() -> str:
     return "gemini" if _gemini_key() else "claude"
 
 
+def llm_configured() -> bool:
+    """Czy jest sens próbować wywołania LLM (jakikolwiek klucz)."""
+    if pick_backend() == "gemini":
+        return _gemini_key() is not None
+    return bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"))
+
+
 # ── Publiczne API ─────────────────────────────────────────────────────────
 
 def estimate_from_photo(image_bytes: bytes, ext: str, note: str | None = None) -> MealEstimate:

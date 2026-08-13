@@ -59,9 +59,10 @@
 </style>
 </head>
 <body>
-<header>{% if has_logo %}<img class="logo" src="/static/logo-bw.png" alt="Fit Krasnal">{% else %}<div class="cap"></div>{% endif %}<h1>Fit Krasnal</h1>
+<header><a href="/" title="Dziś">{% if has_logo %}<img class="logo" src="/static/logo-bw.png" alt="Fit Krasnal">{% else %}<div class="cap"></div>{% endif %}</a><h1>Fit Krasnal</h1>
   <span style="margin-left:auto"></span>
   <a class="nav" href="/trends?days=30">Trendy</a>
+  <a class="nav" href="/settings">Ustawienia</a>
   <input type="date" value="{{ view_date }}" max="{{ today }}"
          onchange="location = '/?date=' + this.value"></header>
 <main>
@@ -100,31 +101,8 @@
      + aktywności {{ report.tdee_model.activities }} + TEF {{ report.tdee_model.tef }}
      = {{ report.tdee_model.total }} kcal · prognoza tygodnia: {{ report.projected_weekly_change_kg }} kg</p>
   <button class="ghost" onclick="doSync()">Odśwież dane z Garmina</button>
+  <span class="muted">{% if report.last_sync_ago %}Ostatnie odświeżanie: {{ report.last_sync_ago }}{% endif %}</span>
   <span class="muted" id="sync-status"></span>
-</section>
-
-<section class="card">
-  <h2>Makroskładniki (normy WHO)</h2>
-  {% set m = report.macros %}
-  {% for key, label, color in [("protein","Białko","#1A4D3A"),("carbs","Węglowodany","#8DC63F"),("fat","Tłuszcze","#3A7A5C"),("fiber","Błonnik","#6C757D"),("sugars","Cukry wolne","#DC3545")] %}
-    {% set item = m[key] %}
-    <div style="margin-bottom:10px">
-      <div class="row" style="justify-content:space-between">
-        <span>{{ label }} — {{ item.consumed_g }} g
-          <span class="muted">
-            {% if key == "protein" %}(WHO ≥ {{ item.who_min_g }} g; redukcja {{ item.cut_range_g[0] }}–{{ item.cut_range_g[1] }} g)
-            {% elif key == "fiber" %}(≥ {{ item.min_g }} g)
-            {% elif key == "sugars" %}(< {{ item.max_g }} g)
-            {% else %}({{ item.range_g[0] }}–{{ item.range_g[1] }} g){% endif %}
-          </span>
-        </span>
-        <span class="{{ 'pos' if item.status == 'ok' else ('mid' if item.status == 'below' else 'neg') }}">
-          {{ {'ok':'w normie','below':'poniżej','above':'powyżej'}[item.status] }}</span>
-      </div>
-      {% set ref = item.who_min_g if key == 'protein' else (item.min_g if key == 'fiber' else (item.max_g if key == 'sugars' else item.range_g[1])) %}
-      <div class="bar"><i style="width: {{ [100, (100 * item.consumed_g / ref) | round] | min if ref else 0 }}%; background: {{ color }}"></i></div>
-    </div>
-  {% endfor %}
 </section>
 
 <section class="card">
@@ -157,6 +135,30 @@
 </section>
 
 <section class="card">
+  <h2>Makroskładniki (normy WHO — grupa: {{ report.norms_group_label }})</h2>
+  {% set m = report.macros %}
+  {% for key, label, color in [("protein","Białko","#1A4D3A"),("carbs","Węglowodany","#8DC63F"),("fat","Tłuszcze","#3A7A5C"),("fiber","Błonnik","#6C757D"),("sugars","Cukry wolne","#DC3545")] %}
+    {% set item = m[key] %}
+    <div style="margin-bottom:10px">
+      <div class="row" style="justify-content:space-between">
+        <span>{{ label }} — {{ item.consumed_g }} g
+          <span class="muted">
+            {% if key == "protein" %}(WHO ≥ {{ item.who_min_g }} g; redukcja {{ item.cut_range_g[0] }}–{{ item.cut_range_g[1] }} g)
+            {% elif key == "fiber" %}(≥ {{ item.min_g }} g)
+            {% elif key == "sugars" %}(< {{ item.max_g }} g)
+            {% else %}({{ item.range_g[0] }}–{{ item.range_g[1] }} g){% endif %}
+          </span>
+        </span>
+        <span class="{{ 'pos' if item.status == 'ok' else ('mid' if item.status == 'below' else 'neg') }}">
+          {{ {'ok':'w normie','below':'poniżej','above':'powyżej'}[item.status] }}</span>
+      </div>
+      {% set ref = item.who_min_g if key == 'protein' else (item.min_g if key == 'fiber' else (item.max_g if key == 'sugars' else item.range_g[1])) %}
+      <div class="bar"><i style="width: {{ [100, (100 * item.consumed_g / ref) | round] | min if ref else 0 }}%; background: {{ color }}"></i></div>
+    </div>
+  {% endfor %}
+</section>
+
+<section class="card">
   <h2>Posiłki — {{ "dziś" if is_today else view_date }}</h2>
   {% if report.meals %}
   <table>
@@ -174,6 +176,21 @@
     {% endfor %}
   </table>
   {% else %}<p class="muted">Krasnal nie odnotował dziś jeszcze żadnego posiłku.</p>{% endif %}
+
+  {% if report.pending_meals %}
+  <h2 style="margin-top:14px">W kolejce (czekają na przetworzenie przez LLM)</h2>
+  <table>
+    {% for p in report.pending_meals %}
+    <tr>
+      <td>{{ p.time[:5] if p.time else "" }}</td>
+      <td>{{ p.label }}{% if p.has_photo %} <span class="muted">📷</span>{% endif %}</td>
+      <td class="muted">oczekuje</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p class="muted">Kolejka przetworzy się automatycznie po podaniu klucza LLM
+    (<a href="/settings">ustawienia</a>).</p>
+  {% endif %}
 </section>
 
 {% endif %}
@@ -215,11 +232,16 @@ async function estimatePhoto() {
   el.textContent = "Krasnal przygląda się posiłkowi…";
   const fd = new FormData();
   fd.append("photo", f);
+  fd.append("day", "{{ view_date }}");
   const note = document.getElementById("note").value;
   if (note) fd.append("note", note);
   const r = await fetch("/api/meals/photo", { method: "POST", body: fd });
   el.textContent = "";
-  if (r.ok) showDraft(await r.json());
+  if (r.ok) {
+    const data = await r.json();
+    if (data.queued) { el.textContent = data.message; setTimeout(() => location.reload(), 2500); }
+    else showDraft(data);
+  }
   else el.textContent = (await r.json()).detail || "Błąd szacowania";
 }
 
@@ -230,9 +252,14 @@ async function estimateText() {
   el.textContent = "Krasnal liczy…";
   const fd = new FormData();
   fd.append("description", desc);
+  fd.append("day", "{{ view_date }}");
   const r = await fetch("/api/meals/text", { method: "POST", body: fd });
   el.textContent = "";
-  if (r.ok) showDraft(await r.json());
+  if (r.ok) {
+    const data = await r.json();
+    if (data.queued) { el.textContent = data.message; setTimeout(() => location.reload(), 2500); }
+    else showDraft(data);
+  }
   else el.textContent = "Błąd szacowania";
 }
 

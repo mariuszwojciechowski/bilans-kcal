@@ -16,6 +16,40 @@ class GarminNotLoggedIn(RuntimeError):
     pass
 
 
+# stan dwustopniowego logowania z ustawień (MVP: jeden użytkownik, pamięć procesu)
+_mfa_state: dict | None = None
+
+
+def tokens_present() -> bool:
+    return GARMIN_TOKENS_DIR.exists() and any(GARMIN_TOKENS_DIR.iterdir())
+
+
+def interactive_login_start(email: str, password: str) -> str:
+    """Logowanie z formularza ustawień. Zwraca 'ok' albo 'mfa' (czekamy na kod).
+    Hasło nie jest nigdzie zapisywane — idzie wyłącznie do biblioteki Garmina."""
+    global _mfa_state
+    api = Garmin(email=email, password=password, return_on_mfa=True)
+    status, state = api.login()
+    if status == "needs_mfa":
+        _mfa_state = {"api": api, "state": state}
+        return "mfa"
+    GARMIN_TOKENS_DIR.mkdir(parents=True, exist_ok=True)
+    api.client.dump(str(GARMIN_TOKENS_DIR))
+    return "ok"
+
+
+def interactive_login_mfa(code: str) -> str:
+    global _mfa_state
+    if _mfa_state is None:
+        raise GarminNotLoggedIn("Brak rozpoczętego logowania — podaj najpierw e-mail i hasło.")
+    api = _mfa_state["api"]
+    api.resume_login(_mfa_state["state"], code)
+    GARMIN_TOKENS_DIR.mkdir(parents=True, exist_ok=True)
+    api.client.dump(str(GARMIN_TOKENS_DIR))
+    _mfa_state = None
+    return "ok"
+
+
 class GarminProvider:
     def __init__(self) -> None:
         self._api: Garmin | None = None
