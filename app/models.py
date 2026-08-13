@@ -26,6 +26,8 @@ class UserProfile(Base):
     height_cm: Mapped[float] = mapped_column(Float)
     target_deficit_kcal: Mapped[int] = mapped_column(Integer, default=500)
     target_weight_kg: Mapped[float | None] = mapped_column(Float)  # cel ciężaru
+    # styl życia -> zakresy makro (sedentary|active|endurance|strength|pregnant)
+    lifestyle: Mapped[str] = mapped_column(String, default="active")
     tz: Mapped[str] = mapped_column(String, default="Europe/Warsaw")
 
 
