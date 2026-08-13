@@ -20,8 +20,12 @@
   * { box-sizing: border-box; }
   body { margin: 0; font-family: -apple-system, "Segoe UI", Inter, sans-serif;
          background: var(--bg); color: var(--ink); }
-  header { background: var(--green); color: #F9FAF8; padding: 14px 24px;
-           display: flex; align-items: center; gap: 12px; }
+  header { background: var(--green); color: #F9FAF8; padding: 0 24px 0 0;
+           display: flex; align-items: stretch; gap: 12px; }
+  header > :not(.brand) { align-self: center; }
+  /* biała sekcja marki: logo bez zmian, nazwa w zieleni */
+  header a.brand { background: #fff; display: flex; align-items: center; gap: 12px;
+                   padding: 8px 22px 8px 18px; text-decoration: none; }
   header .cap { width: 0; height: 0; border-left: 11px solid transparent;
                 border-right: 11px solid transparent; border-bottom: 20px solid var(--lime); }
   header img.logo { width: 52px; height: 52px; transition: transform .18s ease;
@@ -32,7 +36,8 @@
   header a.nav:hover { background: rgba(255,255,255,.12); }
   header input[type=date] { background: transparent; color: #C9D3CC;
                             border: 1px solid rgba(201,211,204,.4); }
-  header h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: .02em; }
+  header h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: .02em;
+              color: var(--green); }
   main { max-width: 860px; margin: 24px auto; padding: 0 16px; display: grid; gap: 16px; }
   .card { background: var(--card); border-radius: 10px; padding: 18px 20px;
           box-shadow: 0 1px 3px rgba(33,37,41,.12); }
@@ -59,7 +64,7 @@
 </style>
 </head>
 <body>
-<header><a href="/" title="Dziś">{% if has_logo %}<img class="logo" src="/static/logo-bw.png" alt="Fit Krasnal">{% else %}<div class="cap"></div>{% endif %}</a><h1>Fit Krasnal</h1>
+<header><a class="brand" href="/" title="Dziś">{% if has_logo %}<img class="logo" src="/static/logo-bw.png" alt="">{% else %}<div class="cap"></div>{% endif %}<h1>Fit Krasnal</h1></a>
   <span style="margin-left:auto"></span>
   <a class="nav" href="/trends?days=30">Trendy</a>
   <a class="nav" href="/settings">Ustawienia</a>

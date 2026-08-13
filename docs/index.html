@@ -23,10 +23,13 @@
   * { box-sizing: border-box; }
   body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
          background: var(--bg); color: var(--ink); padding-bottom: 64px; }
-  header { background: var(--green); color: #F9FAF8; padding: 12px 16px;
-           display: flex; align-items: center; gap: 10px; }
+  header { background: var(--green); color: #F9FAF8; padding: 0 16px 0 0;
+           display: flex; align-items: stretch; gap: 10px; }
+  header > :not(.brand) { align-self: center; }
+  header .brand { background: #fff; display: flex; align-items: center; gap: 10px;
+                  padding: 7px 16px 7px 12px; }
   header img.logo { width: 40px; height: 40px; }
-  header h1 { font-size: 16px; margin: 0; }
+  header h1 { font-size: 16px; margin: 0; color: var(--green); }
   header .muted { margin-left: auto; color: #C9D3CC; font-size: 12px; }
   main { max-width: 560px; margin: 12px auto; padding: 0 12px; display: grid; gap: 12px; }
   .card { background: var(--card); border-radius: 10px; padding: 14px 16px;
@@ -63,7 +66,7 @@
 </style>
 </head>
 <body>
-<header><img class="logo" src="logo.png" alt=""><h1>Fit Krasnal</h1><span class="muted" id="hdr-date"></span></header>
+<header><div class="brand"><img class="logo" src="logo.png" alt=""><h1>Fit Krasnal</h1></div><span class="muted" id="hdr-date"></span></header>
 <main>
 
 <!-- ── DZIŚ ─────────────────────────────────────────────────────────── -->
@@ -160,8 +163,9 @@
     <select id="p-sex"><option value="M">Mężczyzna</option><option value="F">Kobieta</option></select>
     <label>Styl życia (zakresy makro)</label>
     <select id="p-lifestyle">
+      <option value="">— wybierz —</option>
       <option value="sedentary">mało aktywny</option>
-      <option value="active" selected>rekreacyjnie trenujący</option>
+      <option value="active">rekreacyjnie trenujący</option>
       <option value="endurance">wytrzymałościowy (rower, bieganie)</option>
       <option value="strength">siłowy / sylwetkowy</option>
       <option value="pregnant">ciąża / karmienie</option>
@@ -197,6 +201,17 @@
 </div>
 
 </main>
+<div id="profile-popup" style="display:none; position:fixed; inset:0; z-index:20;
+     background:rgba(0,0,0,.55); align-items:center; justify-content:center; padding:20px">
+  <div class="card" style="max-width:420px">
+    <h2>🍄 Krasnal prosi o uzupełnienie profilu</h2>
+    <p>Bez tych danych obliczenia są niepełne lub oparte na założeniach:</p>
+    <ul id="popup-missing" class="muted"></ul>
+    <button class="primary" onclick="document.getElementById('profile-popup').style.display='none'; show('settings')">Uzupełnij teraz</button>
+    <button onclick="document.getElementById('profile-popup').style.display='none'">Później (przypomnę przy następnym otwarciu)</button>
+  </div>
+</div>
+
 <nav>
   <button id="nav-today" class="active" onclick="show('today')">Dziś</button>
   <button id="nav-add" onclick="show('add')">Dodaj posiłek</button>
@@ -230,6 +245,36 @@ const del = (store, id) => new Promise((res) => { tx(store, "readwrite").delete(
 
 const profile = () => JSON.parse(localStorage.getItem("profile") || "null");
 const geminiKey = () => localStorage.getItem("gemini_key") || "";
+
+/* ── kompletność profilu ──
+   Nowe pola profilu startują jako "nieustalone" — popup przypomina przy każdym
+   otwarciu, dopóki użytkownik świadomie ich nie ustawi (nie przegapi rozszerzeń). */
+const PROFILE_FIELDS = [
+  ["sex", "płeć"], ["birth", "data urodzenia"], ["height", "wzrost"],
+  ["weight", "aktualny ciężar"], ["deficit", "cel deficytu"],
+  ["steps", "typowe kroki dziennie"], ["lifestyle", "styl życia (zakresy makro)"],
+];
+function migrateProfile() {
+  // lifestyle był kiedyś domyślnie 'active' bez świadomego wyboru -> cofnij do nieustalonego
+  const p = profile();
+  if (p && p.lifestyle && !p.lifestyleChosen) {
+    p.lifestyle = null;
+    localStorage.setItem("profile", JSON.stringify(p));
+  }
+}
+function missingProfileFields() {
+  const p = profile();
+  if (!p) return PROFILE_FIELDS;
+  return PROFILE_FIELDS.filter(([k]) => p[k] === undefined || p[k] === null || p[k] === "" ||
+    (typeof p[k] === "number" && !(p[k] > 0)));
+}
+function maybeShowProfilePopup() {
+  const missing = missingProfileFields();
+  if (!missing.length) return;
+  document.getElementById("popup-missing").innerHTML =
+    missing.map(([, label]) => `<li>${label}</li>`).join("");
+  document.getElementById("profile-popup").style.display = "flex";
+}
 
 /* ── nawigacja ── */
 function show(page) {
@@ -632,7 +677,7 @@ function loadSettings() {
   const p = profile();
   if (p) {
     document.getElementById("p-sex").value = p.sex;
-    document.getElementById("p-lifestyle").value = p.lifestyle || "active";
+    document.getElementById("p-lifestyle").value = p.lifestyle || "";
     document.getElementById("p-birth").value = p.birth;
     document.getElementById("p-height").value = p.height;
     document.getElementById("p-weight").value = p.weight;
@@ -644,9 +689,11 @@ function loadSettings() {
     geminiKey() ? "Klucz zapisany (…" + geminiKey().slice(-4) + ")" : "Brak klucza.";
 }
 function saveProfile() {
+  const lifestyle = document.getElementById("p-lifestyle").value || null;
   localStorage.setItem("profile", JSON.stringify({
     sex: document.getElementById("p-sex").value,
-    lifestyle: document.getElementById("p-lifestyle").value,
+    lifestyle: lifestyle,
+    lifestyleChosen: !!lifestyle,
     birth: document.getElementById("p-birth").value,
     height: +document.getElementById("p-height").value,
     weight: +document.getElementById("p-weight").value,
@@ -691,7 +738,8 @@ async function importData(file) {
     localStorage.setItem("profile", JSON.stringify({
       sex: pr.sex, birth: pr.birth_date, height: pr.height_cm,
       weight: pr.last_weight_kg || 0, deficit: pr.target_deficit_kcal || 500,
-      goal: pr.target_weight_kg || null, lifestyle: pr.lifestyle || "active",
+      goal: pr.target_weight_kg || null,
+      lifestyle: pr.lifestyle || null, lifestyleChosen: !!pr.lifestyle,
     }));
   }
   const haveW = new Set((await all("weights")).map(w => w.date));
@@ -750,7 +798,14 @@ function nowDefaults() {
   document.getElementById("hdr-date").textContent = todayIso();
 }
 
-openDb().then(d => { db = d; nowDefaults(); renderToday(); ping("open"); });
+openDb().then(d => {
+  db = d;
+  migrateProfile();
+  nowDefaults();
+  renderToday();
+  maybeShowProfilePopup();
+  ping("open");
+});
 
 /* PWA: offline + trwałość danych (ważne na iOS) */
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

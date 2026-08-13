@@ -17,12 +17,15 @@
   * { box-sizing: border-box; }
   body { margin: 0; font-family: -apple-system, "Segoe UI", Inter, sans-serif;
          background: var(--bg); color: var(--ink); }
-  header { background: var(--green); color: #F9FAF8; padding: 14px 24px;
-           display: flex; align-items: center; gap: 12px; }
+  header { background: var(--green); color: #F9FAF8; padding: 0 24px 0 0;
+           display: flex; align-items: stretch; gap: 12px; }
+  header > :not(.brand) { align-self: center; }
+  header a.brand { background: #fff; display: flex; align-items: center; gap: 12px;
+                   padding: 8px 22px 8px 18px; text-decoration: none; }
   header img.logo { width: 52px; height: 52px; transition: transform .18s ease;
                     transform-origin: left center; }
   header img.logo:hover { transform: scale(2); }
-  header h1 { font-size: 18px; font-weight: 600; margin: 0; }
+  header h1 { font-size: 18px; font-weight: 600; margin: 0; color: var(--green); }
   header a.nav { color: #C9D3CC; font-size: 14px; text-decoration: none;
                  padding: 6px 10px; border-radius: 6px; }
   header a.nav:hover { background: rgba(255,255,255,.12); }
@@ -44,7 +47,7 @@
 </style>
 </head>
 <body>
-<header><a href="/" title="Dziś">{% if has_logo %}<img class="logo" src="/static/logo-bw.png" alt="Fit Krasnal">{% endif %}</a><h1>Fit Krasnal — trendy</h1>
+<header><a class="brand" href="/" title="Dziś">{% if has_logo %}<img class="logo" src="/static/logo-bw.png" alt="">{% endif %}<h1>Fit Krasnal — trendy</h1></a>
   <span style="margin-left:auto"></span>
   <a class="nav" href="/">← Dashboard</a></header>
 <main>
