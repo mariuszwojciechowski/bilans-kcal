@@ -475,6 +475,7 @@ async function saveDraft() {
   draft = null;
   document.getElementById("draft").style.display = "none";
   resetForm("Zapisano ✓");
+  ping("meal");
   show("today");
 }
 async function queueOnly(silent) {
@@ -489,6 +490,7 @@ async function queueOnly(silent) {
     created_at: new Date().toISOString(),
   });
   if (!silent) resetForm("W kolejce ✓ (przetworzy się, gdy będzie internet/klucz)");
+  ping("queue");
   renderQueueCount();
 }
 async function processQueue() {
@@ -690,6 +692,18 @@ async function clearAll() {
   show("today");
 }
 
+/* ── anonimowa telemetria użycia ──
+   Same liczniki dzienne (otwarcia / zapisane posiłki / wpisy do kolejki) w publicznym
+   serwisie liczników — zero treści posiłków, zdjęć czy danych profilu. Fire-and-forget:
+   brak internetu = brak pinga, aplikacja działa normalnie. */
+const TELEMETRY_NS = "fitkrasnal-mw-k4x9t2";
+function ping(kind) {
+  try {
+    const day = todayIso().replace(/-/g, "");
+    fetch(`https://abacus.jasoncameron.dev/hit/${TELEMETRY_NS}/${kind}_${day}`).catch(() => {});
+  } catch (e) {}
+}
+
 /* ── util ── */
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const esc = (s) => (s || "").replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
@@ -709,7 +723,7 @@ function nowDefaults() {
   document.getElementById("hdr-date").textContent = todayIso();
 }
 
-openDb().then(d => { db = d; nowDefaults(); renderToday(); });
+openDb().then(d => { db = d; nowDefaults(); renderToday(); ping("open"); });
 
 /* PWA: offline + trwałość danych (ważne na iOS) */
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

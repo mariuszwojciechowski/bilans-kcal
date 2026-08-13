@@ -280,11 +280,11 @@ ilustracji, maskotek i dziecięcej kreski. Krasnal obecny **symbolicznie**, nie 
 
 ### 9.1 Identyfikacja
 
-- **Logo/znak:** okrągły badge z biegnącym krasnalem (ciemna czapka, zielony strój
-  z literą „F", liście dębu, góry i jasnozielona ścieżka) — dostarczony przez
-  właściciela projektu 2026-08-13. Znak (bez wordmarku „KRASNAL") działa jako favicon
-  i ikona aplikacji; ekstrakcja: `scripts/extract_logo.py`. Fallback do czasu
-  wgrania pliku: geometryczny trójkąt w `brand_green_light`.
+- **Logo/znak:** badge z krasnalem na rowerze gravelowym (ciemna czapka, wieniec
+  liści dębu, góry i jasnozielona ścieżka) — wersja v2 dostarczona 2026-08-13.
+  Kompozycja wystaje poza okrąg (koła roweru), więc assety są wycinane pełnym
+  kadrem z przezroczystym tłem (bez maski kołowej); ekstrakcja i komplet ikon:
+  `scripts/extract_logo.py`, warianty mono/B-W: `scripts/logo_variants.py`.
 - **Typografia:** nowoczesny grotesk (Inter / Manrope); nagłówki semibold, cyfry
   tabelaryczne w statystykach.
 - **Ton komunikatów:** rzeczowy, z suchym humorem w mikrocopy ("Krasnal odnotował

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>FK — status</title>
+<style>
+  :root { --green:#1A4D3A; --lime:#8DC63F; --bg:#F9FAF8; --card:#fff;
+          --ink:#212529; --stone:#6C757D; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#131715; --card:#1B211D; --ink:#E8ECE9; --stone:#9AA39D; }
+  }
+  body { margin:0; font-family:-apple-system,"Segoe UI",Roboto,sans-serif;
+         background:var(--bg); color:var(--ink); }
+  header { background:var(--green); color:#F9FAF8; padding:10px 16px; font-weight:600; }
+  main { max-width:560px; margin:14px auto; padding:0 12px; }
+  .card { background:var(--card); border-radius:10px; padding:14px 16px;
+          box-shadow:0 1px 3px rgba(33,37,41,.15); margin-bottom:12px; }
+  table { width:100%; border-collapse:collapse; font-size:14px;
+          font-variant-numeric:tabular-nums; }
+  td,th { padding:5px 8px; text-align:right; border-bottom:1px solid rgba(108,117,125,.2); }
+  td:first-child, th:first-child { text-align:left; }
+  .muted { color:var(--stone); font-size:13px; }
+  .bar { display:inline-block; height:9px; background:var(--lime); border-radius:4px;
+         vertical-align:middle; }
+  b.big { font-size:22px; }
+</style>
+</head>
+<body>
+<header>Fit Krasnal — wskaźniki użycia (ostatnie 14 dni)</header>
+<main>
+<div class="card">
+  <span class="muted">suma 14 dni:</span>
+  <b class="big" id="t-open">…</b> <span class="muted">otwarć ·</span>
+  <b class="big" id="t-meal">…</b> <span class="muted">posiłków ·</span>
+  <b class="big" id="t-queue">…</b> <span class="muted">do kolejki</span>
+</div>
+<div class="card">
+  <table id="tbl"><tr><th>dzień</th><th>otwarcia</th><th>posiłki</th><th>kolejka</th><th></th></tr></table>
+  <p class="muted">Liczniki anonimowe, zbiorcze dla wszystkich urządzeń.
+    Otwarcie tej strony niczego nie dolicza.</p>
+</div>
+</main>
+<script>
+const NS = "fitkrasnal-mw-k4x9t2", KINDS = ["open", "meal", "queue"];
+
+async function get(kind, day) {
+  try {
+    const r = await fetch(`https://abacus.jasoncameron.dev/get/${NS}/${kind}_${day}`);
+    if (!r.ok) return 0;
+    return (await r.json()).value || 0;
+  } catch (e) { return 0; }
+}
+
+(async () => {
+  const days = [...Array(14)].map((_, i) => {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    return d.toISOString().slice(0, 10);
+  });
+  const rows = await Promise.all(days.map(async (iso) => {
+    const day = iso.replace(/-/g, "");
+    const [o, m, q] = await Promise.all(KINDS.map(k => get(k, day)));
+    return { iso, o, m, q };
+  }));
+  const tbl = document.getElementById("tbl");
+  const maxM = Math.max(...rows.map(r => r.m), 1);
+  for (const r of rows) {
+    tbl.insertAdjacentHTML("beforeend",
+      `<tr><td>${r.iso.slice(5)}</td><td>${r.o}</td><td>${r.m}</td><td>${r.q}</td>
+       <td style="width:34%;text-align:left"><span class="bar" style="width:${100 * r.m / maxM}%"></span></td></tr>`);
+  }
+  const sum = (k) => rows.reduce((s, r) => s + r[k], 0);
+  document.getElementById("t-open").textContent = sum("o");
+  document.getElementById("t-meal").textContent = sum("m");
+  document.getElementById("t-queue").textContent = sum("q");
+})();
+</script>
+</body>
+</html>
