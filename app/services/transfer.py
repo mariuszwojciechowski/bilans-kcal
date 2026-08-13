@@ -50,6 +50,10 @@ def export_payload(db: Session, user_id: int) -> dict:
             "sex": profile.sex,
             "height_cm": profile.height_cm,
             "target_deficit_kcal": profile.target_deficit_kcal,
+            "target_weight_kg": profile.target_weight_kg,
+            "last_weight_kg": (
+                max(weights, key=lambda w: w.date).weight_kg if weights else None
+            ),
             "tz": profile.tz,
         } if profile else None,
         "weights": [
@@ -89,6 +93,7 @@ def import_payload(db: Session, user_id: int, payload: dict) -> dict:
         db.add(UserProfile(user_id=user_id, birth_date=date.fromisoformat(p["birth_date"]),
                            sex=p["sex"], height_cm=p["height_cm"],
                            target_deficit_kcal=p.get("target_deficit_kcal", 500),
+                           target_weight_kg=p.get("target_weight_kg"),
                            tz=p.get("tz", "Europe/Warsaw")))
         counts["profile"] = 1
 
