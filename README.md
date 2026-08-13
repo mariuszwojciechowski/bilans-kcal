@@ -1,0 +1,61 @@
+# Fit Krasnal 🔺
+
+Aplikacja wspierająca odchudzanie przez rzetelny dzienny bilans energetyczny:
+**realnie zmierzony wydatek (Garmin) kontra spożycie oszacowane ze zdjęć posiłków (Claude vision)**,
+z teoretycznym modelem energetycznym jako punktem odniesienia i normami makro wg WHO.
+
+Etap 1: web app (walidacja pomysłu). Etap 2: aplikacja mobilna (Android, docelowo też iOS).
+Pełne wymagania: [WYMAGANIA.md](WYMAGANIA.md).
+
+## Architektura (MVP)
+
+- **Python 3.12 + FastAPI**, SQLite, server-rendered dashboard (Jinja2)
+- `app/providers/` — dostęp do danych zdrowotnych za wymiennym interfejsem
+  (MVP: nieoficjalne API Garmin Connect; docelowo Health Connect / HealthKit)
+- `app/services/energy.py` — BMR (Mifflin-St Jeor), NEAT z kroków, MET aktywności
+- `app/services/meal_vision.py` — zdjęcie/opis posiłku → kcal + makro (Claude API)
+- `app/services/macros.py` — zapotrzebowanie i pokrycie makro wg norm WHO
+- `app/services/balance.py` — bilans dnia, prognozy, ostrzeżenia
+
+## Uruchomienie
+
+Wymagany [uv](https://docs.astral.sh/uv/) (albo własny Python ≥3.12).
+
+```bash
+uv venv --python 3.12 && uv pip install -e . --group dev
+```
+
+1. **Klucz Claude API** (szacowanie posiłków): `export ANTHROPIC_API_KEY=sk-ant-...`
+   (albo plik `.env` wg `.env.example` i załadowanie go do środowiska).
+2. **Logowanie do Garmina** (jednorazowo, interaktywnie — obsługuje MFA):
+
+   ```bash
+   .venv/bin/python scripts/garmin_login.py
+   ```
+
+3. **Start:**
+
+   ```bash
+   .venv/bin/uvicorn app.main:app --port 8321
+   ```
+
+   Dashboard: http://localhost:8321 — przy pierwszym uruchomieniu uzupełnij profil,
+   potem kliknij „Synchronizuj z Garminem".
+
+## Testy
+
+```bash
+.venv/bin/python -m pytest
+```
+
+## Prywatność (repo jest publiczne!)
+
+Żadne dane użytkownika nie trafiają do repozytorium:
+
+- baza danych i zdjęcia posiłków → `data/` (w `.gitignore`),
+- tokeny sesji Garmina → `~/.fit-krasnal/garth` (poza drzewem repo),
+- sekrety → zmienne środowiskowe / `.env` (w `.gitignore`).
+
+Uwaga: integracja z Garminem używa nieoficjalnej biblioteki
+[garminconnect](https://github.com/cyberjunky/python-garminconnect) — działa na własnym
+koncie użytkownika i może przestać działać przy zmianach po stronie Garmina.

@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fit Krasnal</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><polygon points='50,8 78,80 22,80' fill='%23B3402A'/></svg>">
+<style>
+  :root {
+    --green: #1B5E4A; --green-dark: #0F3D2E; --red: #B3402A; --amber: #D9982B;
+    --bg: #F5F1E8; --ink: #23201B; --stone: #6B6459; --olive: #6B8E4E; --bark: #8A7357;
+    --card: #FFFFFF;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14261F; --ink: #EDE8DC; --stone: #A39B8B; --card: #0F3D2E; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Inter, sans-serif;
+         background: var(--bg); color: var(--ink); }
+  header { background: var(--green-dark); color: #EDE8DC; padding: 14px 24px;
+           display: flex; align-items: center; gap: 12px; }
+  header .cap { width: 0; height: 0; border-left: 11px solid transparent;
+                border-right: 11px solid transparent; border-bottom: 20px solid var(--red); }
+  header h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: .02em; }
+  main { max-width: 860px; margin: 24px auto; padding: 0 16px; display: grid; gap: 16px; }
+  .card { background: var(--card); border-radius: 10px; padding: 18px 20px;
+          box-shadow: 0 1px 3px rgba(35,32,27,.12); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 12px; }
+  .stat b { display: block; font-size: 26px; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--stone); font-size: 13px; }
+  .pos { color: var(--green); } .neg { color: var(--red); } .warn { color: var(--amber); }
+  .bar { background: rgba(107,100,89,.18); border-radius: 6px; height: 10px; overflow: hidden; margin-top: 4px; }
+  .bar i { display: block; height: 100%; border-radius: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td, th { padding: 6px 8px; text-align: left; border-bottom: 1px solid rgba(107,100,89,.2); }
+  button, input, select { font: inherit; padding: 8px 10px; border-radius: 6px;
+    border: 1px solid var(--stone); background: var(--card); color: var(--ink); }
+  button.primary { background: var(--red); color: #fff; border: none; cursor: pointer; }
+  button.ghost { background: var(--green); color: #fff; border: none; cursor: pointer; }
+  .muted { color: var(--stone); font-size: 13px; }
+  h2 { font-size: 15px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: .05em;
+       color: var(--stone); }
+  #draft { display: none; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+</style>
+</head>
+<body>
+<header><div class="cap"></div><h1>Fit Krasnal</h1>
+  <span class="muted" style="margin-left:auto">{{ today }}</span></header>
+<main>
+
+{% if not profile %}
+<section class="card">
+  <h2>Profil — konfiguracja startowa</h2>
+  <form method="post" action="/profile-form" class="row">
+    <label>Data urodzenia <input type="date" name="birth_date" required></label>
+    <label>Płeć <select name="sex"><option value="M">M</option><option value="F">K</option></select></label>
+    <label>Wzrost [cm] <input type="number" name="height_cm" step="0.5" required></label>
+    <label>Cel deficytu [kcal/d] <input type="number" name="target_deficit_kcal" value="500"></label>
+    <button class="primary">Zapisz</button>
+  </form>
+</section>
+{% elif error %}
+<section class="card"><h2>Do zrobienia</h2>
+  <p>{{ error }}</p>
+  <button class="ghost" onclick="doSync()">Synchronizuj z Garminem</button>
+  <p class="muted" id="sync-status"></p>
+</section>
+{% else %}
+
+<section class="card">
+  <h2>Dziś — bilans <span class="muted">(wydatek: {{ report.out_source }}{% if report.estimated %}, dzień w toku — szacunek{% endif %})</span></h2>
+  <div class="stats">
+    <div class="stat"><b>{{ report.kcal_in }}</b><span>kcal spożyte</span></div>
+    <div class="stat"><b>{{ report.kcal_out }}</b><span>kcal spalone</span></div>
+    <div class="stat"><b class="{{ 'pos' if report.balance <= -report.target_deficit_kcal else ('warn' if report.balance <= 0 else 'neg') }}">{{ report.balance }}</b><span>bilans</span></div>
+    <div class="stat"><b class="{{ 'pos' if report.remaining_kcal >= 0 else 'neg' }}">{{ report.remaining_kcal }}</b><span>zostało do celu</span></div>
+    <div class="stat"><b>{{ report.weight_smoothed_kg }}</b><span>waga (śr. 7 dni) kg</span></div>
+    <div class="stat"><b>{{ report.steps or "—" }}</b><span>kroki</span></div>
+  </div>
+  {% if report.deficit_warning %}<p class="warn">⚠ {{ report.deficit_warning }}</p>{% endif %}
+  <p class="muted">Model teoretyczny: BMR {{ report.tdee_model.bmr }} + NEAT {{ report.tdee_model.neat }}
+     + aktywności {{ report.tdee_model.activities }} + TEF {{ report.tdee_model.tef }}
+     = {{ report.tdee_model.total }} kcal · prognoza tygodnia: {{ report.projected_weekly_change_kg }} kg</p>
+  <button class="ghost" onclick="doSync()">Odśwież dane z Garmina</button>
+  <span class="muted" id="sync-status"></span>
+</section>
+
+<section class="card">
+  <h2>Makroskładniki (normy WHO)</h2>
+  {% set m = report.macros %}
+  {% for key, label, color in [("protein","Białko","#B3402A"),("carbs","Węglowodany","#D9982B"),("fat","Tłuszcze","#6B8E4E"),("fiber","Błonnik","#8A7357"),("sugars","Cukry wolne","#B3402A")] %}
+    {% set item = m[key] %}
+    <div style="margin-bottom:10px">
+      <div class="row" style="justify-content:space-between">
+        <span>{{ label }} — {{ item.consumed_g }} g
+          <span class="muted">
+            {% if key == "protein" %}(WHO ≥ {{ item.who_min_g }} g; redukcja {{ item.cut_range_g[0] }}–{{ item.cut_range_g[1] }} g)
+            {% elif key == "fiber" %}(≥ {{ item.min_g }} g)
+            {% elif key == "sugars" %}(< {{ item.max_g }} g)
+            {% else %}({{ item.range_g[0] }}–{{ item.range_g[1] }} g){% endif %}
+          </span>
+        </span>
+        <span class="{{ 'pos' if item.status == 'ok' else ('warn' if item.status == 'below' else 'neg') }}">
+          {{ {'ok':'w normie','below':'poniżej','above':'powyżej'}[item.status] }}</span>
+      </div>
+      {% set ref = item.who_min_g if key == 'protein' else (item.min_g if key == 'fiber' else (item.max_g if key == 'sugars' else item.range_g[1])) %}
+      <div class="bar"><i style="width: {{ [100, (100 * item.consumed_g / ref) | round] | min if ref else 0 }}%; background: {{ color }}"></i></div>
+    </div>
+  {% endfor %}
+</section>
+
+<section class="card">
+  <h2>Dodaj posiłek</h2>
+  <div class="row">
+    <input type="file" id="photo" accept="image/*">
+    <input type="text" id="note" placeholder="uwaga do zdjęcia (opcjonalnie)" size="28">
+    <button class="primary" onclick="estimatePhoto()">Szacuj ze zdjęcia</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <input type="text" id="textdesc" placeholder="albo opisz: 2 jajka sadzone i kromka żytniego" size="44">
+    <button class="ghost" onclick="estimateText()">Szacuj z opisu</button>
+  </div>
+  <p class="muted" id="est-status"></p>
+
+  <div id="draft" class="card" style="background:rgba(217,152,43,.08)">
+    <h2>Szacunek — sprawdź i popraw przed zapisem</h2>
+    <p id="draft-desc"></p>
+    <table id="draft-items"></table>
+    <ul id="draft-assumptions" class="muted"></ul>
+    <div class="row">
+      <label>kcal <input type="number" id="d-kcal" style="width:90px"></label>
+      <label>białko g <input type="number" id="d-protein" step="0.1" style="width:80px"></label>
+      <label>tłuszcz g <input type="number" id="d-fat" step="0.1" style="width:80px"></label>
+      <label>węgle g <input type="number" id="d-carbs" step="0.1" style="width:80px"></label>
+      <button class="primary" onclick="saveMeal()">Zapisz posiłek</button>
+    </div>
+    <p class="muted" id="draft-range"></p>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Posiłki dziś</h2>
+  {% if report.meals %}
+  <table>
+    <tr><th>Godz.</th><th>Opis</th><th>kcal</th><th>B/T/W [g]</th><th></th></tr>
+    {% for meal in report.meals %}
+    <tr>
+      <td>{{ meal.time[:5] if meal.time else "" }}</td>
+      <td>{{ meal.description }}</td>
+      <td>{{ meal.kcal }}{% if meal.kcal_range[0] %} <span class="muted">({{ meal.kcal_range[0] }}–{{ meal.kcal_range[1] }})</span>{% endif %}</td>
+      <td>{{ meal.protein_g|round(0)|int }}/{{ meal.fat_g|round(0)|int }}/{{ meal.carbs_g|round(0)|int }}</td>
+      <td><button onclick="delMeal({{ meal.id }})">✕</button></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">Krasnal nie odnotował dziś jeszcze żadnego posiłku.</p>{% endif %}
+</section>
+
+{% endif %}
+</main>
+
+<script>
+let draft = null;
+
+async function doSync() {
+  const el = document.getElementById("sync-status");
+  el.textContent = "Synchronizuję…";
+  const r = await fetch("/api/sync?days=7", { method: "POST" });
+  if (r.ok) { location.reload(); }
+  else { el.textContent = (await r.json()).detail || "Błąd synchronizacji"; }
+}
+
+function showDraft(data) {
+  draft = data;
+  document.getElementById("draft").style.display = "block";
+  document.getElementById("draft-desc").textContent = data.description;
+  document.getElementById("draft-items").innerHTML =
+    "<tr><th>Składnik</th><th>g</th><th>kcal</th><th>pewność</th></tr>" +
+    data.items.map(i => `<tr><td>${i.name}</td><td>${Math.round(i.mass_g)}</td><td>${Math.round(i.kcal)}</td><td>${i.confidence}</td></tr>`).join("");
+  document.getElementById("draft-assumptions").innerHTML =
+    data.assumptions.map(a => `<li>${a}</li>`).join("");
+  document.getElementById("d-kcal").value = Math.round(data.kcal);
+  document.getElementById("d-protein").value = sum(data.items, "protein_g");
+  document.getElementById("d-fat").value = sum(data.items, "fat_g");
+  document.getElementById("d-carbs").value = sum(data.items, "carbs_g");
+  document.getElementById("draft-range").textContent =
+    `Przedział niepewności: ${Math.round(data.kcal_min)}–${Math.round(data.kcal_max)} kcal`;
+}
+const sum = (items, k) => Math.round(items.reduce((s, i) => s + (i[k] || 0), 0) * 10) / 10;
+
+async function estimatePhoto() {
+  const f = document.getElementById("photo").files[0];
+  if (!f) { alert("Wybierz zdjęcie"); return; }
+  const el = document.getElementById("est-status");
+  el.textContent = "Krasnal przygląda się posiłkowi…";
+  const fd = new FormData();
+  fd.append("photo", f);
+  const note = document.getElementById("note").value;
+  if (note) fd.append("note", note);
+  const r = await fetch("/api/meals/photo", { method: "POST", body: fd });
+  el.textContent = "";
+  if (r.ok) showDraft(await r.json());
+  else el.textContent = (await r.json()).detail || "Błąd szacowania";
+}
+
+async function estimateText() {
+  const desc = document.getElementById("textdesc").value.trim();
+  if (!desc) return;
+  const el = document.getElementById("est-status");
+  el.textContent = "Krasnal liczy…";
+  const fd = new FormData();
+  fd.append("description", desc);
+  const r = await fetch("/api/meals/text", { method: "POST", body: fd });
+  el.textContent = "";
+  if (r.ok) showDraft(await r.json());
+  else el.textContent = "Błąd szacowania";
+}
+
+async function saveMeal() {
+  const now = new Date();
+  const body = {
+    date: "{{ today }}",
+    time: now.toTimeString().slice(0, 5),
+    description: draft.description,
+    photo_path: draft.photo_path,
+    kcal: +document.getElementById("d-kcal").value,
+    kcal_min: draft.kcal_min, kcal_max: draft.kcal_max,
+    protein_g: +document.getElementById("d-protein").value,
+    fat_g: +document.getElementById("d-fat").value,
+    carbs_g: +document.getElementById("d-carbs").value,
+    fiber_g: sum(draft.items, "fiber_g"),
+    sugars_g: sum(draft.items, "sugars_g"),
+    items: draft.items, assumptions: draft.assumptions,
+    source: draft.photo_path ? "photo" : "text",
+  };
+  const r = await fetch("/api/meals", { method: "POST",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (r.ok) location.reload();
+}
+
+async function delMeal(id) {
+  await fetch(`/api/meals/${id}`, { method: "DELETE" });
+  location.reload();
+}
+</script>
+</body>
+</html>

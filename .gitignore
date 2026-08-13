@@ -1,0 +1,45 @@
+# ── Dane prywatne / runtime — NIGDY nie commitować ──────────────
+# Cała baza i wszystkie dane zebrane w czasie działania aplikacji
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Sekrety i konfiguracja lokalna (loginy, tokeny, profil użytkownika)
+.env
+.env.*
+*.secret
+secrets/
+
+# Tokeny sesji Garmina (garth zapisuje je domyślnie w ~/.garth,
+# ale gdyby ktoś wskazał katalog w repo — też ignorujemy)
+.garth/
+tokens/
+
+# Zdjęcia posiłków i inne media użytkownika
+photos/
+uploads/
+media/
+
+# Zrzuty/eksporty danych z developmentu i debugowania
+*.json.dump
+dumps/
+exports/
+notebooks/*.ipynb_checkpoints
+
+# ── Python ───────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ── System / IDE ─────────────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
