@@ -185,6 +185,14 @@ Moduł w web MVP pokazujący **dzienne zapotrzebowanie** i **pokrycie** z dzienn
 
 ### 7.1 Normy (WHO/FAO — cele populacyjne, prezentowane jako przedziały)
 
+**Normy są danymi, nie kodem:** leżą w `app/resources/who_norms.json` (z metadanymi
+źródeł WHO 2003/2007/2015/2023) i są rozwiązywane **per profil użytkownika**:
+grupa wiekowa z wieku (dorosły 18–64 / senior 65+ z podniesionym minimum białka
+1.0 g/kg wg PROT-AGE), mechanizm nadpisań per płeć (`sex_overrides` — w WHO makra
+nie różnią się płcią; płeć wpływa przez BMR i masę ciała, ale plik pozwala podmienić
+np. błonnik wg IOM 38/25 g), białko z aktualnej wygładzonej wagi. Zmiana użytkownika
+= inne normy bez zmiany kodu.
+
 Punkt odniesienia energetyczny: `E_cel = zapotrzebowanie skalibrowane + cel deficytu`
 (normy % liczone od energii docelowej, nie od faktycznego spożycia).
 

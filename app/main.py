@@ -147,7 +147,8 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
         day_complete=bool(summary and summary.complete),
     )
     e_target = bal.kcal_out - profile.target_deficit_kcal
-    targets = who_targets(e_target, weight)
+    targets = who_targets(e_target, weight, sex=profile.sex,
+                          age=age_years(profile.birth_date, day))
     macros = coverage(
         targets,
         protein_g=sum(m.protein_g for m in meals),

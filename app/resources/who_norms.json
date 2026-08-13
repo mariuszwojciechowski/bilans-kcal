@@ -1,0 +1,44 @@
+{
+  "meta": {
+    "fetched": "2026-08-13",
+    "sources": [
+      "WHO (2023) Guideline: Total fat intake — tłuszcze ≤30% energii; nasycone ≤10%E; trans <1%E",
+      "WHO (2023) Guideline: Carbohydrate intake — błonnik ≥25 g/d (dorośli, silna rekomendacja); węglowodany głównie z pełnego ziarna, warzyw, owoców i strączków",
+      "WHO (2015) Guideline: Sugars intake — cukry wolne <10% energii (silna), preferencyjnie <5% (warunkowa)",
+      "WHO/FAO (2003) TRS 916: populacyjne cele — węglowodany 55-75% energii, tłuszcze 15-30% (dolne granice zakresów pasków)",
+      "WHO/FAO/UNU (2007) TRS 935: białko — bezpieczne spożycie 0.83 g/kg m.c./d (dorośli, obie płcie)",
+      "PROT-AGE/ESPEN (uzupełnienie, nie WHO): białko ≥1.0 g/kg/d dla 65+"
+    ],
+    "notes": [
+      "Płeć nie różnicuje w WHO wartości makro per kg ani udziałów energii — wpływa na normy pośrednio przez energię docelową (BMR wg płci) i masę ciała.",
+      "Mechanizm sex_overrides pozwala podmienić wartości per płeć (np. błonnik 38/25 g wg IOM), jeśli właściciel apki tak zdecyduje."
+    ]
+  },
+  "groups": [
+    {
+      "id": "adult",
+      "match": { "age_min": 18, "age_max": 64 },
+      "protein_g_per_kg_min": 0.83,
+      "protein_cut_g_per_kg": [1.2, 1.6],
+      "fat_energy": [0.15, 0.30],
+      "carbs_energy": [0.55, 0.75],
+      "free_sugars_energy_max": 0.10,
+      "fiber_g_min": 25.0
+    },
+    {
+      "id": "senior",
+      "match": { "age_min": 65 },
+      "protein_g_per_kg_min": 1.0,
+      "protein_cut_g_per_kg": [1.2, 1.6],
+      "fat_energy": [0.15, 0.30],
+      "carbs_energy": [0.55, 0.75],
+      "free_sugars_energy_max": 0.10,
+      "fiber_g_min": 25.0,
+      "note": "65+: minimum białka 1.0 g/kg wg PROT-AGE/ESPEN (WHO safe level to nadal 0.83)"
+    }
+  ],
+  "sex_overrides": {
+    "M": {},
+    "F": {}
+  }
+}
