@@ -450,7 +450,8 @@ async function renderToday() {
     document.getElementById("macros").innerHTML = '<p class="muted">Brak profilu.</p>';
   }
 
-  document.getElementById("t-meals").innerHTML = meals.map(m => `
+  const mealsByTimeDesc = [...meals].sort((a, b) => (b.time || "").localeCompare(a.time || ""));
+  document.getElementById("t-meals").innerHTML = mealsByTimeDesc.map(m => `
     <div class="entry">
       <div style="flex:1"><div>${esc(m.description)}</div>
         <div class="muted">${m.time || ""} · ${m.kcal} kcal · B/T/W ${r0(m.protein_g)}/${r0(m.fat_g)}/${r0(m.carbs_g)} g</div></div>

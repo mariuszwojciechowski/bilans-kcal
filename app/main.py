@@ -160,7 +160,7 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
         select(Activity).where(Activity.user_id == user_id, Activity.date == day)
     ).all()
     meals = db.scalars(
-        select(Meal).where(Meal.user_id == user_id, Meal.date == day).order_by(Meal.time)
+        select(Meal).where(Meal.user_id == user_id, Meal.date == day).order_by(Meal.time.desc())
     ).all()
     pending = db.scalars(
         select(PendingMeal).where(PendingMeal.user_id == user_id, PendingMeal.date == day)
