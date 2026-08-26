@@ -1,4 +1,6 @@
-from app.services.macros import coverage, resolve_norms, who_targets
+import pytest
+
+from app.services.macros import bar_pct, coverage, resolve_norms, who_targets
 
 
 def test_who_targets_protein_from_weight_default_lifestyle():
@@ -77,3 +79,31 @@ def test_coverage_statuses():
     assert cov["carbs"]["status"] == "ok"
     assert cov["fiber"]["status"] == "below"
     assert cov["sugars"]["status"] == "above"
+
+
+def test_bar_pct_range_breakpoints():
+    # b1 -> 1/3, b2 -> 2/3, b3 -> 100%, liniowo w każdej sekcji
+    assert bar_pct(0, 100, 150, 450) == 0.0
+    assert bar_pct(50, 100, 150, 450) == pytest.approx(16.7, abs=0.1)
+    assert bar_pct(100, 100, 150, 450) == pytest.approx(33.3, abs=0.1)
+    assert bar_pct(125, 100, 150, 450) == 50.0
+    assert bar_pct(150, 100, 150, 450) == pytest.approx(66.7, abs=0.1)
+    assert bar_pct(450, 100, 150, 450) == 100.0
+    assert bar_pct(600, 100, 150, 450) == 100.0  # ponad koniec paska: przycięte
+
+
+def test_bar_pct_single_bound_fiber_and_sugars():
+    # błonnik: tylko dolna granica (min) -> b1/b2/b3 = 1x/2x/3x min
+    assert bar_pct(25, 25, 50, 75) == pytest.approx(33.3, abs=0.1)
+    assert bar_pct(50, 25, 50, 75) == pytest.approx(66.7, abs=0.1)
+    assert bar_pct(75, 25, 50, 75) == 100.0
+    # cukry wolne: tylko górna granica (max) -> b1/b2/b3 = 1x/2x/3x max
+    assert bar_pct(50, 50, 100, 150) == pytest.approx(33.3, abs=0.1)
+    assert bar_pct(150, 50, 100, 150) == 100.0
+
+
+def test_coverage_includes_bar_pct_for_all_macros():
+    t = who_targets(2000, weight_kg=90, lifestyle="sedentary")
+    cov = coverage(t, protein_g=100, fat_g=80, carbs_g=300, fiber_g=10, sugars_g=60)
+    for key in ("protein", "fat", "carbs", "fiber", "sugars"):
+        assert 0.0 <= cov[key]["bar_pct"] <= 100.0
