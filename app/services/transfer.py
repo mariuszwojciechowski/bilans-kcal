@@ -4,9 +4,13 @@ Format pliku: JSON `fit-krasnal-transfer` v1. Ten sam plik obsługuje:
 - eksport z desktopa (profil, wagi, posiłki, kolejka) -> inne stanowisko,
 - eksport ze strony mobilnej (tylko kolejka: opisy + zdjęcia base64) -> desktop.
 Nośnikiem może być cokolwiek (Google Drive, mail, kabel) — to zwykły plik.
-Import jest idempotentny: duplikaty posiłków/wag są pomijane."""
+Import jest idempotentny: wagi dedupowane po dacie, posiłki po stabilnym
+external_id (wielokrotne wczytanie tego samego pliku nie duplikuje posiłków;
+posiłki bez external_id — starsze eksporty — nie mają z czym się dopasować
+i są wczytywane jako nowe, czyli faktycznie duplikowane)."""
 
 import base64
+import uuid
 from datetime import date, datetime, time
 
 from sqlalchemy import select
@@ -63,6 +67,7 @@ def export_payload(db: Session, user_id: int) -> dict:
         ],
         "meals": [
             {
+                "external_id": m.external_id,
                 "date": m.date.isoformat(), "time": _t(m.time),
                 "description": m.description, "kcal": m.kcal,
                 "kcal_min": m.kcal_min, "kcal_max": m.kcal_max,
@@ -110,16 +115,22 @@ def import_payload(db: Session, user_id: int, payload: dict) -> dict:
                          source=w.get("source", "import")))
         counts["weights"] += 1
 
-    existing_meals = {
-        (m.date.isoformat(), _t(m.time), m.kcal, m.description)
-        for m in db.scalars(select(Meal).where(Meal.user_id == user_id)).all()
+    # Dedup po external_id: ten sam posiłek wczytany wielokrotnie (ten sam plik
+    # transferu) liczy się tylko raz. Wpisy bez external_id (starsze eksporty,
+    # sprzed wprowadzenia identyfikatorów) nie mają z czym się dopasować —
+    # zawsze trafiają jako nowe (i dostają świeży external_id).
+    existing_ids = {
+        eid for (eid,) in db.execute(
+            select(Meal.external_id).where(Meal.user_id == user_id)
+        ).all()
     }
     for m in payload.get("meals", []):
-        key = (m["date"], m.get("time"), round(m["kcal"]), m.get("description", ""))
-        if key in existing_meals:
+        eid = m.get("external_id")
+        if eid and eid in existing_ids:
             counts["skipped"] += 1
             continue
-        db.add(Meal(user_id=user_id, date=date.fromisoformat(m["date"]),
+        db.add(Meal(user_id=user_id, external_id=eid or uuid.uuid4().hex,
+                    date=date.fromisoformat(m["date"]),
                     time=_parse_time(m.get("time")), description=m.get("description", ""),
                     kcal=round(m["kcal"]), kcal_min=m.get("kcal_min"), kcal_max=m.get("kcal_max"),
                     protein_g=m.get("protein_g", 0), fat_g=m.get("fat_g", 0),
@@ -127,6 +138,8 @@ def import_payload(db: Session, user_id: int, payload: dict) -> dict:
                     sugars_g=m.get("sugars_g", 0), items_json=m.get("items_json"),
                     assumptions_json=m.get("assumptions_json"),
                     source=m.get("source", "import")))
+        if eid:
+            existing_ids.add(eid)
         counts["meals"] += 1
 
     existing_pending = {

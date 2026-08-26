@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -39,6 +41,19 @@ def _migrate(engine) -> None:
         if cols and "lifestyle" not in cols:
             conn.execute(text(
                 "ALTER TABLE user_profile ADD COLUMN lifestyle VARCHAR DEFAULT 'active' NOT NULL"
+            ))
+            conn.commit()
+
+        meal_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(meal)"))]
+        if meal_cols and "external_id" not in meal_cols:
+            conn.execute(text("ALTER TABLE meal ADD COLUMN external_id VARCHAR"))
+            conn.commit()
+            for (meal_id,) in conn.execute(text("SELECT id FROM meal WHERE external_id IS NULL")):
+                conn.execute(text("UPDATE meal SET external_id = :eid WHERE id = :id"),
+                             {"eid": uuid.uuid4().hex, "id": meal_id})
+            conn.commit()
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_meal_external_id ON meal(external_id)"
             ))
             conn.commit()
 

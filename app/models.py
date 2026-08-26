@@ -1,3 +1,4 @@
+import uuid
 from datetime import date, datetime, time
 
 from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, Text, Time, UniqueConstraint
@@ -102,6 +103,10 @@ class Meal(Base):
     __tablename__ = "meal"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # identyfikator stabilny między urządzeniami/eksportami — pozwala rozpoznać
+    # ten sam posiłek przy wielokrotnym wczytaniu tego samego pliku transferu
+    external_id: Mapped[str] = mapped_column(String, unique=True, index=True,
+                                              default=lambda: uuid.uuid4().hex)
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), index=True)
     date: Mapped[date] = mapped_column(Date, index=True)
     time: Mapped[time | None] = mapped_column(Time)
