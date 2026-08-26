@@ -467,6 +467,20 @@ async function renderToday() {
   document.getElementById("t-queue").innerHTML = queue.length
     ? `<p class="muted">W kolejce offline: ${queue.length} (przetwórz w zakładce „Dodaj")</p>` : "";
 }
+// Pozycja na pasku wg trzech punktów odniesienia: 0 -> 0%, b1 -> 1/3,
+// b2 -> 2/3, b3 -> 100%. W każdej z trzech sekcji (0-b1, b1-b2, b2-b3)
+// postęp jest liniowy względem długości TEJ sekcji (nie całego paska).
+// Białko/węgle/tłuszcze: b1/b2 = dolna/górna granica normy, b3 = 3x górna.
+// Błonnik (tylko dolna granica): b1/b2/b3 = 1x/2x/3x minimum.
+// Cukry wolne (tylko górna granica): b1/b2/b3 = 1x/2x/3x maksimum.
+function barPct(v, b1, b2, b3) {
+  if (!b3 || b3 <= 0 || v <= 0) return 0;
+  let pct;
+  if (v <= b1) pct = b1 > 0 ? (v / b1) / 3 : 0;
+  else if (v <= b2) pct = b2 > b1 ? (1 / 3) + ((v - b1) / (b2 - b1)) / 3 : 2 / 3;
+  else pct = b3 > b2 ? (2 / 3) + Math.min(1, (v - b2) / (b3 - b2)) / 3 : 1;
+  return Math.min(100, pct * 100);
+}
 function renderMacros(p, day, eTarget, meals) {
   const t = whoTargets(p, day, eTarget);
   document.getElementById("m-group").textContent = t.group;
@@ -481,11 +495,13 @@ function renderMacros(p, day, eTarget, meals) {
   document.getElementById("macros").innerHTML = rows.map(([n, v, lo, hi, c, range]) => {
     const status = (lo !== null && v < lo) ? ["poniżej", "mid"] :
                    (hi !== null && v > hi) ? ["powyżej", "neg"] : ["w normie", "pos"];
-    const ref = hi ?? lo ?? 1;
+    const [b1, b2, b3] = (lo !== null && hi !== null) ? [lo, hi, 3 * hi]
+      : (lo !== null) ? [lo, 2 * lo, 3 * lo] : [hi, 2 * hi, 3 * hi];
+    const pct = barPct(v, b1, b2, b3);
     return `<div style="display:flex;justify-content:space-between">
         <span>${n} — ${v.toFixed(1)} g <span class="muted">(${range})</span></span>
         <span class="${status[1]}">${status[0]}</span></div>
-      <div class="bar"><i style="width:${Math.min(100, 100 * v / ref)}%;background:${c}"></i></div>`;
+      <div class="bar"><i style="width:${pct}%;background:${c}"></i></div>`;
   }).join("");
 }
 
