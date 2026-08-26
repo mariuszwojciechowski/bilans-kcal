@@ -45,6 +45,9 @@
   img.quip-icon { width: 22px; height: 22px; vertical-align: -5px; margin-right: 6px; }
   @media (prefers-color-scheme: dark) { img.quip-icon { filter: invert(1); } }
   .pos { color: var(--success); } .neg { color: var(--danger); } .mid { color: var(--green-med); }
+  .macro-below { color: #fff; }
+  .macro-ok { color: var(--success); font-weight: 700; }
+  .macro-above { color: var(--danger); font-weight: 700; font-style: italic; }
   nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex;
         background: var(--green); z-index: 5; }
   nav button { flex: 1; background: none; border: none; color: #C9D3CC; padding: 12px 4px;
@@ -486,15 +489,15 @@ function renderMacros(p, day, eTarget, meals) {
   document.getElementById("m-group").textContent = t.group;
   const sum = k => meals.reduce((s, m) => s + (m[k] || 0), 0);
   const rows = [
-    ["Białko", sum("protein_g"), t.protein[0], t.protein[1], "#1A4D3A", `${t.protein[0].toFixed(0)}–${t.protein[1].toFixed(0)} g`],
-    ["Węglowodany", sum("carbs_g"), t.carbs[0], t.carbs[1], "#8DC63F", `${t.carbs[0].toFixed(0)}–${t.carbs[1].toFixed(0)} g`],
-    ["Tłuszcze", sum("fat_g"), t.fat[0], t.fat[1], "#3A7A5C", `${t.fat[0].toFixed(0)}–${t.fat[1].toFixed(0)} g`],
-    ["Błonnik", sum("fiber_g"), t.fiber_min, null, "#6C757D", `≥ ${t.fiber_min} g`],
+    ["Białko", sum("protein_g"), t.protein[0], t.protein[1], "#FFFFFF", `${t.protein[0].toFixed(0)}–${t.protein[1].toFixed(0)} g`],
+    ["Węglowodany", sum("carbs_g"), t.carbs[0], t.carbs[1], "#000000", `${t.carbs[0].toFixed(0)}–${t.carbs[1].toFixed(0)} g`],
+    ["Tłuszcze", sum("fat_g"), t.fat[0], t.fat[1], "#FFEB3B", `${t.fat[0].toFixed(0)}–${t.fat[1].toFixed(0)} g`],
+    ["Błonnik", sum("fiber_g"), t.fiber_min, null, "#28A745", `≥ ${t.fiber_min} g`],
     ["Cukry wolne", sum("sugars_g"), null, t.sugars_max, "#DC3545", `< ${t.sugars_max.toFixed(0)} g`],
   ];
   document.getElementById("macros").innerHTML = rows.map(([n, v, lo, hi, c, range]) => {
-    const status = (lo !== null && v < lo) ? ["poniżej", "mid"] :
-                   (hi !== null && v > hi) ? ["powyżej", "neg"] : ["w normie", "pos"];
+    const status = (lo !== null && v < lo) ? ["poniżej", "macro-below"] :
+                   (hi !== null && v > hi) ? ["powyżej", "macro-above"] : ["w normie", "macro-ok"];
     const [b1, b2, b3] = (lo !== null && hi !== null) ? [lo, hi, 3 * hi]
       : (lo !== null) ? [lo, 2 * lo, 3 * lo] : [hi, 2 * hi, 3 * hi];
     const pct = barPct(v, b1, b2, b3);

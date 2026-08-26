@@ -46,6 +46,9 @@
   .stat span { color: var(--stone); font-size: 13px; }
   .pos { color: var(--success); } .neg { color: var(--danger); }
   .warn { color: var(--danger); } .mid { color: var(--green-med); }
+  .macro-below { color: #fff; }
+  .macro-ok { color: var(--success); font-weight: 700; }
+  .macro-above { color: var(--danger); font-weight: 700; font-style: italic; }
   .bar { background: rgba(108,117,125,.18); border-radius: 6px; height: 10px; overflow: hidden; margin-top: 4px; }
   .bar i { display: block; height: 100%; border-radius: 6px; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -148,7 +151,7 @@
 <section class="card">
   <h2>Makroskładniki (normy WHO — grupa: {{ report.norms_group_label }})</h2>
   {% set m = report.macros %}
-  {% for key, label, color in [("protein","Białko","#1A4D3A"),("carbs","Węglowodany","#8DC63F"),("fat","Tłuszcze","#3A7A5C"),("fiber","Błonnik","#6C757D"),("sugars","Cukry wolne","#DC3545")] %}
+  {% for key, label, color in [("protein","Białko","#FFFFFF"),("carbs","Węglowodany","#000000"),("fat","Tłuszcze","#FFEB3B"),("fiber","Błonnik","#28A745"),("sugars","Cukry wolne","#DC3545")] %}
     {% set item = m[key] %}
     <div style="margin-bottom:10px">
       <div class="row" style="justify-content:space-between">
@@ -160,7 +163,7 @@
             {% else %}({{ item.range_g[0] }}–{{ item.range_g[1] }} g){% endif %}
           </span>
         </span>
-        <span class="{{ 'pos' if item.status == 'ok' else ('mid' if item.status == 'below' else 'neg') }}">
+        <span class="{{ 'macro-ok' if item.status == 'ok' else ('macro-below' if item.status == 'below' else 'macro-above') }}">
           {{ {'ok':'w normie','below':'poniżej','above':'powyżej'}[item.status] }}</span>
       </div>
       <div class="bar"><i style="width: {{ item.bar_pct }}%; background: {{ color }}"></i></div>
