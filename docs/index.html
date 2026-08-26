@@ -198,6 +198,13 @@
   </section>
   <section class="card">
     <h2>Przenoszenie danych</h2>
+    <label>Zakres eksportu</label>
+    <select id="export-scope" onchange="onExportScopeChange()">
+      <option value="all">Wszystkie dane</option>
+      <option value="since">Od wskazanej daty do dziś</option>
+      <option value="today">Tylko dziś</option>
+    </select>
+    <input type="date" id="export-since" style="display:none">
     <button class="ghost" onclick="exportData()">Przygotuj dane do przeniesienia (pobierz plik)</button>
     <label>Wczytaj dane z innego urządzenia (np. profil z komputera):</label>
     <input type="file" id="f-import" accept=".json,application/json" onchange="importData(this.files[0])">
@@ -790,10 +797,23 @@ function saveKey() {
   loadSettings();
 }
 
+function onExportScopeChange() {
+  document.getElementById("export-since").style.display =
+    document.getElementById("export-scope").value === "since" ? "" : "none";
+}
 async function exportData() {
-  const meals = await all("meals");
-  const queue = await all("queue");
-  const weights = await all("weights");
+  const scope = document.getElementById("export-scope").value;
+  let from = null;
+  if (scope === "today") from = todayIso();
+  else if (scope === "since") {
+    from = document.getElementById("export-since").value;
+    if (!from) { alert("Wybierz datę początkową."); return; }
+  }
+  const inRange = (d) => !from || d >= from;
+
+  const meals = (await all("meals")).filter(m => inRange(m.date));
+  const queue = (await all("queue")).filter(q => inRange(q.date));
+  const weights = (await all("weights")).filter(w => inRange(w.date));
   const payload = {
     format: "fit-krasnal-transfer", version: 1, source: "mobile",
     exported_at: new Date().toISOString(),
@@ -807,7 +827,9 @@ async function exportData() {
   const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `fit-krasnal-${todayIso()}.json`;
+  const suffix = scope === "today" ? `dzis-${todayIso()}`
+    : scope === "since" ? `${from}_do_${todayIso()}` : todayIso();
+  a.download = `fit-krasnal-${suffix}.json`;
   a.click();
 }
 async function importData(file) {
