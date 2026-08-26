@@ -62,6 +62,39 @@ def test_transfer_rejects_foreign_file(db):
         transfer.import_payload(db, 1, {"format": "cos-innego"})
 
 
+def test_transfer_meal_dedup_by_external_id_survives_repeated_import(db):
+    _seed(db)
+    payload = transfer.export_payload(db, 1)
+
+    transfer.import_payload(db, 1, payload)
+    transfer.import_payload(db, 1, payload)
+    transfer.import_payload(db, 1, payload)
+
+    assert len(db.scalars(select(Meal)).all()) == 1
+
+
+def test_transfer_meal_without_external_id_is_duplicated_on_reimport():
+    """Zgodnie z decyzją: pliki bez external_id (starsze eksporty) nie są
+    dedupowane — każde ich wczytanie tworzy nowy posiłek."""
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine)()
+    session.add(User(email="t@t"))
+    session.commit()
+
+    legacy_payload = {
+        "format": "fit-krasnal-transfer", "version": 1, "source": "desktop",
+        "meals": [{"date": "2026-08-12", "time": "12:30:00",
+                   "description": "jajecznica", "kcal": 420}],
+    }
+    transfer.import_payload(session, 1, legacy_payload)
+    transfer.import_payload(session, 1, legacy_payload)
+
+    meals = session.scalars(select(Meal)).all()
+    assert len(meals) == 2
+    assert meals[0].external_id != meals[1].external_id
+
+
 def _macros(protein="ok", fiber="ok", sugars="ok"):
     return {"protein": {"status": protein}, "fiber": {"status": fiber},
             "sugars": {"status": sugars}}

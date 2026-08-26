@@ -575,6 +575,7 @@ function showDraft(e) {
 async function saveDraft() {
   const sum = k => draft.items.reduce((s, i) => s + (i[k] || 0), 0);
   await put("meals", {
+    external_id: crypto.randomUUID(),
     date: document.getElementById("f-date").value, time: document.getElementById("f-time").value,
     description: draft.description,
     kcal: +document.getElementById("d-kcal").value,
@@ -621,6 +622,7 @@ async function processQueue() {
       const e = await callGemini(prompt, q.photo_b64);
       const sum = k => e.items.reduce((s, i) => s + (i[k] || 0), 0);
       await put("meals", {
+        external_id: crypto.randomUUID(),
         date: q.date, time: q.time, description: e.description,
         kcal: Math.round(sum("kcal")), kcal_min: Math.round(e.kcal_min), kcal_max: Math.round(e.kcal_max),
         protein_g: +sum("protein_g").toFixed(1), fat_g: +sum("fat_g").toFixed(1),
@@ -825,14 +827,18 @@ async function importData(file) {
   for (const w of (payload.weights || []))
     if (!haveW.has(w.date)) await ups("weights", { date: w.date, weight_kg: w.weight_kg });
   let added = 0;
+  // Dedup po external_id: to samo wczytanie tego samego pliku nie duplikuje
+  // posiłków. Wpisy bez external_id (starsze eksporty) nie mają z czym się
+  // dopasować i zawsze wchodzą jako nowe (dostają świeży external_id).
   const existing = await all("meals");
-  const seen = new Set(existing.map(m => `${m.date}|${m.time}|${m.kcal}|${m.description}`));
+  const seenIds = new Set(existing.map(m => m.external_id).filter(Boolean));
   for (const m of (payload.meals || [])) {
-    const key = `${m.date}|${m.time ? m.time.slice(0,5) : m.time}|${Math.round(m.kcal)}|${m.description}`;
-    if (seen.has(key)) continue;
+    if (m.external_id && seenIds.has(m.external_id)) continue;
     await put("meals", { ...m, time: m.time ? m.time.slice(0, 5) : null,
+      external_id: m.external_id || crypto.randomUUID(),
       items: m.items_json ? JSON.parse(m.items_json) : [],
       assumptions: m.assumptions_json ? JSON.parse(m.assumptions_json) : [] });
+    if (m.external_id) seenIds.add(m.external_id);
     added++;
   }
   alert(`Wczytano. Nowych posiłków: ${added}${payload.profile ? ", profil zaimportowany" : ""}.`);
