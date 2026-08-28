@@ -118,3 +118,43 @@ def test_successful_login_resets_failed_attempts(client):
 def test_login_page_renders_without_session(client):
     assert client.get("/login").status_code == 200
     assert client.get("/register").status_code == 200
+
+
+def test_api_returns_401_when_not_logged_in(client):
+    """Klienci JSON (mobile/curl) dostają 401, nie redirect."""
+    for path in ("/api/profile", "/api/day/2026-08-27", "/api/transfer/export"):
+        r = client.get(path)
+        assert r.status_code == 401, path
+
+
+def test_html_pages_redirect_to_login_when_not_logged_in(client):
+    """Przeglądarki (Accept: text/html) na 401 dostają redirect na /login."""
+    for path in ("/", "/settings", "/trends"):
+        r = client.get(path, headers={"accept": "text/html"})
+        assert r.status_code == 303, path
+        assert r.headers["location"] == "/login"
+
+
+def test_two_users_do_not_see_each_others_profile(client):
+    """Rejestracja B nie może zobaczyć/nadpisać profilu A."""
+    _register(client, email="alice@example.com")
+    client.put("/api/profile", json={
+        "birth_date": "1990-01-01", "sex": "F", "height_cm": 170,
+    })
+    client.post("/logout")
+
+    _register(client, email="bob@example.com")
+    resp = client.get("/api/profile")
+    assert resp.status_code == 404          # Bob nie widzi profilu Alicji
+
+    client.put("/api/profile", json={
+        "birth_date": "1985-06-15", "sex": "M", "height_cm": 180,
+    })
+
+    got_bob = client.get("/api/profile").json()
+    assert got_bob["sex"] == "M" and got_bob["height_cm"] == 180
+
+    client.post("/logout")
+    client.post("/login", data={"email": "alice@example.com", "password": "tajnehaslo1"})
+    got_alice = client.get("/api/profile").json()
+    assert got_alice["sex"] == "F" and got_alice["height_cm"] == 170  # A nadal ma swoje

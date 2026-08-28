@@ -41,20 +41,28 @@ STATIC_DIR = Path(__file__).parent / "static"
 STATIC_DIR.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-LOCAL_USER_EMAIL = "local@fit-krasnal"
-
-
 @app.on_event("startup")
 def startup() -> None:
     ensure_dirs()
     init_db()
+    # Klucze LLM aplikują się per-użytkownika w /settings/llm — przy multi-user
+    # nie ma "tego jednego" usera do zasilenia na starcie. Kolejka posiłków jest
+    # globalna (retencja 21 dni), więc jej sprzątanie zostawiamy.
     db = get_session()
     try:
-        user = local_user(db)
-        settings_service.apply_llm_env(db, user.id)  # klucze z ustawień -> środowisko
-        meal_queue.purge_expired(db)                 # retencja kolejki: 21 dni
+        meal_queue.purge_expired(db)
     finally:
         db.close()
+
+
+# 401 z current_user na stronie HTML → redirect na /login (przeglądarka).
+# Endpointy JSON /api/* zostawiamy jako 401 (dla klientów, np. mobile).
+@app.exception_handler(HTTPException)
+async def _redirect_html_on_401(request: Request, exc: HTTPException):
+    from fastapi.exception_handlers import http_exception_handler
+    if exc.status_code == 401 and "text/html" in request.headers.get("accept", ""):
+        return RedirectResponse("/login", status_code=303)
+    return await http_exception_handler(request, exc)
 
 
 def humanize_ago(dt: datetime | None) -> str | None:
@@ -72,15 +80,6 @@ def humanize_ago(dt: datetime | None) -> str | None:
         parts.append(f"{hours}h")
     parts.append(f"{minutes}m")
     return " ".join(parts) + " temu"
-
-
-def local_user(db: Session) -> User:
-    user = db.scalar(select(User).where(User.email == LOCAL_USER_EMAIL))
-    if user is None:
-        user = User(email=LOCAL_USER_EMAIL)
-        db.add(user)
-        db.commit()
-    return user
 
 
 # ── Logowanie / rejestracja ───────────────────────────────────────────────
@@ -177,8 +176,7 @@ class ProfileIn(BaseModel):
 
 
 @app.get("/api/profile")
-def get_profile(db: Session = Depends(db_session)):
-    user = local_user(db)
+def get_profile(db: Session = Depends(db_session), user: User = Depends(auth.current_user)):
     profile = db.get(UserProfile, user.id)
     if profile is None:
         raise HTTPException(404, "Profil nie jest jeszcze skonfigurowany")
@@ -186,10 +184,10 @@ def get_profile(db: Session = Depends(db_session)):
 
 
 @app.put("/api/profile")
-def put_profile(data: ProfileIn, db: Session = Depends(db_session)):
+def put_profile(data: ProfileIn, db: Session = Depends(db_session),
+                user: User = Depends(auth.current_user)):
     if data.sex.upper() not in ("M", "F"):
         raise HTTPException(422, "sex musi być 'M' lub 'F'")
-    user = local_user(db)
     profile = db.get(UserProfile, user.id)
     if profile is None:
         profile = UserProfile(user_id=user.id, birth_date=data.birth_date,
@@ -211,9 +209,9 @@ def put_profile(data: ProfileIn, db: Session = Depends(db_session)):
 # ── Synchronizacja Garmin ─────────────────────────────────────────────────
 
 @app.post("/api/sync")
-def sync(days: int = 7, db: Session = Depends(db_session)):
+def sync(days: int = 7, db: Session = Depends(db_session),
+         user: User = Depends(auth.current_user)):
     """Ręczna synchronizacja — bez throttla, synchronicznie, zwraca liczniki."""
-    user = local_user(db)
     mark_attempt(user.id)
     try:
         return sync_range(db, GarminProvider(), user.id, days=days)
@@ -354,8 +352,8 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
 
 
 @app.get("/api/day/{day}")
-def get_day(day: date, db: Session = Depends(db_session)):
-    user = local_user(db)
+def get_day(day: date, db: Session = Depends(db_session),
+            user: User = Depends(auth.current_user)):
     return day_report(db, user.id, day)
 
 
@@ -380,10 +378,10 @@ async def estimate_meal_photo(
     note: str | None = Form(None),
     day: date | None = Form(None),
     db: Session = Depends(db_session),
+    user: User = Depends(auth.current_user),
 ):
     """Krok 1: zdjęcie → szacunek (draft do korekty; nic nie zapisujemy).
     Bez klucza LLM / bez internetu: posiłek trafia do kolejki offline."""
-    user = local_user(db)
     background.add_task(maybe_sync, user.id)
     data = await photo.read()
     if len(data) > MAX_PHOTO_BYTES:
@@ -410,9 +408,9 @@ def estimate_meal_text(
     description: str = Form(...),
     day: date | None = Form(None),
     db: Session = Depends(db_session),
+    user: User = Depends(auth.current_user),
 ):
     """Krok 1 (wariant tekstowy): opis → szacunek. Fallback: kolejka offline."""
-    user = local_user(db)
     background.add_task(maybe_sync, user.id)
     target_day = day or date.today()
     if not meal_vision.llm_configured():
@@ -444,9 +442,10 @@ class MealIn(BaseModel):
 
 
 @app.post("/api/meals")
-def save_meal(data: MealIn, background: BackgroundTasks, db: Session = Depends(db_session)):
+def save_meal(data: MealIn, background: BackgroundTasks,
+              db: Session = Depends(db_session),
+              user: User = Depends(auth.current_user)):
     """Krok 2: zapis posiłku (po ewentualnej korekcie użytkownika)."""
-    user = local_user(db)
     background.add_task(maybe_sync, user.id)
     meal = Meal(
         user_id=user.id,
@@ -472,8 +471,8 @@ def save_meal(data: MealIn, background: BackgroundTasks, db: Session = Depends(d
 
 
 @app.delete("/api/meals/{meal_id}")
-def delete_meal(meal_id: int, db: Session = Depends(db_session)):
-    user = local_user(db)
+def delete_meal(meal_id: int, db: Session = Depends(db_session),
+                user: User = Depends(auth.current_user)):
     meal = db.get(Meal, meal_id)
     if meal is None or meal.user_id != user.id:
         raise HTTPException(404)
@@ -483,9 +482,9 @@ def delete_meal(meal_id: int, db: Session = Depends(db_session)):
 
 
 @app.delete("/api/queue/{pending_id}")
-def delete_pending(pending_id: int, db: Session = Depends(db_session)):
+def delete_pending(pending_id: int, db: Session = Depends(db_session),
+                   user: User = Depends(auth.current_user)):
     """Usunięcie wpisu z kolejki offline (bez przetwarzania przez LLM)."""
-    user = local_user(db)
     pending = db.get(PendingMeal, pending_id)
     if pending is None or pending.user_id != user.id:
         raise HTTPException(404)
@@ -501,8 +500,8 @@ def dashboard(
     background: BackgroundTasks,
     view: date | None = Query(None, alias="date"),
     db: Session = Depends(db_session),
+    user: User = Depends(auth.current_user),
 ):
-    user = local_user(db)
     background.add_task(maybe_sync, user.id)  # auto-odświeżenie przy wejściu (throttle 10 min)
     view_day = min(view or date.today(), date.today())
     profile = db.get(UserProfile, user.id)
@@ -532,9 +531,9 @@ def dashboard(
 
 @app.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request, db: Session = Depends(db_session),
+                  user: User = Depends(auth.current_user),
                   saved: str | None = None, mfa: str | None = None,
                   error: str | None = None):
-    user = local_user(db)
     stored = settings_service.all_settings(db, user.id)
     profile = db.get(UserProfile, user.id)
     last_sync = db.scalar(
@@ -569,9 +568,9 @@ def settings_llm(
     gemini_api_key: str = Form(""),
     anthropic_api_key: str = Form(""),
     db: Session = Depends(db_session),
+    user: User = Depends(auth.current_user),
 ):
     """Zapis kluczy LLM (puste pole = bez zmian). Po zapisie: przetworzenie kolejki."""
-    user = local_user(db)
     if gemini_api_key.strip():
         settings_service.set_setting(db, user.id, "gemini_api_key", gemini_api_key.strip())
     if anthropic_api_key.strip():
@@ -582,9 +581,9 @@ def settings_llm(
 
 
 @app.post("/settings/lifestyle")
-def settings_lifestyle(lifestyle: str = Form(...), db: Session = Depends(db_session)):
+def settings_lifestyle(lifestyle: str = Form(...), db: Session = Depends(db_session),
+                       user: User = Depends(auth.current_user)):
     """Styl życia — zmienia zakresy makro (białko g/kg, węgle g/kg u trenujących)."""
-    user = local_user(db)
     profile = db.get(UserProfile, user.id)
     if profile is None:
         raise HTTPException(409, "Najpierw skonfiguruj profil na dashboardzie")
@@ -596,9 +595,9 @@ def settings_lifestyle(lifestyle: str = Form(...), db: Session = Depends(db_sess
 
 
 @app.post("/settings/goal")
-def settings_goal(target_weight_kg: float = Form(...), db: Session = Depends(db_session)):
+def settings_goal(target_weight_kg: float = Form(...), db: Session = Depends(db_session),
+                  user: User = Depends(auth.current_user)):
     """Cel ciężaru — rysowany na trendach, używany w tekstach motywacyjnych."""
-    user = local_user(db)
     profile = db.get(UserProfile, user.id)
     if profile is None:
         raise HTTPException(409, "Najpierw skonfiguruj profil na dashboardzie")
@@ -608,7 +607,8 @@ def settings_goal(target_weight_kg: float = Form(...), db: Session = Depends(db_
 
 
 @app.post("/settings/garmin")
-def settings_garmin(email: str = Form(...), password: str = Form(...)):
+def settings_garmin(email: str = Form(...), password: str = Form(...),
+                    user: User = Depends(auth.current_user)):
     """Logowanie do Garmina z ustawień. Hasło idzie tylko do biblioteki Garmina."""
     try:
         result = garmin_provider.interactive_login_start(email.strip(), password)
@@ -620,7 +620,7 @@ def settings_garmin(email: str = Form(...), password: str = Form(...)):
 
 
 @app.post("/settings/garmin/mfa")
-def settings_garmin_mfa(code: str = Form(...)):
+def settings_garmin_mfa(code: str = Form(...), user: User = Depends(auth.current_user)):
     try:
         garmin_provider.interactive_login_mfa(code.strip())
     except Exception as exc:
@@ -631,9 +631,9 @@ def settings_garmin_mfa(code: str = Form(...)):
 # ── Przenoszenie danych między urządzeniami ───────────────────────────────
 
 @app.get("/api/transfer/export")
-def transfer_export(db: Session = Depends(db_session)):
+def transfer_export(db: Session = Depends(db_session),
+                    user: User = Depends(auth.current_user)):
     """'Przygotuj dane do przeniesienia na inne urządzenie' — plik JSON do pobrania."""
-    user = local_user(db)
     payload = transfer.export_payload(db, user.id)
     return Response(
         json.dumps(payload, ensure_ascii=False),
@@ -648,9 +648,9 @@ async def transfer_import(
     background: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(db_session),
+    user: User = Depends(auth.current_user),
 ):
     """'Wczytaj dane z innego urządzenia' — scala plik transferu (desktop lub telefon)."""
-    user = local_user(db)
     try:
         payload = json.loads(await file.read())
         counts = transfer.import_payload(db, user.id, payload)
@@ -661,8 +661,9 @@ async def transfer_import(
 
 
 @app.post("/api/queue/process")
-def queue_process(background: BackgroundTasks, db: Session = Depends(db_session)):
-    background.add_task(meal_queue.process_queue, local_user(db).id)
+def queue_process(background: BackgroundTasks,
+                  user: User = Depends(auth.current_user)):
+    background.add_task(meal_queue.process_queue, user.id)
     return {"ok": True}
 
 
@@ -677,8 +678,8 @@ def trends(
     background: BackgroundTasks,
     days: int = 30,
     db: Session = Depends(db_session),
+    user: User = Depends(auth.current_user),
 ):
-    user = local_user(db)
     background.add_task(maybe_sync, user.id)
     days = max(2, min(days, 366))
     today = date.today()
@@ -771,10 +772,12 @@ def profile_form(
     height_cm: float = Form(...),
     target_deficit_kcal: int = Form(500),
     db: Session = Depends(db_session),
+    user: User = Depends(auth.current_user),
 ):
     put_profile(
         ProfileIn(birth_date=birth_date, sex=sex, height_cm=height_cm,
                   target_deficit_kcal=target_deficit_kcal),
         db,
+        user,
     )
     return RedirectResponse("/", status_code=303)
