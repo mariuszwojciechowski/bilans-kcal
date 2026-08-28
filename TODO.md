@@ -27,3 +27,11 @@ per `user_id` (bez e-maili, bez surowych danych osobowych): liczba
 posiłków/dzień, liczba synców Garmina, liczba szacowań LLM, ostatnia
 aktywność, wielkość bazy per user. Do orientacji, ilu testerów faktycznie
 używa i jak intensywnie.
+
+## Ręczne dodawanie posiłku (bez LLM)
+
+Trzeci wariant obok zdjęcia i opisu: pełny formularz do wpisania z ręki,
+np. przepisania wartości z etykiety produktu. Pola: opis, kcal, białko,
+tłuszcz, węgle, błonnik, cukry, opcjonalnie porcja (g). Zapis prosto do
+`POST /api/meals` z `source="manual"`. Nie potrzeba klucza LLM — działa
+zawsze, przydatne dla batonów, jogurtów, gotowych dań ze znanym składem.
