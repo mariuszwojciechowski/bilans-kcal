@@ -81,7 +81,10 @@
   <a class="nav" href="/trends?days=30">Trendy</a>
   <a class="nav" href="/settings">Ustawienia</a>
   <input type="date" value="{{ view_date }}" max="{{ today }}"
-         onchange="location = '/?date=' + this.value"></header>
+         onchange="location = '/?date=' + this.value">
+  <form method="post" action="/logout" style="margin:0">
+    <button type="submit" class="nav" style="border:none;background:none;cursor:pointer">Wyloguj</button>
+  </form></header>
 <main>
 
 {% if not profile %}
