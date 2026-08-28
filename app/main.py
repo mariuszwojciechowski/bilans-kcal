@@ -399,6 +399,17 @@ def delete_meal(meal_id: int, db: Session = Depends(db_session)):
     return {"ok": True}
 
 
+@app.delete("/api/queue/{pending_id}")
+def delete_pending(pending_id: int, db: Session = Depends(db_session)):
+    """Usunięcie wpisu z kolejki offline (bez przetwarzania przez LLM)."""
+    user = local_user(db)
+    pending = db.get(PendingMeal, pending_id)
+    if pending is None or pending.user_id != user.id:
+        raise HTTPException(404)
+    meal_queue.delete_pending(db, pending)
+    return {"ok": True}
+
+
 # ── Dashboard (server-rendered) ───────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)

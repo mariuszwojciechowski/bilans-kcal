@@ -205,6 +205,7 @@
       <td>{{ p.time[:5] if p.time else "" }}</td>
       <td>{{ p.label }}{% if p.has_photo %} <span class="muted">📷</span>{% endif %}</td>
       <td class="muted">oczekuje</td>
+      <td><button onclick="delPending({{ p.id }})">✕</button></td>
     </tr>
     {% endfor %}
   </table>
@@ -309,6 +310,12 @@ async function saveMeal() {
 
 async function delMeal(id) {
   await fetch(`/api/meals/${id}`, { method: "DELETE" });
+  location.reload();
+}
+
+async function delPending(id) {
+  if (!confirm("Usunąć wpis z kolejki? Nie zostanie przetworzony.")) return;
+  await fetch(`/api/queue/${id}`, { method: "DELETE" });
   location.reload();
 }
 </script>
