@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fit Krasnal — rejestracja</title>
+{% if has_logo %}<link rel="icon" href="/static/favicon-32.png">
+{% endif %}<style>
+  :root {
+    --green: #1A4D3A; --green-med: #3A7A5C; --lime: #8DC63F;
+    --bg: #F9FAF8; --card: #FFFFFF; --ink: #212529; --stone: #6C757D;
+    --danger: #DC3545; --success: #28A745;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #131715; --card: #1B211D; --ink: #E8ECE9; --stone: #9AA39D; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Inter, sans-serif;
+         background: var(--bg); color: var(--ink); }
+  main { max-width: 420px; margin: 8vh auto; padding: 0 16px; display: grid; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 12px; justify-content: center; }
+  .brand img { width: 64px; height: 64px; }
+  .brand h1 { font-size: 22px; font-weight: 600; margin: 0; color: var(--green); }
+  @media (prefers-color-scheme: dark) { .brand h1 { color: var(--lime); } }
+  .card { background: var(--card); border-radius: 10px; padding: 18px 20px;
+          box-shadow: 0 1px 3px rgba(33,37,41,.12); }
+  h2 { font-size: 15px; margin: 0 0 10px; text-transform: uppercase;
+       letter-spacing: .05em; color: var(--stone); }
+  input, button { font: inherit; padding: 8px 10px; border-radius: 6px;
+                  border: 1px solid var(--stone); background: var(--card); color: var(--ink); }
+  input { width: 100%; }
+  button.primary { background: var(--lime); color: var(--green); font-weight: 600;
+                   border: none; cursor: pointer; width: 100%; margin-top: 14px; }
+  .muted { color: var(--stone); font-size: 13px; }
+  label { display: block; margin: 10px 0 4px; font-size: 14px; }
+  .banner { padding: 10px 14px; border-radius: 8px; font-size: 14px; }
+  .banner.err { background: rgba(220,53,69,.12); }
+  a { color: var(--green-med); }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">
+    {% if has_logo %}<img src="/static/logo-bw.png" alt="">{% endif %}
+    <h1>Fit Krasnal</h1>
+  </div>
+
+  {% if error %}<div class="banner err">{{ error }}</div>{% endif %}
+
+  <section class="card">
+    <h2>Rejestracja</h2>
+    <form method="post" action="/register">
+      <label for="invite_code">Kod zaproszenia</label>
+      <input type="text" id="invite_code" name="invite_code" required autofocus>
+      <label for="email">E-mail</label>
+      <input type="email" id="email" name="email" required autocomplete="username">
+      <label for="password">Hasło (min. 8 znaków)</label>
+      <input type="password" id="password" name="password" required
+             minlength="8" autocomplete="new-password">
+      <label for="password2">Powtórz hasło</label>
+      <input type="password" id="password2" name="password2" required
+             minlength="8" autocomplete="new-password">
+      <button class="primary" type="submit">Załóż konto</button>
+    </form>
+    <p class="muted" style="margin-bottom:0">
+      Masz już konto? <a href="/login">Zaloguj się</a>.
+    </p>
+  </section>
+
+  <p class="muted" style="text-align:center; margin:0">
+    Po założeniu konta wklej w Ustawieniach własny (darmowy) klucz Gemini
+    i połącz swoje konto Garmin.
+  </p>
+</main>
+</body>
+</html>
