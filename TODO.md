@@ -35,3 +35,11 @@ np. przepisania wartości z etykiety produktu. Pola: opis, kcal, białko,
 tłuszcz, węgle, błonnik, cukry, opcjonalnie porcja (g). Zapis prosto do
 `POST /api/meals` z `source="manual"`. Nie potrzeba klucza LLM — działa
 zawsze, przydatne dla batonów, jogurtów, gotowych dań ze znanym składem.
+
+## Landing page — drobne poprawki
+
+- Do karty *Fit Krasnal* dopisać informację o wygodniejszym widoku dla
+  telefonu: `fit.krasnal.cc/mobile`.
+- Adresy stron (`fit.krasnal.cc`, `mariuszwojciechowski.github.io/bilans-kcal`,
+  `pikimocy.krasnal.cc`) zamienić na klikalne linki — teraz są tylko tekstem
+  w `<span>`.
