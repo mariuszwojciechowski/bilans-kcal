@@ -1,4 +1,5 @@
 import json
+import secrets
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -12,7 +13,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from .config import DEBUG, MAX_PHOTO_BYTES, PHOTOS_DIR, SECRET_KEY, ensure_dirs
+from . import auth
+from .config import (DEBUG, INVITE_CODE, MAX_PHOTO_BYTES, PHOTOS_DIR, SECRET_KEY,
+                     ensure_dirs)
 from .db import db_session, get_session, init_db
 from .models import Activity, DailySummary, Meal, PendingMeal, User, UserProfile, WeightLog
 from .providers import garmin as garmin_provider
@@ -78,6 +81,87 @@ def local_user(db: Session) -> User:
         db.add(user)
         db.commit()
     return user
+
+
+# ── Logowanie / rejestracja ───────────────────────────────────────────────
+
+LOGIN_ERRORS = {
+    "bad": "Nieprawidłowy e-mail lub hasło.",
+    "locked": (f"Za dużo nieudanych prób. Odczekaj "
+               f"{auth.LOCKOUT_S // 60} minut i spróbuj ponownie."),
+}
+REGISTER_ERRORS = {
+    "invite": "Nieprawidłowy kod zaproszenia.",
+    "mismatch": "Hasła nie są identyczne.",
+    "short": f"Hasło musi mieć co najmniej {auth.MIN_PASSWORD_LEN} znaków.",
+    "long": "Hasło jest za długie (maks. 72 bajty).",
+    "taken": "Konto z tym adresem już istnieje.",
+}
+
+
+def _auth_page(request: Request, template: str, errors: dict, error: str | None):
+    return templates.TemplateResponse(
+        request,
+        template,
+        {
+            "error": errors.get(error) if error else None,
+            "has_logo": (STATIC_DIR / "logo.png").exists(),
+        },
+    )
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request, error: str | None = None):
+    return _auth_page(request, "login.html", LOGIN_ERRORS, error)
+
+
+@app.post("/login")
+def login_submit(request: Request, email: str = Form(...), password: str = Form(...),
+                 db: Session = Depends(db_session)):
+    email = email.strip().lower()
+    if auth.is_locked_out(email):
+        return RedirectResponse("/login?error=locked", status_code=303)
+    user = db.scalar(select(User).where(User.email == email))
+    if user is None or not auth.verify_password(password, user.password_hash):
+        auth.note_failed_login(email)
+        return RedirectResponse("/login?error=bad", status_code=303)
+    auth.reset_failed_login(email)
+    auth.login_user(request, user)
+    return RedirectResponse("/", status_code=303)
+
+
+@app.get("/register", response_class=HTMLResponse)
+def register_page(request: Request, error: str | None = None):
+    if not INVITE_CODE:
+        raise HTTPException(503, "Rejestracja jest wyłączona.")
+    return _auth_page(request, "register.html", REGISTER_ERRORS, error)
+
+
+@app.post("/register")
+def register_submit(request: Request, email: str = Form(...), password: str = Form(...),
+                    password2: str = Form(...), invite_code: str = Form(...),
+                    db: Session = Depends(db_session)):
+    if not INVITE_CODE:
+        raise HTTPException(503, "Rejestracja jest wyłączona.")
+    if not secrets.compare_digest(invite_code.strip(), INVITE_CODE):
+        return RedirectResponse("/register?error=invite", status_code=303)
+    problem = auth.password_problem(password, password2)
+    if problem:
+        return RedirectResponse(f"/register?error={problem}", status_code=303)
+    email = email.strip().lower()
+    if db.scalar(select(User).where(User.email == email)) is not None:
+        return RedirectResponse("/register?error=taken", status_code=303)
+    user = User(email=email, password_hash=auth.hash_password(password))
+    db.add(user)
+    db.commit()
+    auth.login_user(request, user)
+    return RedirectResponse("/", status_code=303)
+
+
+@app.post("/logout")
+def logout_submit(request: Request):
+    auth.logout_user(request)
+    return RedirectResponse("/login", status_code=303)
 
 
 # ── Profil ────────────────────────────────────────────────────────────────
