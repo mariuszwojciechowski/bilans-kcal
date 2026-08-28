@@ -13,6 +13,18 @@ Przy każdym punkcie **szacowanie złożoności w skali 1-10**:
 
 ---
 
+## GitHub Pages — czerwony pipeline po skasowaniu docs/ (1/10)
+
+Po usunięciu katalogu `docs/` (commit `091844d`) workflow *pages build and
+deployment* w GitHub Actions faluje: repo miało w Settings → Pages → Source
+ustawione na `docs/` folder, którego już nie ma. Stary content nadal
+serwuje się z ostatniego udanego deploya, ale każdy push wywala nowego
+builda. Do wyboru: (a) wyłączyć Pages w Settings → *None* (przerywa też
+serwowanie starej wersji), (b) zostawić w Source folder `/` i wrzucić
+minimalny `index.html` który redirectuje na `fit.krasnal.cc` (zabija starą
+wersję po naszej stronie), (c) ignorować pipeline — nic to nie psuje,
+tylko brzydko wygląda w Actions.
+
 ## Landing page — drobne poprawki (1/10)
 
 - Do karty *Fit Krasnal* dopisać informację o wygodniejszym widoku dla

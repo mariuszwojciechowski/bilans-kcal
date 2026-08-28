@@ -429,17 +429,19 @@ async def estimate_meal_photo(
     """Krok 1: zdjęcie → szacunek (draft do korekty; nic nie zapisujemy).
     Bez klucza LLM / bez internetu: posiłek trafia do kolejki offline."""
     background.add_task(maybe_sync, user.id)
-    settings_service.apply_llm_env(db, user.id)   # klucz Gemini tego usera do env
+    keys = settings_service.get_llm_keys(db, user.id)
     data = await photo.read()
     if len(data) > MAX_PHOTO_BYTES:
         raise HTTPException(413, "Zdjęcie za duże (limit 15 MB)")
     ext = (photo.filename or "jpg").rsplit(".", 1)[-1]
     target_day = day or date.today()
-    if not meal_vision.llm_configured():
+    if not meal_vision.llm_configured(keys.gemini, keys.anthropic):
         return _queue_meal(db, user.id, target_day, "brak klucza LLM",
                            note=note, photo_bytes=data)
     try:
-        estimate = meal_vision.estimate_from_photo(data, ext, note)
+        estimate = meal_vision.estimate_from_photo(data, ext, note,
+                                                    gemini_key=keys.gemini,
+                                                    anthropic_key=keys.anthropic)
     except ValueError as exc:
         raise HTTPException(422, str(exc))
     except Exception:
@@ -459,12 +461,14 @@ def estimate_meal_text(
 ):
     """Krok 1 (wariant tekstowy): opis → szacunek. Fallback: kolejka offline."""
     background.add_task(maybe_sync, user.id)
-    settings_service.apply_llm_env(db, user.id)   # klucz Gemini tego usera do env
+    keys = settings_service.get_llm_keys(db, user.id)
     target_day = day or date.today()
-    if not meal_vision.llm_configured():
+    if not meal_vision.llm_configured(keys.gemini, keys.anthropic):
         return _queue_meal(db, user.id, target_day, "brak klucza LLM", description=description)
     try:
-        estimate = meal_vision.estimate_from_text(description)
+        estimate = meal_vision.estimate_from_text(description,
+                                                   gemini_key=keys.gemini,
+                                                   anthropic_key=keys.anthropic)
     except Exception:
         return _queue_meal(db, user.id, target_day, "szacowanie nie powiodło się",
                            description=description)
@@ -593,10 +597,8 @@ def settings_page(request: Request, db: Session = Depends(db_session),
                   user: User = Depends(auth.current_user),
                   saved: str | None = None, mfa: str | None = None,
                   error: str | None = None):
-    # klucze usera do env, zeby pick_backend() nizej widzial je jako aktywne
-    # (w multi-user proces nie ma "domyslnego" usera do primingu na starcie)
-    settings_service.apply_llm_env(db, user.id)
     stored = settings_service.all_settings(db, user.id)
+    keys = settings_service.get_llm_keys(db, user.id)
     profile = db.get(UserProfile, user.id)
     last_sync = db.scalar(
         select(func.max(DailySummary.sync_ts)).where(DailySummary.user_id == user.id)
@@ -612,7 +614,8 @@ def settings_page(request: Request, db: Session = Depends(db_session),
             "last_sync_ago": humanize_ago(last_sync),
             "gemini_masked": settings_service.masked(stored.get("gemini_api_key")),
             "claude_masked": settings_service.masked(stored.get("anthropic_api_key")),
-            "backend": meal_vision.pick_backend() if meal_vision.llm_configured() else None,
+            "backend": (meal_vision.pick_backend(keys.gemini, keys.anthropic)
+                         if meal_vision.llm_configured(keys.gemini, keys.anthropic) else None),
             "pending_count": pending_count or 0,
             "retention_days": meal_queue.RETENTION_DAYS,
             "target_weight_kg": profile.target_weight_kg if profile else None,
@@ -637,7 +640,6 @@ def settings_llm(
         settings_service.set_setting(db, user.id, "gemini_api_key", gemini_api_key.strip())
     if anthropic_api_key.strip():
         settings_service.set_setting(db, user.id, "anthropic_api_key", anthropic_api_key.strip())
-    settings_service.apply_llm_env(db, user.id)
     background.add_task(meal_queue.process_queue, user.id)
     return RedirectResponse("/settings?saved=1", status_code=303)
 

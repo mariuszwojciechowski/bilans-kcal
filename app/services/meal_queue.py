@@ -113,7 +113,7 @@ def process_queue(user_id: int) -> dict:
     db = get_session()
     processed = failed = 0
     try:
-        settings_service.apply_llm_env(db, user_id)  # klucz Gemini tego usera do env
+        keys = settings_service.get_llm_keys(db, user_id)
         purge_expired(db)
         pending = db.scalars(
             select(PendingMeal).where(PendingMeal.user_id == user_id)
@@ -123,10 +123,14 @@ def process_queue(user_id: int) -> dict:
             try:
                 if row.photo_path:
                     photo = (PHOTOS_DIR / row.photo_path).read_bytes()
-                    estimate = meal_vision.estimate_from_photo(photo, "jpg", row.note)
+                    estimate = meal_vision.estimate_from_photo(
+                        photo, "jpg", row.note,
+                        gemini_key=keys.gemini, anthropic_key=keys.anthropic)
                     source = "photo"
                 else:
-                    estimate = meal_vision.estimate_from_text(row.description or "")
+                    estimate = meal_vision.estimate_from_text(
+                        row.description or "",
+                        gemini_key=keys.gemini, anthropic_key=keys.anthropic)
                     source = "text"
             except meal_vision.MealVisionNotConfigured:
                 logger.info("Kolejka: LLM nieskonfigurowany — przerywam.")
