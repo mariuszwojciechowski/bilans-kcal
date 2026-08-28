@@ -10,9 +10,10 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from starlette.middleware.sessions import SessionMiddleware
 
-from .config import MAX_PHOTO_BYTES, PHOTOS_DIR, ensure_dirs
-from .db import get_session, init_db
+from .config import DEBUG, MAX_PHOTO_BYTES, PHOTOS_DIR, SECRET_KEY, ensure_dirs
+from .db import db_session, get_session, init_db
 from .models import Activity, DailySummary, Meal, PendingMeal, User, UserProfile, WeightLog
 from .providers import garmin as garmin_provider
 from .providers.garmin import GarminNotLoggedIn, GarminProvider
@@ -25,6 +26,12 @@ from .services.macros import coverage, lifestyle_options, who_targets
 from .services.sync import mark_attempt, maybe_sync, sync_range
 
 app = FastAPI(title="Fit Krasnal")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SECRET_KEY,
+    https_only=not DEBUG,   # lokalny dev po http potrzebuje https_only=False
+    same_site="lax",
+)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -62,14 +69,6 @@ def humanize_ago(dt: datetime | None) -> str | None:
         parts.append(f"{hours}h")
     parts.append(f"{minutes}m")
     return " ".join(parts) + " temu"
-
-
-def db_session():
-    db = get_session()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 def local_user(db: Session) -> User:

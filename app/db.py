@@ -67,3 +67,12 @@ def get_session() -> Session:
     get_engine()
     assert _SessionLocal is not None
     return _SessionLocal()
+
+
+def db_session():
+    """Zależność FastAPI: sesja bazy na czas requestu."""
+    db = get_session()
+    try:
+        yield db
+    finally:
+        db.close()
