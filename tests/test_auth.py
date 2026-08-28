@@ -135,6 +135,54 @@ def test_html_pages_redirect_to_login_when_not_logged_in(client):
         assert r.headers["location"] == "/login"
 
 
+def test_manual_weight_and_steps_endpoints(client):
+    """Mobile bez Garmina: /api/weight i /api/day/{day}/steps."""
+    from app.models import WeightLog, DailySummary
+    _register(client, email="mobile@test")
+
+    assert client.post("/api/weight", json={
+        "date": "2026-08-27", "weight_kg": 80.5,
+    }).status_code == 200
+    # upsert: drugi wpis na ten sam dzień nadpisuje, nie tworzy drugiego rekordu
+    assert client.post("/api/weight", json={
+        "date": "2026-08-27", "weight_kg": 80.7,
+    }).status_code == 200
+
+    db = client.session_factory()
+    rows = db.scalars(select(WeightLog)).all()
+    assert len(rows) == 1 and rows[0].weight_kg == 80.7 and rows[0].source == "manual"
+    db.close()
+
+    assert client.post("/api/weight", json={
+        "date": "2026-08-27", "weight_kg": 5,          # nierealne
+    }).status_code == 422
+
+    assert client.post("/api/day/2026-08-27/steps", json={"steps": 12345}).status_code == 200
+    db = client.session_factory()
+    ds = db.scalars(select(DailySummary)).one()
+    assert ds.steps == 12345
+    db.close()
+
+
+def test_mobile_view_requires_auth_and_renders(client):
+    # bez sesji: redirect na /login (HTML)
+    r = client.get("/mobile", headers={"accept": "text/html"})
+    assert r.status_code == 303 and r.headers["location"] == "/login"
+
+    _register(client, email="m@test")
+    r = client.get("/mobile")
+    assert r.status_code == 200
+    assert "Fit Krasnal" in r.text
+    assert "/api/day/" in r.text     # cienki klient używa API
+
+
+def test_weight_and_steps_require_auth(client):
+    assert client.post("/api/weight", json={"date": "2026-08-27",
+                                             "weight_kg": 80}).status_code == 401
+    assert client.post("/api/day/2026-08-27/steps",
+                        json={"steps": 1000}).status_code == 401
+
+
 def test_two_users_do_not_see_each_others_profile(client):
     """Rejestracja B nie może zobaczyć/nadpisać profilu A."""
     _register(client, email="alice@example.com")

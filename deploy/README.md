@@ -101,3 +101,24 @@ się nie przeładuje.
 - Logi Caddy: `sudo journalctl -u caddy -f`
 - Restart ręczny: `sudo systemctl restart fit-krasnal`
 - Backup danych: `sudo tar czf ~/fk-backup.tar.gz /var/lib/fit-krasnal`
+
+## Onboarding testera
+
+1. Wejdź na `https://fit.krasnal.cc` (przez basic_auth Caddy, dopóki nie
+   zdejmiemy tej kłódki po zamknięciu pilota).
+2. Kliknij *Zarejestruj się*, podaj e-mail, hasło (≥ 8 znaków) i **kod
+   zaproszenia** (wartość `FIT_KRASNAL_INVITE_CODE` z `/etc/fit-krasnal/env`
+   — trzymaj przy sobie i przekazuj testerom osobno).
+3. Wejdź w **Ustawienia** → wklej własny darmowy klucz Gemini
+   (https://aistudio.google.com → *Get API key*) — dzięki temu szacowanie
+   posiłków idzie z Twojej quoty, nie z jakiegoś wspólnego.
+4. (Opcjonalnie) w Ustawieniach podłącz konto Garmin — login/hasło + kod MFA
+   z aplikacji Garmin. Tokeny lądują w `~/.fit-krasnal/garth/<user_id>/`
+   izolowane od innych testerów.
+5. Dwa widoki, ta sama sesja:
+   - `/` — pełny dashboard desktopowy (server-rendered).
+   - `/mobile` — cienki klient dla telefonu (SPA używający `/api/*`;
+     bez kolejki offline, wymaga internetu przy każdej operacji).
+
+Bez Garmina można wpisać wagę i kroki ręcznie z widoku mobile — trafi to
+do `WeightLog(source="manual")` i `DailySummary.steps`.

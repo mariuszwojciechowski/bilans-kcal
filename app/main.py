@@ -219,6 +219,52 @@ def sync(days: int = 7, db: Session = Depends(db_session),
         raise HTTPException(409, str(exc))
 
 
+# ── Ręczny wpis wagi i kroków (dla mobile, bez Garmina) ──────────────────
+
+class WeightIn(BaseModel):
+    date: date
+    weight_kg: float
+
+
+@app.post("/api/weight")
+def save_weight(data: WeightIn, db: Session = Depends(db_session),
+                user: User = Depends(auth.current_user)):
+    """Ręczny wpis wagi z mobile (świadome odstępstwo od D3 — desktop bierze
+    tylko z Garmina). Upsert po (user_id, date): jeden pomiar na dzień."""
+    if not 20 <= data.weight_kg <= 300:
+        raise HTTPException(422, "waga poza sensownym zakresem (20-300 kg)")
+    existing = db.scalar(select(WeightLog).where(
+        WeightLog.user_id == user.id, WeightLog.date == data.date))
+    if existing:
+        existing.weight_kg = data.weight_kg
+        existing.source = "manual"
+    else:
+        db.add(WeightLog(user_id=user.id, date=data.date,
+                          weight_kg=data.weight_kg, source="manual"))
+    db.commit()
+    return {"ok": True}
+
+
+class StepsIn(BaseModel):
+    steps: int
+
+
+@app.post("/api/day/{day}/steps")
+def save_steps(day: date, data: StepsIn, db: Session = Depends(db_session),
+               user: User = Depends(auth.current_user)):
+    """Ręczny wpis kroków (mobile). Upsert po (user_id, date)."""
+    if not 0 <= data.steps <= 200_000:
+        raise HTTPException(422, "kroki poza sensownym zakresem")
+    summary = db.scalar(select(DailySummary).where(
+        DailySummary.user_id == user.id, DailySummary.date == day))
+    if summary:
+        summary.steps = data.steps
+    else:
+        db.add(DailySummary(user_id=user.id, date=day, steps=data.steps))
+    db.commit()
+    return {"ok": True}
+
+
 # ── Raport dzienny ────────────────────────────────────────────────────────
 
 def day_report(db: Session, user_id: int, day: date) -> dict:
@@ -493,6 +539,17 @@ def delete_pending(pending_id: int, db: Session = Depends(db_session),
 
 
 # ── Dashboard (server-rendered) ───────────────────────────────────────────
+
+@app.get("/mobile", response_class=HTMLResponse)
+def mobile_view(request: Request,
+                user: User = Depends(auth.current_user)):
+    """Cienki klient (mobile) — wszystkie dane przez /api/*, ta sama sesja."""
+    return templates.TemplateResponse(
+        request,
+        "mobile.html",
+        {"has_logo": (STATIC_DIR / "logo.png").exists()},
+    )
+
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard(

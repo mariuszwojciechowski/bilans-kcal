@@ -7,6 +7,9 @@ z teoretycznym modelem energetycznym jako punktem odniesienia i normami makro wg
 Etap 1: web app (walidacja pomysłu). Etap 2: aplikacja mobilna (Android, docelowo też iOS).
 Pełne wymagania: [WYMAGANIA.md](WYMAGANIA.md).
 
+**Publiczna instancja pilotowa:** https://fit.krasnal.cc (multi-user, wymaga
+kodu zaproszenia do rejestracji; szczegóły wdrożenia w [deploy/README.md](deploy/README.md)).
+
 ## Architektura (MVP)
 
 - **Python 3.12 + FastAPI**, SQLite, server-rendered dashboard (Jinja2)

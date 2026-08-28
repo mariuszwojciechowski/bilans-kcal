@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fit Krasnal — mobile</title>
+{% if has_logo %}<link rel="icon" href="/static/favicon-32.png">{% endif %}
+<meta name="theme-color" content="#1A4D3A">
+<style>
+  :root {
+    --green: #1A4D3A; --green-med: #3A7A5C; --lime: #8DC63F;
+    --bg: #F9FAF8; --card: #FFFFFF; --ink: #212529; --stone: #6C757D;
+    --danger: #DC3545; --success: #28A745;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #131715; --card: #1B211D; --ink: #E8ECE9; --stone: #9AA39D; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+         background: var(--bg); color: var(--ink); padding-bottom: 64px; }
+  header { background: var(--green); color: #F9FAF8; padding: 0 16px 0 0;
+           display: flex; align-items: stretch; gap: 10px; }
+  header .brand { background: #fff; display: flex; align-items: center; gap: 10px;
+                  padding: 7px 16px 7px 12px; }
+  header h1 { font-size: 16px; margin: 0; color: var(--green); }
+  header .muted { margin-left: auto; color: #C9D3CC; font-size: 12px; align-self: center; }
+  main { max-width: 560px; margin: 12px auto; padding: 0 12px; display: grid; gap: 12px; }
+  .card { background: var(--card); border-radius: 10px; padding: 14px 16px;
+          box-shadow: 0 1px 3px rgba(33,37,41,.15); }
+  h2 { font-size: 13px; margin: 0 0 8px; text-transform: uppercase;
+       letter-spacing: .05em; color: var(--stone); }
+  input, textarea, select, button { font: inherit; padding: 10px; border-radius: 8px; width: 100%;
+    border: 1px solid var(--stone); background: var(--card); color: var(--ink); margin: 4px 0; }
+  button.primary { background: var(--lime); color: var(--green); font-weight: 700; border: none; }
+  button.ghost { background: var(--green-med); color: #fff; border: none; }
+  button.danger { background: none; border: 1px solid var(--danger); color: var(--danger); }
+  .muted { color: var(--stone); font-size: 13px; }
+  .pos { color: var(--success); } .neg { color: var(--danger); } .mid { color: var(--green-med); }
+  .macro-below { color: var(--ink); }
+  .macro-ok { color: var(--success); font-weight: 700; }
+  .macro-above { color: var(--danger); font-weight: 700; font-style: italic; }
+  nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex;
+        background: var(--green); z-index: 5; }
+  nav button { flex: 1; background: none; border: none; color: #C9D3CC; padding: 12px 4px;
+               border-radius: 0; font-size: 13px; margin: 0; }
+  nav button.active { color: #fff; font-weight: 700; background: rgba(255,255,255,.12); }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--stone); font-size: 12px; }
+  .bar { background: rgba(108,117,125,.18); border-radius: 6px; height: 8px;
+         overflow: hidden; margin: 3px 0 8px; position: relative; }
+  .bar i { display: block; height: 100%; border-radius: 6px; }
+  .bar::before, .bar::after {
+    content: ""; position: absolute; top: 0; bottom: 0; width: 1px;
+    background: rgba(255,255,255,.55); mix-blend-mode: difference; pointer-events: none;
+  }
+  .bar::before { left: 33.333%; }
+  .bar::after { left: 66.667%; }
+  .entry { display: flex; gap: 10px; align-items: center; padding: 8px 0;
+           border-bottom: 1px solid rgba(108,117,125,.25); }
+  .entry .x { width: auto; padding: 6px 10px; margin: 0; }
+  .row2 { display: flex; gap: 8px; }
+  .page { display: none; } .page.visible { display: grid; gap: 12px; }
+  #draft { background: rgba(141,198,63,.10); }
+  label { font-size: 13px; color: var(--stone); margin-top: 6px; display: block; }
+  a { color: var(--green-med); }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/mobile" style="text-decoration:none">
+    {% if has_logo %}<img class="logo" src="/static/logo-bw.png" alt="" style="width:32px;height:32px">{% endif %}
+    <h1>Fit Krasnal</h1>
+  </a>
+  <span class="muted" id="hdr-date"></span>
+</header>
+<main>
+
+<!-- ── DZIŚ ─────────────────────────────────────────────────────────── -->
+<div class="page visible" id="page-today">
+  <section class="card">
+    <h2>Bilans — <span id="t-day"></span></h2>
+    <p class="muted" id="quip" style="font-style:italic"></p>
+    <div class="stats">
+      <div class="stat"><b id="t-in">—</b><span>kcal spożyte</span></div>
+      <div class="stat"><b id="t-out">—</b><span>kcal spalone</span></div>
+      <div class="stat"><b id="t-bal">—</b><span>bilans</span></div>
+      <div class="stat"><b id="t-left">—</b><span>zostało do celu dnia</span></div>
+      <div class="stat"><b id="t-weight">—</b><span>ciężar 7d [kg]</span></div>
+      <div class="stat"><b id="t-goal">—</b><span>do celu ciężaru</span></div>
+    </div>
+    <input type="date" id="t-date" onchange="renderToday()">
+    <div class="row2">
+      <span style="flex:1"><label>kroki dziś</label>
+        <input type="number" id="t-steps" step="500" onchange="saveDaySteps()"></span>
+      <span style="flex:1"><label>pomiar ciężaru [kg]</label>
+        <input type="number" id="t-newweight" step="0.1" placeholder="—" onchange="saveWeighIn()"></span>
+    </div>
+  </section>
+  <section class="card">
+    <h2>Makroskładniki (normy WHO)</h2>
+    <div id="macros"><p class="muted">Ładowanie…</p></div>
+  </section>
+  <section class="card">
+    <h2>Posiłki</h2>
+    <div id="t-meals"></div>
+  </section>
+</div>
+
+<!-- ── DODAJ ────────────────────────────────────────────────────────── -->
+<div class="page" id="page-add">
+  <section class="card">
+    <h2>Dodaj posiłek</h2>
+    <div class="row2">
+      <input type="date" id="f-date">
+      <input type="time" id="f-time">
+    </div>
+    <input type="file" id="f-photo" accept="image/*" capture="environment">
+    <input type="text" id="f-note" placeholder="uwaga do zdjęcia (opcjonalnie)">
+    <textarea id="f-desc" rows="2" placeholder="albo opisz posiłek: 2 jajka sadzone i kromka żytniego"></textarea>
+    <button class="primary" onclick="estimate()">Szacuj</button>
+    <p class="muted" id="msg"></p>
+  </section>
+  <section class="card" id="draft" style="display:none">
+    <h2>Szacunek — sprawdź i popraw</h2>
+    <p id="d-desc"></p>
+    <div id="d-items" class="muted" style="margin-bottom:6px"></div>
+    <ul id="d-assumptions" class="muted"></ul>
+    <div class="row2">
+      <span style="flex:1"><label>kcal</label><input type="number" id="d-kcal"></span>
+      <span style="flex:1"><label>białko g</label><input type="number" step="0.1" id="d-protein"></span>
+    </div>
+    <div class="row2">
+      <span style="flex:1"><label>tłuszcz g</label><input type="number" step="0.1" id="d-fat"></span>
+      <span style="flex:1"><label>węgle g</label><input type="number" step="0.1" id="d-carbs"></span>
+    </div>
+    <p class="muted" id="d-range"></p>
+    <button class="primary" onclick="saveDraft()">Zapisz posiłek</button>
+  </section>
+</div>
+
+<!-- ── USTAWIENIA ───────────────────────────────────────────────────── -->
+<div class="page" id="page-settings">
+  <section class="card">
+    <h2>Profil</h2>
+    <p class="muted">Profil, klucz LLM i konto Garmina konfigurujesz na
+      <a href="/settings">/settings</a> (widok desktopowy — pełny).</p>
+    <p><a href="/">Otwórz dashboard desktopowy</a></p>
+    <form method="post" action="/logout" style="margin-top:12px">
+      <button type="submit" class="danger">Wyloguj</button>
+    </form>
+  </section>
+</div>
+
+</main>
+
+<nav>
+  <button id="nav-today" class="active" onclick="show('today')">Dziś</button>
+  <button id="nav-add" onclick="show('add')">Dodaj posiłek</button>
+  <button id="nav-settings" onclick="show('settings')">Ustawienia</button>
+</nav>
+
+<script>
+/* Cienki klient backendu: żadnego IndexedDB, żadnego bezpośredniego LLM.
+   Wszystko przez /api/* pod tą samą sesją co dashboard. */
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const r0 = (v) => Math.round(v || 0);
+const todayIso = () => new Date().toISOString().slice(0, 10);
+
+async function api(path, opts = {}) {
+  opts.credentials = "same-origin";
+  const r = await fetch(path, opts);
+  if (r.status === 401) { location.href = "/login"; throw new Error("not logged in"); }
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`HTTP ${r.status}: ${t.slice(0, 200)}`);
+  }
+  const ct = r.headers.get("content-type") || "";
+  return ct.includes("json") ? r.json() : r.text();
+}
+async function apiJson(path, body) {
+  return api(path, {method: "POST", headers: {"content-type": "application/json"},
+                    body: JSON.stringify(body)});
+}
+async function apiForm(path, formData) {
+  return api(path, {method: "POST", body: formData});
+}
+
+/* ── nawigacja ── */
+function show(page) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("visible"));
+  document.getElementById("page-" + page).classList.add("visible");
+  document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+  document.getElementById("nav-" + page).classList.add("active");
+}
+
+/* ── DZIŚ: renderowanie ── */
+let draft = null;
+
+async function renderToday() {
+  const day = document.getElementById("t-date").value || todayIso();
+  document.getElementById("t-day").textContent = day === todayIso() ? "dziś" : day;
+  document.getElementById("hdr-date").textContent = day;
+  try {
+    const rep = await api(`/api/day/${day}`);
+    document.getElementById("t-in").textContent = rep.kcal_in;
+    document.getElementById("t-out").textContent = rep.kcal_out;
+    setColored("t-bal", rep.balance,
+      rep.balance <= -rep.target_deficit_kcal ? "pos" : (rep.balance <= 0 ? "mid" : "neg"));
+    setColored("t-left", rep.remaining_kcal, rep.remaining_kcal >= 0 ? "pos" : "neg");
+    document.getElementById("t-weight").textContent = rep.weight_smoothed_kg;
+    document.getElementById("t-goal").textContent =
+      rep.to_goal_kg === null ? "—" : rep.to_goal_kg + " kg";
+    document.getElementById("t-steps").value = rep.steps ?? "";
+    document.getElementById("quip").textContent = rep.quip || "";
+    renderMacros(rep.macros);
+    renderMeals(rep.meals);
+  } catch (e) {
+    document.getElementById("quip").textContent =
+      "Brak danych. Uzupełnij profil i wagę na /settings albo tu poniżej.";
+    document.getElementById("macros").innerHTML =
+      '<p class="muted">Brak profilu / pomiaru wagi. Wpisz wagę i sprawdź ustawienia.</p>';
+    document.getElementById("t-meals").innerHTML = "";
+  }
+}
+
+function setColored(id, value, cls) {
+  const el = document.getElementById(id);
+  el.textContent = value;
+  el.className = cls;
+}
+
+function renderMacros(m) {
+  if (!m) return;
+  const rows = [
+    ["Białko", m.protein, "protein", "#FFFFFF", `${r0(m.protein.range_g[0])}–${r0(m.protein.range_g[1])} g`],
+    ["Węglowodany", m.carbs, "carbs", "#000000", `${r0(m.carbs.range_g[0])}–${r0(m.carbs.range_g[1])} g`],
+    ["Tłuszcze", m.fat, "fat", "#FFEB3B", `${r0(m.fat.range_g[0])}–${r0(m.fat.range_g[1])} g`],
+    ["Błonnik", m.fiber, "fiber", "#28A745", `≥ ${r0(m.fiber.min_g)} g`],
+    ["Cukry wolne", m.sugars, "sugars", "#DC3545", `< ${r0(m.sugars.max_g)} g`],
+  ];
+  const statusText = {ok: "w normie", below: "poniżej", above: "powyżej"};
+  const statusClass = {ok: "macro-ok", below: "macro-below", above: "macro-above"};
+  document.getElementById("macros").innerHTML = rows.map(([label, item, key, color, range]) => `
+    <div style="display:flex;justify-content:space-between">
+      <span>${label} — ${item.consumed_g.toFixed(1)} g <span class="muted">(${range})</span></span>
+      <span class="${statusClass[item.status]}">${statusText[item.status]}</span></div>
+    <div class="bar"><i style="width:${item.bar_pct}%;background:${color}"></i></div>
+  `).join("");
+}
+
+function renderMeals(meals) {
+  if (!meals || !meals.length) {
+    document.getElementById("t-meals").innerHTML = '<p class="muted">Brak posiłków dziś.</p>';
+    return;
+  }
+  document.getElementById("t-meals").innerHTML = meals.map(m => `
+    <div class="entry">
+      <div style="flex:1"><div>${esc(m.description)}</div>
+        <div class="muted">${m.time ? m.time.slice(0,5) : ""} · ${m.kcal} kcal · B/T/W ${r0(m.protein_g)}/${r0(m.fat_g)}/${r0(m.carbs_g)} g</div></div>
+      <button class="x" onclick="delMeal(${m.id})">✕</button>
+    </div>`).join("");
+}
+
+async function delMeal(id) {
+  if (!confirm("Usunąć posiłek?")) return;
+  await api(`/api/meals/${id}`, {method: "DELETE"});
+  renderToday();
+}
+
+async function saveWeighIn() {
+  const v = +document.getElementById("t-newweight").value;
+  const day = document.getElementById("t-date").value || todayIso();
+  if (v > 0) {
+    await apiJson("/api/weight", {date: day, weight_kg: v});
+    document.getElementById("t-newweight").value = "";
+    renderToday();
+  }
+}
+
+async function saveDaySteps() {
+  const v = +document.getElementById("t-steps").value;
+  const day = document.getElementById("t-date").value || todayIso();
+  if (v >= 0) {
+    await apiJson(`/api/day/${day}/steps`, {steps: v});
+    renderToday();
+  }
+}
+
+/* ── DODAJ: szacowanie i zapis posiłku ── */
+async function estimate() {
+  const msg = document.getElementById("msg");
+  const file = document.getElementById("f-photo").files[0];
+  const desc = document.getElementById("f-desc").value.trim();
+  if (!file && !desc) { msg.textContent = "Dodaj zdjęcie albo opis."; return; }
+  msg.textContent = "Krasnal ogląda talerz…";
+  try {
+    let est;
+    if (file) {
+      const fd = new FormData();
+      fd.append("photo", file);
+      if (document.getElementById("f-note").value.trim()) fd.append("note", document.getElementById("f-note").value.trim());
+      const day = document.getElementById("f-date").value;
+      if (day) fd.append("day", day);
+      est = await apiForm("/api/meals/photo", fd);
+    } else {
+      const fd = new FormData();
+      fd.append("description", desc);
+      const day = document.getElementById("f-date").value;
+      if (day) fd.append("day", day);
+      est = await apiForm("/api/meals/text", fd);
+    }
+    if (est.queued) { msg.textContent = est.message; return; }
+    showDraft(est);
+    msg.textContent = "";
+  } catch (e) {
+    msg.textContent = "Nie udało się oszacować: " + e.message;
+  }
+}
+
+function showDraft(e) {
+  draft = e;
+  document.getElementById("draft").style.display = "";
+  document.getElementById("d-desc").textContent = e.description || "";
+  document.getElementById("d-items").innerHTML = (e.items || []).map(i =>
+    `• ${esc(i.name)}: ${r0(i.mass_g)}g, ${r0(i.kcal)} kcal`).join("<br>");
+  document.getElementById("d-assumptions").innerHTML = (e.assumptions || []).map(a =>
+    `<li>${esc(a)}</li>`).join("");
+  const sum = k => (e.items || []).reduce((s, i) => s + (i[k] || 0), 0);
+  document.getElementById("d-kcal").value = r0(sum("kcal"));
+  document.getElementById("d-protein").value = sum("protein_g").toFixed(1);
+  document.getElementById("d-fat").value = sum("fat_g").toFixed(1);
+  document.getElementById("d-carbs").value = sum("carbs_g").toFixed(1);
+  document.getElementById("d-range").textContent =
+    `Przedział: ${r0(e.kcal_min)}–${r0(e.kcal_max)} kcal`;
+}
+
+async function saveDraft() {
+  const sum = k => (draft.items || []).reduce((s, i) => s + (i[k] || 0), 0);
+  const day = document.getElementById("f-date").value || todayIso();
+  const time = document.getElementById("f-time").value ||
+    new Date().toISOString().slice(11, 16);
+  await apiJson("/api/meals", {
+    date: day, time,
+    description: draft.description,
+    kcal: +document.getElementById("d-kcal").value,
+    kcal_min: r0(draft.kcal_min), kcal_max: r0(draft.kcal_max),
+    protein_g: +document.getElementById("d-protein").value,
+    fat_g: +document.getElementById("d-fat").value,
+    carbs_g: +document.getElementById("d-carbs").value,
+    fiber_g: +sum("fiber_g").toFixed(1), sugars_g: +sum("sugars_g").toFixed(1),
+    items: draft.items, assumptions: draft.assumptions,
+    source: document.getElementById("f-photo").files[0] ? "photo" : "text",
+  });
+  draft = null;
+  document.getElementById("draft").style.display = "none";
+  document.getElementById("f-desc").value = "";
+  document.getElementById("f-photo").value = "";
+  document.getElementById("f-note").value = "";
+  document.getElementById("msg").textContent = "Zapisano ✓";
+  show("today");
+  renderToday();
+}
+
+/* ── init ── */
+document.getElementById("t-date").value = todayIso();
+document.getElementById("f-date").value = todayIso();
+document.getElementById("f-time").value = new Date().toISOString().slice(11, 16);
+renderToday();
+</script>
+</body>
+</html>
