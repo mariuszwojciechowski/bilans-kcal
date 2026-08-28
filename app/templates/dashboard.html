@@ -139,19 +139,25 @@
   <div class="row" style="margin-top:8px">
     <input type="text" id="textdesc" placeholder="albo opisz: 2 jajka sadzone i kromka żytniego" size="44">
     <button class="ghost" onclick="estimateText()">Szacuj z opisu</button>
+    <button class="ghost" onclick="showManual()">Wpisz wartości ręcznie</button>
   </div>
   <p class="muted" id="est-status"></p>
 
   <div id="draft" class="card" style="background:rgba(141,198,63,.10)">
-    <h2>Szacunek — sprawdź i popraw przed zapisem</h2>
-    <p id="draft-desc"></p>
-    <table id="draft-items"></table>
-    <ul id="draft-assumptions" class="muted"></ul>
+    <h2 id="draft-title">Szacunek — sprawdź i popraw przed zapisem</h2>
+    <input type="text" id="draft-desc" placeholder="Opis posiłku"
+           style="width:100%;font-size:15px;font-weight:600;margin-bottom:8px;padding:6px 8px">
+    <div id="draft-llm-details">
+      <table id="draft-items"></table>
+      <ul id="draft-assumptions" class="muted"></ul>
+    </div>
     <div class="row">
       <label>kcal <input type="number" id="d-kcal" style="width:90px"></label>
       <label>białko g <input type="number" id="d-protein" step="0.1" style="width:80px"></label>
       <label>tłuszcz g <input type="number" id="d-fat" step="0.1" style="width:80px"></label>
       <label>węgle g <input type="number" id="d-carbs" step="0.1" style="width:80px"></label>
+      <label>błonnik g <input type="number" id="d-fiber" step="0.1" style="width:80px" value="0"></label>
+      <label>cukry g <input type="number" id="d-sugars" step="0.1" style="width:80px" value="0"></label>
       <button class="primary" onclick="saveMeal()">Zapisz posiłek</button>
     </div>
     <p class="muted" id="draft-range"></p>
@@ -222,6 +228,7 @@
 
 <script>
 let draft = null;
+let _manual = false;
 
 async function doSync() {
   const el = document.getElementById("sync-status");
@@ -233,8 +240,11 @@ async function doSync() {
 
 function showDraft(data) {
   draft = data;
+  _manual = false;
   document.getElementById("draft").style.display = "block";
-  document.getElementById("draft-desc").textContent = data.description;
+  document.getElementById("draft-title").textContent = "Szacunek — sprawdź i popraw przed zapisem";
+  document.getElementById("draft-llm-details").style.display = "";
+  document.getElementById("draft-desc").value = data.description;
   document.getElementById("draft-items").innerHTML =
     "<tr><th>Składnik</th><th>g</th><th>kcal</th><th>pewność</th></tr>" +
     data.items.map(i => `<tr><td>${i.name}</td><td>${Math.round(i.mass_g)}</td><td>${Math.round(i.kcal)}</td><td>${i.confidence}</td></tr>`).join("");
@@ -244,10 +254,26 @@ function showDraft(data) {
   document.getElementById("d-protein").value = sum(data.items, "protein_g");
   document.getElementById("d-fat").value = sum(data.items, "fat_g");
   document.getElementById("d-carbs").value = sum(data.items, "carbs_g");
+  document.getElementById("d-fiber").value = sum(data.items, "fiber_g");
+  document.getElementById("d-sugars").value = sum(data.items, "sugars_g");
   document.getElementById("draft-range").textContent =
     `Przedział niepewności: ${Math.round(data.kcal_min)}–${Math.round(data.kcal_max)} kcal`;
 }
 const sum = (items, k) => Math.round(items.reduce((s, i) => s + (i[k] || 0), 0) * 10) / 10;
+
+function showManual() {
+  draft = null;
+  _manual = true;
+  document.getElementById("draft").style.display = "block";
+  document.getElementById("draft-title").textContent = "Dane posiłku — wpisz ręcznie";
+  document.getElementById("draft-llm-details").style.display = "none";
+  document.getElementById("draft-desc").value = "";
+  ["d-kcal","d-protein","d-fat","d-carbs","d-fiber","d-sugars"].forEach(id =>
+    document.getElementById(id).value = "0");
+  document.getElementById("draft-range").textContent = "";
+  document.getElementById("est-status").textContent = "";
+  document.getElementById("draft-desc").focus();
+}
 
 async function estimatePhoto() {
   const f = document.getElementById("photo").files[0];
@@ -289,20 +315,23 @@ async function estimateText() {
 
 async function saveMeal() {
   const now = new Date();
+  const kcal = +document.getElementById("d-kcal").value;
+  const desc = document.getElementById("draft-desc").value.trim() || "posiłek";
   const body = {
     date: "{{ view_date }}",
     time: now.toTimeString().slice(0, 5),
-    description: draft.description,
-    photo_path: draft.photo_path,
-    kcal: +document.getElementById("d-kcal").value,
-    kcal_min: draft.kcal_min, kcal_max: draft.kcal_max,
+    description: desc,
+    kcal,
+    kcal_min: _manual ? kcal : draft.kcal_min,
+    kcal_max: _manual ? kcal : draft.kcal_max,
     protein_g: +document.getElementById("d-protein").value,
     fat_g: +document.getElementById("d-fat").value,
     carbs_g: +document.getElementById("d-carbs").value,
-    fiber_g: sum(draft.items, "fiber_g"),
-    sugars_g: sum(draft.items, "sugars_g"),
-    items: draft.items, assumptions: draft.assumptions,
-    source: draft.photo_path ? "photo" : "text",
+    fiber_g: +document.getElementById("d-fiber").value,
+    sugars_g: +document.getElementById("d-sugars").value,
+    items: _manual ? [] : (draft?.items || []),
+    assumptions: _manual ? [] : (draft?.assumptions || []),
+    source: _manual ? "manual" : (draft?.photo_path ? "photo" : "text"),
   };
   const r = await fetch("/api/meals", { method: "POST",
     headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
