@@ -1,0 +1,32 @@
+[Unit]
+Description=Fit Krasnal (FastAPI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=fitkrasnal
+Group=fitkrasnal
+WorkingDirectory=/opt/fit-krasnal
+
+# Sekrety i konfiguracja poza repo (root:fitkrasnal, chmod 640).
+EnvironmentFile=/etc/fit-krasnal/env
+
+# Nasłuch TYLKO na loopbacku — z internetu wejście wyłącznie przez Caddy (HTTPS).
+ExecStart=/opt/fit-krasnal/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8321
+
+Restart=always
+RestartSec=3
+
+# Ograniczenie uprawnień procesu.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/fit-krasnal
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

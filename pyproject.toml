@@ -17,6 +17,15 @@ dependencies = [
     "bcrypt>=4.1",
 ]
 
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# Jawna lista pakietów — bez tego setuptools widzi runtime'owy katalog data/
+# jako drugi pakiet najwyższego poziomu i odmawia budowy.
+[tool.setuptools.packages.find]
+include = ["app*"]
+
 [dependency-groups]
 dev = ["pytest>=8.0", "httpx>=0.27"]
 
