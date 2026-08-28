@@ -39,6 +39,14 @@ Analogiczny do `scripts/adopt_local_user.py`, tyle że dla dowolnego użytkownik
 lądowało w historii bash), haszuje i zapisuje w bazie. Do użycia, gdy tester
 zapomni hasła i napisze do Ciebie.
 
+## Edytowanie liczby kroków w wersji desktopowej (1/10)
+
+Dashboard desktopowy wyświetla kroki z Garmina, ale nie ma pola do ręcznego
+wpisania — jest tylko w `/mobile`. Dodać input liczbowy obok statystyki kroków
+(analogicznie do `saveDaySteps()` w `mobile.html`) z `POST /api/day/{day}/steps`.
+Przydatne gdy krok Garmina nie zsynchronizował się albo użytkownik nie ma
+zegarka.
+
 ## Zmiana hasła z poziomu Ustawień (2/10)
 
 Dodatkowa karta w `/settings`: pola *stare hasło*, *nowe hasło*, *powtórz*.
@@ -82,6 +90,20 @@ np. przepisania wartości z etykiety produktu. Pola: opis, kcal, białko,
 tłuszcz, węgle, błonnik, cukry, opcjonalnie porcja (g). Zapis prosto do
 `POST /api/meals` z `source="manual"`. Nie potrzeba klucza Gemini — działa
 zawsze, przydatne dla batonów, jogurtów, gotowych dań ze znanym składem.
+
+## Ręczny wpis aktywności fizycznej (bez Garmina) (4/10)
+
+Dla testerów bez zegarka sportowego: formularz do wpisania czasu trwania
+i rodzaju aktywności, który przelicza go na spalone kcal metodą MET
+(Metabolic Equivalent of Task — standardowe tabele ACSM). Pola:
+aktywność (lista: rower, pływanie, bieganie, ćwiczenia siłowe, marsz szybki),
+czas [minuty], opcjonalnie intensywność (lekka/umiarkowana/intensywna —
+różne wartości MET). Wzór: `kcal = MET × masa_ciała_kg × czas_h`.
+Masa ciała z ostatniego pomiaru w bazie. Zapis do `Activity` (tabela już
+istnieje, `app/models.py`) z `source="manual"` — to samo co Garmin, więc
+bilans i TDEE od razu uwzględniają aktywność. Wyświetlać w dashboardzie
+i `/mobile` w sekcji bilansu obok kroków. Nie zastępuje synchronizacji
+Garmina — jest alternatywą dla tych, którzy go nie mają.
 
 ## Dashboard lepiej wyglądający na telefonie (4/10)
 
