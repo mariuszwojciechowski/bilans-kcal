@@ -54,12 +54,7 @@ Endpoint `POST /settings/password` używa `auth.verify_password` na starym,
 `auth.hash_password` na nowym, sprawdza kryteria minimalnej długości. Ten
 sam wzorzec błędów co formularze rejestracji.
 
-## Zmniejszanie zdjęcia w przeglądarce przed wysłaniem na serwer (2/10)
-
-Dziś na telefonie zdjęcie z galerii (typowo 3-8 MB) leci na serwer bez zmian.
-W poprzedniej wersji był kod, który zmniejszał do maks. 1280 px i konwertował
-na JPEG (~200-400 KB) przed uploadem. Skopiować z historii gita
-(`git show 091844d^:docs/index.html | grep -A 15 downscale`).
+## ~~Zmniejszanie zdjęcia w przeglądarce przed wysłaniem na serwer~~ ✓ zrobione (commit b30b1eb)
 
 ## Redirect po zalogowaniu w zależności od urządzenia (2/10)
 
@@ -83,13 +78,7 @@ Wykresy już generuje `app/services/charts.py`, można je serwować przez nowy
 endpoint JSON i rysować po stronie klienta, albo po prostu wstawić SVG z
 serwera pod URL-em typu `/trends/embedded?days=30`.
 
-## Ręczne dodawanie posiłku (bez szacowania) (3/10)
-
-Trzeci wariant obok zdjęcia i opisu: pełny formularz do wpisania z ręki,
-np. przepisania wartości z etykiety produktu. Pola: opis, kcal, białko,
-tłuszcz, węgle, błonnik, cukry, opcjonalnie porcja (g). Zapis prosto do
-`POST /api/meals` z `source="manual"`. Nie potrzeba klucza Gemini — działa
-zawsze, przydatne dla batonów, jogurtów, gotowych dań ze znanym składem.
+## ~~Ręczne dodawanie posiłku (bez szacowania)~~ ✓ zrobione (commit b30b1eb + 2485da5)
 
 ## Ręczny wpis aktywności fizycznej (bez Garmina) (4/10)
 
