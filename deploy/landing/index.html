@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Krasnal — aplikacje</title>
+<style>
+  :root {
+    --green: #1A4D3A; --green-med: #3A7A5C; --lime: #8DC63F;
+    --bg: #F9FAF8; --card: #FFFFFF; --ink: #212529; --stone: #6C757D;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #131715; --card: #1B211D; --ink: #E8ECE9; --stone: #9AA39D; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Inter, sans-serif;
+         background: var(--bg); color: var(--ink);
+         display: flex; align-items: center; justify-content: center;
+         min-height: 100vh; padding: 24px; }
+  main { max-width: 460px; width: 100%; }
+  h1 { font-size: 26px; margin: 0 0 6px; color: var(--green); }
+  @media (prefers-color-scheme: dark) { h1 { color: var(--lime); } }
+  p.lead { color: var(--stone); margin: 0 0 24px; font-size: 15px; }
+  .app { display: block; background: var(--card); border-radius: 10px;
+         padding: 16px 18px; margin-bottom: 12px; text-decoration: none;
+         color: inherit; box-shadow: 0 1px 3px rgba(33,37,41,.12);
+         border-left: 4px solid var(--lime); transition: transform .12s ease; }
+  a.app:hover { transform: translateX(3px); }
+  .app b { display: block; font-size: 16px; color: var(--green-med); }
+  @media (prefers-color-scheme: dark) { .app b { color: var(--lime); } }
+  .app span { color: var(--stone); font-size: 14px; }
+  .soon { opacity: .55; border-left-color: var(--stone); cursor: default; }
+  .soon:hover { transform: none; }
+  footer { color: var(--stone); font-size: 12px; margin-top: 20px; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Aplikacje Krasnala</h1>
+  <p class="lead">Domowe narzędzia, robione po godzinach.</p>
+
+  <a class="app" href="https://fit.krasnal.cc">
+    <b>Fit Krasnal</b>
+    <span>fit.krasnal.cc — bilans kalorii, makro i dane z Garmina</span>
+  </a>
+
+  <div class="app soon">
+    <b>Pikimocy</b>
+    <span>pikimocy.krasnal.cc — piki mocy z treningów Strava · wkrótce</span>
+  </div>
+
+  <footer>krasnal.cc</footer>
+</main>
+</body>
+</html>
