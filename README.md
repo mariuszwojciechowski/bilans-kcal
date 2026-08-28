@@ -10,6 +10,8 @@ Pełne wymagania: [WYMAGANIA.md](WYMAGANIA.md).
 **Publiczna instancja pilotowa:** https://fit.krasnal.cc (multi-user, wymaga
 kodu zaproszenia do rejestracji; szczegóły wdrożenia w [deploy/README.md](deploy/README.md)).
 
+**Kontakt:** [krasnal@krasnal.cc](mailto:krasnal@krasnal.cc).
+
 ## Architektura (MVP)
 
 - **Python 3.12 + FastAPI**, SQLite, server-rendered dashboard (Jinja2)
