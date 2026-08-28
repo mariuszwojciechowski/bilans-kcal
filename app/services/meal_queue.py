@@ -108,10 +108,12 @@ def process_queue(user_id: int) -> dict:
     """Przetwarza zaległe posiłki (najstarsze najpierw). Otwiera własną sesję DB —
     nadaje się do BackgroundTasks. Przerywa, gdy LLM nieskonfigurowany."""
     from ..db import get_session
+    from . import settings as settings_service
 
     db = get_session()
     processed = failed = 0
     try:
+        settings_service.apply_llm_env(db, user_id)  # klucz Gemini tego usera do env
         purge_expired(db)
         pending = db.scalars(
             select(PendingMeal).where(PendingMeal.user_id == user_id)

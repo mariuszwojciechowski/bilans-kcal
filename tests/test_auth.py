@@ -164,6 +164,29 @@ def test_manual_weight_and_steps_endpoints(client):
     db.close()
 
 
+def test_settings_page_reflects_saved_llm_key_after_restart(client, monkeypatch):
+    """Bug: klucz Gemini w AppSetting, ale env pusty (po restarcie serwera)
+    → settings pokazywał sprzeczność 'zapisany' + 'aktywny backend: brak'.
+    Fix: /settings odpala apply_llm_env przed sprawdzeniem pick_backend()."""
+    from app import auth
+    from app.services import settings as ss
+
+    _register(client)
+    # zasymulowanie stanu po restarcie: klucz w bazie, env pusty
+    db = client.session_factory()
+    user = db.scalars(select(User)).one()
+    ss.set_setting(db, user.id, "gemini_api_key", "AIza-testowy-klucz")
+    db.close()
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    assert "zapisany:" in resp.text          # klucz w bazie
+    # backend musi pokazywac gemini, nie 'brak'
+    assert "brak — posiłki trafiają do kolejki" not in resp.text
+
+
 def test_mobile_view_requires_auth_and_renders(client):
     # bez sesji: redirect na /login (HTML)
     r = client.get("/mobile", headers={"accept": "text/html"})

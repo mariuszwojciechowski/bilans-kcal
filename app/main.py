@@ -429,6 +429,7 @@ async def estimate_meal_photo(
     """Krok 1: zdjęcie → szacunek (draft do korekty; nic nie zapisujemy).
     Bez klucza LLM / bez internetu: posiłek trafia do kolejki offline."""
     background.add_task(maybe_sync, user.id)
+    settings_service.apply_llm_env(db, user.id)   # klucz Gemini tego usera do env
     data = await photo.read()
     if len(data) > MAX_PHOTO_BYTES:
         raise HTTPException(413, "Zdjęcie za duże (limit 15 MB)")
@@ -458,6 +459,7 @@ def estimate_meal_text(
 ):
     """Krok 1 (wariant tekstowy): opis → szacunek. Fallback: kolejka offline."""
     background.add_task(maybe_sync, user.id)
+    settings_service.apply_llm_env(db, user.id)   # klucz Gemini tego usera do env
     target_day = day or date.today()
     if not meal_vision.llm_configured():
         return _queue_meal(db, user.id, target_day, "brak klucza LLM", description=description)
@@ -591,6 +593,9 @@ def settings_page(request: Request, db: Session = Depends(db_session),
                   user: User = Depends(auth.current_user),
                   saved: str | None = None, mfa: str | None = None,
                   error: str | None = None):
+    # klucze usera do env, zeby pick_backend() nizej widzial je jako aktywne
+    # (w multi-user proces nie ma "domyslnego" usera do primingu na starcie)
+    settings_service.apply_llm_env(db, user.id)
     stored = settings_service.all_settings(db, user.id)
     profile = db.get(UserProfile, user.id)
     last_sync = db.scalar(
