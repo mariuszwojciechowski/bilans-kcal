@@ -475,7 +475,14 @@ async function renderToday() {
       <button class="x" onclick="delMeal(${m.id})">✕</button>
     </div>`).join("") || '<p class="muted">Brak posiłków.</p>';
   document.getElementById("t-queue").innerHTML = queue.length
-    ? `<p class="muted">W kolejce offline: ${queue.length} (przetwórz w zakładce „Dodaj")</p>` : "";
+    ? `<p class="muted">W kolejce offline: ${queue.length} (przetwórz w zakładce „Dodaj")</p>`
+      + queue.map(q => `
+      <div class="entry">
+        <div style="flex:1"><div>${esc(q.description || q.note || "zdjęcie")}</div>
+          <div class="muted">${q.time || ""} · oczekuje${q.photo_b64 ? " · 📷" : ""}</div></div>
+        <button class="x" onclick="delQueued(${q.id})">✕</button>
+      </div>`).join("")
+    : "";
 }
 // Pozycja na pasku wg trzech punktów odniesienia: 0 -> 0%, b1 -> 1/3,
 // b2 -> 2/3, b3 -> 100%. W każdej z trzech sekcji (0-b1, b1-b2, b2-b3)
@@ -674,6 +681,13 @@ async function renderQueueCount() {
   document.getElementById("q-count").textContent = (await all("queue")).length;
 }
 async function delMeal(id) { await del("meals", id); renderToday(); }
+
+async function delQueued(id) {
+  if (!confirm("Usunąć wpis z kolejki? Nie zostanie przetworzony.")) return;
+  await del("queue", id);
+  await renderToday();
+  await renderQueueCount();
+}
 
 async function saveDaySteps() {
   const v = +document.getElementById("t-steps").value;

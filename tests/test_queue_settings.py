@@ -59,6 +59,17 @@ def test_purge_expired_respects_retention(db):
     assert [r.id for r in left] == [fresh.id]
 
 
+def test_delete_pending_removes_row_and_photo(db):
+    keep = meal_queue.enqueue(db, 1, date.today(), time(9, 0), description="zostaje")
+    drop = meal_queue.enqueue(db, 1, date.today(), time(10, 0), photo_bytes=_jpeg())
+    drop_photo = meal_queue.PHOTOS_DIR / drop.photo_path
+
+    meal_queue.delete_pending(db, drop)
+
+    assert not drop_photo.exists()
+    assert [r.id for r in db.scalars(select(PendingMeal)).all()] == [keep.id]
+
+
 def test_settings_roundtrip_and_env(db, monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     settings_service.set_setting(db, 1, "gemini_api_key", "AQ.test123")

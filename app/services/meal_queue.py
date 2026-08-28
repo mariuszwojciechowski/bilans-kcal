@@ -64,6 +64,13 @@ def _delete_photo(photo_path: str | None) -> None:
         (PHOTOS_DIR / photo_path).unlink(missing_ok=True)
 
 
+def delete_pending(db: Session, pending: PendingMeal) -> None:
+    """Usuwa wpis z kolejki wraz ze zdjęciem (rezygnacja z przetwarzania)."""
+    _delete_photo(pending.photo_path)
+    db.delete(pending)
+    db.commit()
+
+
 def purge_expired(db: Session) -> int:
     """Usuwa nieprzetworzone wpisy starsze niż RETENTION_DAYS (wraz ze zdjęciami)."""
     cutoff = datetime.utcnow() - timedelta(days=RETENTION_DAYS)
