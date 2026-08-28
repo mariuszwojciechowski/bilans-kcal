@@ -91,6 +91,15 @@ staging'u. Regresja w main = regresja u testerów. Testy muszą chronić.
   w `garmin.py` — dziś to dict-y w pamięci procesu, przy wielu workerach
   będą się rozjeżdżać).
 
+## Preferencje współpracy (obowiązkowe dla każdej sesji)
+
+- **Przed kodowaniem zawsze pytaj** — opisz co zamierzasz zrobić i poczekaj na
+  potwierdzenie. Nie zaczynaj implementacji bez zgody.
+- **Commit i push bez pytania** — po skończonej pracy wykonuj od razu.
+- **Oznaczaj zrealizowane punkty w TODO.md** — format:
+  `## ~~Tytuł~~ ✓ zrobione (commit <sha>)`. Rób to w tym samym commicie co
+  implementacja lub osobno, ale zawsze.
+
 ## Historia decyzji
 
 Plan wdrożenia multi-user (kroki 1-9): [deploy/multi-user-plan.md](deploy/multi-user-plan.md).
