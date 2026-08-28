@@ -100,7 +100,7 @@ def maybe_sync(user_id: int, days: int = 7, force: bool = False) -> None:
 
     db = get_session()
     try:
-        result = sync_range(db, GarminProvider(), user_id, days=days)
+        result = sync_range(db, GarminProvider(user_id), user_id, days=days)
         logger.info("Auto-sync Garmin: %s", result)
     except Exception as exc:
         logger.warning("Auto-sync Garmin nieudany: %s", exc)

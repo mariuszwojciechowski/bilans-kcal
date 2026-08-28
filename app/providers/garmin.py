@@ -1,14 +1,14 @@
 """GarminProvider — nieoficjalna biblioteka `garminconnect` (decyzja D4).
 
-Logowanie: jednorazowo interaktywnie przez scripts/garmin_login.py (obsługa MFA);
-tokeny sesji trafiają do ~/.fit-krasnal/garth (poza repo). Tutaj tylko wznawiamy
-sesję z tokenstore — bez haseł w kodzie i konfiguracji aplikacji."""
+Multi-user: tokeny sesji trzymamy w podkatalogu per użytkownik
+(GARMIN_TOKENS_DIR/<user_id>/), stan dwustopniowego logowania (MFA) też
+per użytkownik — dwaj testerzy łączą swoje konta Garmina niezależnie."""
 
 from datetime import date, datetime
 
 from garminconnect import Garmin
 
-from ..config import GARMIN_TOKENS_DIR
+from ..config import garmin_tokens_dir
 from . import ActivityData, DailySummaryData, WeightData
 
 
@@ -16,52 +16,57 @@ class GarminNotLoggedIn(RuntimeError):
     pass
 
 
-# stan dwustopniowego logowania z ustawień (MVP: jeden użytkownik, pamięć procesu)
-_mfa_state: dict | None = None
+# stan dwustopniowego logowania z ustawień, keyowany user_id
+# (jeśli ktoś zacznie MFA i nie dokończy, wpis zostaje w pamięci — akceptowalne
+# przy pilocie <10 osób, nie warto sprzątać ręcznie)
+_mfa_state: dict[int, dict] = {}
 
 
-def tokens_present() -> bool:
-    return GARMIN_TOKENS_DIR.exists() and any(GARMIN_TOKENS_DIR.iterdir())
+def tokens_present(user_id: int) -> bool:
+    d = garmin_tokens_dir(user_id)
+    return d.exists() and any(d.iterdir())
 
 
-def interactive_login_start(email: str, password: str) -> str:
+def interactive_login_start(email: str, password: str, user_id: int) -> str:
     """Logowanie z formularza ustawień. Zwraca 'ok' albo 'mfa' (czekamy na kod).
     Hasło nie jest nigdzie zapisywane — idzie wyłącznie do biblioteki Garmina."""
-    global _mfa_state
     api = Garmin(email=email, password=password, return_on_mfa=True)
     status, state = api.login()
     if status == "needs_mfa":
-        _mfa_state = {"api": api, "state": state}
+        _mfa_state[user_id] = {"api": api, "state": state}
         return "mfa"
-    GARMIN_TOKENS_DIR.mkdir(parents=True, exist_ok=True)
-    api.client.dump(str(GARMIN_TOKENS_DIR))
+    tokens = garmin_tokens_dir(user_id)
+    tokens.mkdir(parents=True, exist_ok=True)
+    api.client.dump(str(tokens))
     return "ok"
 
 
-def interactive_login_mfa(code: str) -> str:
-    global _mfa_state
-    if _mfa_state is None:
+def interactive_login_mfa(code: str, user_id: int) -> str:
+    pending = _mfa_state.get(user_id)
+    if pending is None:
         raise GarminNotLoggedIn("Brak rozpoczętego logowania — podaj najpierw e-mail i hasło.")
-    api = _mfa_state["api"]
-    api.resume_login(_mfa_state["state"], code)
-    GARMIN_TOKENS_DIR.mkdir(parents=True, exist_ok=True)
-    api.client.dump(str(GARMIN_TOKENS_DIR))
-    _mfa_state = None
+    api = pending["api"]
+    api.resume_login(pending["state"], code)
+    tokens = garmin_tokens_dir(user_id)
+    tokens.mkdir(parents=True, exist_ok=True)
+    api.client.dump(str(tokens))
+    del _mfa_state[user_id]
     return "ok"
 
 
 class GarminProvider:
-    def __init__(self) -> None:
+    def __init__(self, user_id: int) -> None:
+        self._user_id = user_id
         self._api: Garmin | None = None
 
     def _client(self) -> Garmin:
         if self._api is None:
             api = Garmin()
             try:
-                api.login(str(GARMIN_TOKENS_DIR))
+                api.login(str(garmin_tokens_dir(self._user_id)))
             except Exception as exc:  # brak/wygasłe tokeny
                 raise GarminNotLoggedIn(
-                    "Brak ważnej sesji Garmina. Uruchom: python scripts/garmin_login.py"
+                    "Brak ważnej sesji Garmina. Połącz konto w /settings."
                 ) from exc
             self._api = api
         return self._api

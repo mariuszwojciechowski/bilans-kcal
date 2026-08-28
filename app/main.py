@@ -214,7 +214,7 @@ def sync(days: int = 7, db: Session = Depends(db_session),
     """Ręczna synchronizacja — bez throttla, synchronicznie, zwraca liczniki."""
     mark_attempt(user.id)
     try:
-        return sync_range(db, GarminProvider(), user.id, days=days)
+        return sync_range(db, GarminProvider(user.id), user.id, days=days)
     except GarminNotLoggedIn as exc:
         raise HTTPException(409, str(exc))
 
@@ -546,7 +546,7 @@ def settings_page(request: Request, db: Session = Depends(db_session),
         request,
         "settings.html",
         {
-            "garmin_connected": garmin_provider.tokens_present(),
+            "garmin_connected": garmin_provider.tokens_present(user.id),
             "last_sync_ago": humanize_ago(last_sync),
             "gemini_masked": settings_service.masked(stored.get("gemini_api_key")),
             "claude_masked": settings_service.masked(stored.get("anthropic_api_key")),
@@ -611,7 +611,7 @@ def settings_garmin(email: str = Form(...), password: str = Form(...),
                     user: User = Depends(auth.current_user)):
     """Logowanie do Garmina z ustawień. Hasło idzie tylko do biblioteki Garmina."""
     try:
-        result = garmin_provider.interactive_login_start(email.strip(), password)
+        result = garmin_provider.interactive_login_start(email.strip(), password, user.id)
     except Exception as exc:
         return RedirectResponse(f"/settings?error={exc.__class__.__name__}", status_code=303)
     if result == "mfa":
@@ -622,7 +622,7 @@ def settings_garmin(email: str = Form(...), password: str = Form(...),
 @app.post("/settings/garmin/mfa")
 def settings_garmin_mfa(code: str = Form(...), user: User = Depends(auth.current_user)):
     try:
-        garmin_provider.interactive_login_mfa(code.strip())
+        garmin_provider.interactive_login_mfa(code.strip(), user.id)
     except Exception as exc:
         return RedirectResponse(f"/settings?error={exc.__class__.__name__}", status_code=303)
     return RedirectResponse("/settings?saved=1", status_code=303)
