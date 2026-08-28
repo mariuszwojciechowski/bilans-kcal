@@ -44,6 +44,11 @@ def _migrate(engine) -> None:
             ))
             conn.commit()
 
+        user_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(user)"))]
+        if user_cols and "password_hash" not in user_cols:
+            conn.execute(text("ALTER TABLE user ADD COLUMN password_hash VARCHAR"))
+            conn.commit()
+
         meal_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(meal)"))]
         if meal_cols and "external_id" not in meal_cols:
             conn.execute(text("ALTER TABLE meal ADD COLUMN external_id VARCHAR"))
