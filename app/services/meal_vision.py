@@ -69,53 +69,66 @@ class MealVisionNotConfigured(RuntimeError):
     pass
 
 
-def _gemini_key() -> str | None:
+def _env_gemini_key() -> str | None:
     return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
 
-def pick_backend() -> str:
+def _env_anthropic_key() -> str | None:
+    return os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")
+
+
+def pick_backend(gemini_key: str | None = None, anthropic_key: str | None = None) -> str:
+    """Wybór backendu. Wybór wg config (LLM_BACKEND) jest globalny.
+    W trybie auto: gemini, jeśli podany klucz Gemini (albo w env — fallback)."""
     if LLM_BACKEND in ("claude", "gemini"):
         return LLM_BACKEND
-    return "gemini" if _gemini_key() else "claude"
+    if gemini_key or _env_gemini_key():
+        return "gemini"
+    return "claude"
 
 
-def llm_configured() -> bool:
+def llm_configured(gemini_key: str | None = None, anthropic_key: str | None = None) -> bool:
     """Czy jest sens próbować wywołania LLM (jakikolwiek klucz)."""
-    if pick_backend() == "gemini":
-        return _gemini_key() is not None
-    return bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"))
+    if pick_backend(gemini_key, anthropic_key) == "gemini":
+        return bool(gemini_key or _env_gemini_key())
+    return bool(anthropic_key or _env_anthropic_key())
 
 
 # ── Publiczne API ─────────────────────────────────────────────────────────
 
-def estimate_from_photo(image_bytes: bytes, ext: str, note: str | None = None) -> MealEstimate:
+def estimate_from_photo(image_bytes: bytes, ext: str, note: str | None = None,
+                        gemini_key: str | None = None,
+                        anthropic_key: str | None = None) -> MealEstimate:
     media_type = MEDIA_TYPES.get(ext.lower().lstrip("."))
     if media_type is None:
         raise ValueError(f"Nieobsługiwany format zdjęcia: {ext}")
     prompt = "Oszacuj wartości odżywcze posiłku ze zdjęcia." + (
         f" Uwaga użytkownika: {note}" if note else ""
     )
-    if pick_backend() == "gemini":
-        return _estimate_gemini(prompt, image_bytes, media_type)
-    return _estimate_claude(prompt, image_bytes, media_type)
+    if pick_backend(gemini_key, anthropic_key) == "gemini":
+        return _estimate_gemini(prompt, image_bytes, media_type, api_key=gemini_key)
+    return _estimate_claude(prompt, image_bytes, media_type, api_key=anthropic_key)
 
 
-def estimate_from_text(description: str) -> MealEstimate:
+def estimate_from_text(description: str,
+                        gemini_key: str | None = None,
+                        anthropic_key: str | None = None) -> MealEstimate:
     prompt = f"Oszacuj wartości odżywcze posiłku: {description}"
-    if pick_backend() == "gemini":
-        return _estimate_gemini(prompt)
-    return _estimate_claude(prompt)
+    if pick_backend(gemini_key, anthropic_key) == "gemini":
+        return _estimate_gemini(prompt, api_key=gemini_key)
+    return _estimate_claude(prompt, api_key=anthropic_key)
 
 
 # ── Backend: Claude (Anthropic API) ───────────────────────────────────────
 
 def _estimate_claude(
-    prompt: str, image_bytes: bytes | None = None, media_type: str | None = None
+    prompt: str, image_bytes: bytes | None = None, media_type: str | None = None,
+    api_key: str | None = None,
 ) -> MealEstimate:
     import anthropic
 
     try:
-        client = anthropic.Anthropic()
+        client = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
         client._validate_headers({}, {})  # wymusza rozwiązanie uwierzytelnienia
     except TypeError as exc:
         raise MealVisionNotConfigured(
@@ -155,16 +168,18 @@ def _estimate_claude(
 # ── Backend: Gemini (Google AI Studio, darmowy tier) ──────────────────────
 
 def _estimate_gemini(
-    prompt: str, image_bytes: bytes | None = None, media_type: str | None = None
+    prompt: str, image_bytes: bytes | None = None, media_type: str | None = None,
+    api_key: str | None = None,
 ) -> MealEstimate:
-    if not _gemini_key():
+    key = api_key or _env_gemini_key()
+    if not key:
         raise MealVisionNotConfigured(
             "Brak klucza Gemini — ustaw GEMINI_API_KEY (darmowy klucz: aistudio.google.com)."
         )
     from google import genai
     from google.genai import types
 
-    client = genai.Client()
+    client = genai.Client(api_key=key)
     contents: list = []
     if image_bytes is not None:
         contents.append(types.Part.from_bytes(data=image_bytes, mime_type=media_type))

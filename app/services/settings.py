@@ -1,15 +1,21 @@
 """Ustawienia aplikacji per użytkownik (klucze LLM itd.).
 
-MVP jest single-user, a backendy LLM czytają klucze ze środowiska — dlatego po
-zapisaniu/odczycie ustawień odbijamy je w os.environ (`apply_llm_env`).
-Przy wersji multi-user trzeba będzie przekazywać klucze per żądanie."""
+Multi-user: klucze LLM z bazy przekazywane są jako argumenty do meal_vision.*
+per request (get_llm_keys). apply_llm_env zostawiony jako pomoc dla skryptów
+i testów legacy, ale route'y appki nie korzystają z niego."""
 
 import os
+from typing import NamedTuple
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import AppSetting
+
+
+class LlmKeys(NamedTuple):
+    gemini: str | None
+    anthropic: str | None
 
 # klucz ustawienia -> zmienna środowiskowa czytana przez meal_vision
 LLM_KEYS = {
@@ -41,12 +47,23 @@ def all_settings(db: Session, user_id: int) -> dict[str, str]:
 
 
 def apply_llm_env(db: Session, user_id: int) -> None:
-    """Odbija klucze LLM z bazy do środowiska (nadpisuje — baza jest źródłem prawdy,
-    ale nie kasuje zmiennej ustawionej ręcznie w środowisku, gdy w bazie pusto)."""
+    """LEGACY: odbija klucze LLM z bazy do środowiska. Route'y appki tego już nie
+    używają (przekazują klucze bezpośrednio przez get_llm_keys); zostawione dla
+    skryptów lokalnych i testów, które ustawiają klucz przez env."""
     stored = all_settings(db, user_id)
     for key, env_name in LLM_KEYS.items():
         if stored.get(key):
             os.environ[env_name] = stored[key]
+
+
+def get_llm_keys(db: Session, user_id: int) -> LlmKeys:
+    """Klucze LLM tego usera z AppSetting — do przekazania per request do
+    meal_vision.*. Zwraca None dla brakujących kluczy (nie fallback do env)."""
+    stored = all_settings(db, user_id)
+    return LlmKeys(
+        gemini=stored.get("gemini_api_key"),
+        anthropic=stored.get("anthropic_api_key"),
+    )
 
 
 def masked(value: str | None) -> str | None:
