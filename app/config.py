@@ -26,10 +26,20 @@ DATA_DIR = Path(os.getenv("FIT_KRASNAL_DATA", BASE_DIR / "data"))
 PHOTOS_DIR = DATA_DIR / "photos"
 DB_PATH = DATA_DIR / "fit-krasnal.db"
 
-# Tokeny sesji Garmina żyją poza drzewem repo.
+# Tokeny sesji Garmina żyją poza drzewem repo (katalog bazowy — per user podkatalog).
 GARMIN_TOKENS_DIR = Path(
     os.path.expanduser(os.getenv("GARMINTOKENS", "~/.fit-krasnal/garth"))
 )
+
+# Sesja logowania (podpisane ciasteczko). W produkcji MUSI być ustawione własne
+# FIT_KRASNAL_SECRET_KEY — domyślna wartość jest jawnie oznaczona jako niebezpieczna,
+# żeby nie dało się jej przeoczyć w konfiguracji wdrożenia.
+DEV_SECRET_KEY = "dev-insecure-secret-change-me"
+SECRET_KEY = os.getenv("FIT_KRASNAL_SECRET_KEY", DEV_SECRET_KEY)
+# Tryb dev: ciasteczko bez wymogu HTTPS (localhost). W produkcji zostaw wyłączone.
+DEBUG = os.getenv("FIT_KRASNAL_DEBUG", "").lower() in ("1", "true", "yes")
+# Wspólny kod zaproszenia do rejestracji. Bez niego rejestracja jest wyłączona.
+INVITE_CODE = os.getenv("FIT_KRASNAL_INVITE_CODE", "")
 
 # Backend LLM do szacowania posiłków: auto | claude | gemini
 # auto = gemini, jeśli jest GEMINI_API_KEY/GOOGLE_API_KEY; w przeciwnym razie claude.
@@ -38,6 +48,11 @@ VISION_MODEL = os.getenv("FIT_KRASNAL_VISION_MODEL", "claude-opus-5")
 GEMINI_MODEL = os.getenv("FIT_KRASNAL_GEMINI_MODEL", "gemini-3.5-flash")
 
 MAX_PHOTO_BYTES = 15 * 1024 * 1024
+
+
+def garmin_tokens_dir(user_id: int) -> Path:
+    """Katalog tokenów Garmina dla konkretnego użytkownika (izolacja multi-user)."""
+    return GARMIN_TOKENS_DIR / str(user_id)
 
 
 def ensure_dirs() -> None:
