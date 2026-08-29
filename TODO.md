@@ -144,3 +144,8 @@ tabeli tokenów resetu w bazie, szablonu maila, konfiguracji wysyłki
 (przez Gmail SMTP relay albo zewnętrzną usługę), ustawienia SPF/DKIM na
 `krasnal.cc`, testowania że maile nie lądują w spamie. Kilka dni pracy,
 w większości spoza samego kodu appki.
+
+
+## Integracja z innym zrodlami w zakresie spalanych kcal (??/10)
+
+Apple Watch, Fitbit, Whoop, Oura, Health Connect
