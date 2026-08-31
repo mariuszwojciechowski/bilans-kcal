@@ -130,8 +130,7 @@
       <button class="ghost" style="flex:none;padding:8px 14px;margin:0;width:auto" onclick="changeDay(1)">▶</button>
     </div>
     <div class="row2">
-      <span style="flex:1"><label>kroki dziś</label>
-        <input type="number" id="t-steps" step="500" onchange="saveDaySteps()"></span>
+      <button class="ghost" style="flex:1;margin:4px 0" onclick="show('activities')">Aktywności/Kroki →</button>
       <span style="flex:1"><label>pomiar ciężaru [kg]</label>
         <input type="number" id="t-newweight" step="0.1" placeholder="—" onchange="saveWeighIn()"></span>
     </div>
@@ -246,6 +245,75 @@
   </section>
 </div>
 
+<!-- ── AKTYWNOŚCI/KROKI ────────────────────────────────────────────── -->
+<div class="page" id="page-activities">
+  <section class="card">
+    <h2>Kroki</h2>
+    <div style="display:grid;gap:8px">
+      <div>
+        <label>Liczba kroków w wybranym dniu</label>
+        <input type="number" id="a-steps" step="100" placeholder="5000 (default)">
+        <p class="muted" style="font-size:11px;margin:4px 0 0">Synchronizacja z Garminem nadpisze tę wartość.</p>
+      </div>
+      <button class="primary sm" onclick="saveActivitySteps()" style="width:auto;margin-top:4px">Zapisz kroki</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Rozbicie wydatku energetycznego</h2>
+    <div id="a-tdee-breakdown"><p class="muted">Ładowanie…</p></div>
+  </section>
+
+  <section class="card">
+    <h2>Dodaj aktywność</h2>
+    <div style="display:grid;gap:8px">
+      <div>
+        <label>Rodzaj</label>
+        <select id="a-type">
+          <option value="">— wybierz —</option>
+          <option value="running">Bieganie</option>
+          <option value="cycling">Rower</option>
+          <option value="walking">Marsz/spacer</option>
+          <option value="strength_training">Siłownia</option>
+        </select>
+      </div>
+      <div>
+        <label>Czas [minuty]</label>
+        <input type="number" id="a-duration-min" min="1" placeholder="30">
+      </div>
+      <div id="a-distance-div">
+        <label>Dystans [km] (opcjonalnie)</label>
+        <input type="number" id="a-distance-km" step="0.1" placeholder="5">
+      </div>
+      <div>
+        <label style="margin-bottom:6px">Intensywność</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+          <label style="margin:0;border:1px solid var(--stone);padding:8px;border-radius:6px;text-align:center;cursor:pointer">
+            <input type="radio" name="a-intensity" value="lekka"> Lekka
+          </label>
+          <label style="margin:0;border:1px solid var(--stone);padding:8px;border-radius:6px;text-align:center;cursor:pointer">
+            <input type="radio" name="a-intensity" value="umiarkowana" checked> Umiarkowana
+          </label>
+          <label style="margin:0;border:1px solid var(--stone);padding:8px;border-radius:6px;text-align:center;cursor:pointer">
+            <input type="radio" name="a-intensity" value="intensywna"> Intensywna
+          </label>
+        </div>
+      </div>
+      <button class="primary" onclick="addActivity()">Dodaj aktywność</button>
+      <div id="a-msg" class="muted" style="font-size:12px;margin-top:4px"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Aktywności dzisiaj</h2>
+    <div id="a-list"><p class="muted">Ładowanie…</p></div>
+  </section>
+
+  <div id="a-garmin-warning" style="display:none;background:rgba(220,53,69,.1);border:1px solid var(--danger);padding:10px;border-radius:8px;margin:0 12px;color:var(--danger);font-size:12px">
+    ⚠ Posiadasz podłączone Garmin. Ręczne wpisy mogą zawyżać spalone kcal w dniu w toku.
+  </div>
+</div>
+
 <!-- ── USTAWIENIA ───────────────────────────────────────────────────── -->
 <div class="page" id="page-settings">
   <p class="muted" id="s-status" style="padding:0 4px"></p>
@@ -312,6 +380,7 @@
 <nav>
   <button id="nav-today" class="active" onclick="goToday()">Dziś</button>
   <button id="nav-add" onclick="show('add')">Dodaj</button>
+  <button id="nav-activities" onclick="show('activities')">Aktywności</button>
   <button id="nav-trends" onclick="show('trends')">Trendy</button>
   <button id="nav-settings" onclick="show('settings')">Ustawienia</button>
 </nav>
@@ -404,11 +473,13 @@ async function renderToday() {
     document.getElementById("t-weight").textContent = rep.weight_smoothed_kg;
     document.getElementById("t-goal").textContent =
       rep.to_goal_kg === null ? "—" : rep.to_goal_kg + " kg";
-    document.getElementById("t-steps").value = rep.steps ?? "";
     document.getElementById("quip").textContent = rep.quip || "";
+    document.getElementById("a-steps").value = rep.steps ?? "";
     renderMacros(rep.macros);
     renderMeals(rep.meals, rep.pending_meals || []);
     renderTdee(rep);
+    renderActivityBreakdown(rep);
+    loadActivityList(day);
   } catch (e) {
     document.getElementById("quip").textContent =
       "Brak danych. Uzupełnij profil i wagę w Ustawieniach.";
@@ -416,6 +487,8 @@ async function renderToday() {
       '<p class="muted">Brak profilu / pomiaru wagi.</p>';
     document.getElementById("t-meals").innerHTML = "";
     document.getElementById("tdee-breakdown").innerHTML = "";
+    document.getElementById("a-tdee-breakdown").innerHTML = "";
+    document.getElementById("a-list").innerHTML = "";
   }
 }
 
@@ -866,6 +939,129 @@ async function saveLlmKey() {
   }
   btn.disabled = false;
   setTimeout(() => btn.textContent = "Zapisz klucz", 2500);
+}
+
+/* ── AKTYWNOŚCI ── */
+function renderActivityBreakdown(rep) {
+  const el = document.getElementById("a-tdee-breakdown");
+  if (!el || !rep.tdee_model) return;
+  const t = rep.tdee_model;
+  let html = `<div style="font-size:12px;color:var(--stone);line-height:1.8">`;
+  html += `BMR <b>${t.bmr}</b> + kroki <b>${t.neat}</b> + aktywności <b>${t.activities}</b> + TEF <b>${t.tef}</b> = <b style="color:var(--ink)">${t.total} kcal</b><br>`;
+  html += `Kroki: <b>${rep.steps}${rep.steps_default ? " (domyślne)" : ""}</b>`;
+  html += `</div>`;
+  el.innerHTML = html;
+}
+
+async function saveActivitySteps() {
+  const val = +document.getElementById("a-steps").value;
+  if (!val) return;
+  const day = document.getElementById("t-date").value || todayIso();
+  try {
+    await apiJson(`/api/day/${day}/steps`, {steps: val});
+    document.getElementById("a-steps").value = "";
+    await renderToday();
+    showLoadingInActivityList();
+    loadActivityList(day);
+  } catch(e) {
+    alert("Błąd: " + e.message);
+  }
+}
+
+document.getElementById("a-type").addEventListener("change", function() {
+  const hideDistance = this.value === "strength_training";
+  document.getElementById("a-distance-div").style.display = hideDistance ? "none" : "";
+});
+
+async function addActivity() {
+  const type = document.getElementById("a-type").value;
+  const duration = +document.getElementById("a-duration-min").value;
+  const distance = +document.getElementById("a-distance-km").value || null;
+  const intensity = document.querySelector("input[name='a-intensity']:checked").value;
+  const msg = document.getElementById("a-msg");
+
+  if (!type || !duration || !intensity) {
+    msg.textContent = "⚠ Wypełnij wymagane pola";
+    return;
+  }
+
+  const day = document.getElementById("t-date").value || todayIso();
+  try {
+    const res = await apiJson("/api/activities", {
+      type, intensity, duration_min: duration, distance_km: distance, day
+    });
+    msg.textContent = `✓ ${res.explanation}`;
+    document.getElementById("a-type").value = "";
+    document.getElementById("a-duration-min").value = "";
+    document.getElementById("a-distance-km").value = "";
+    setTimeout(() => {
+      msg.textContent = "";
+      loadActivityList(day);
+      renderToday();
+    }, 1500);
+  } catch(e) {
+    msg.textContent = `✗ ${e.message}`;
+  }
+}
+
+function showLoadingInActivityList() {
+  document.getElementById("a-list").innerHTML = '<p class="muted">Ładowanie…</p>';
+}
+
+async function loadActivityList(day) {
+  try {
+    const rep = await api(`/api/day/${day}`);
+    const activities = rep.activities || [];
+    const manual = activities.filter(a => a.source === "manual");
+    const garmin = activities.filter(a => a.source === "garmin");
+
+    let html = "";
+    if (manual.length) {
+      html += "<h3>Moje wpisy</h3>";
+      manual.forEach(a => {
+        const dist = a.distance_m ? ` · ${(a.distance_m/1000).toFixed(1)} km` : "";
+        const mins = Math.round(a.duration_s / 60);
+        html += `<div class="entry">
+          <div style="flex:1">
+            <div><b>${a.type}</b> ${mins} min${dist}</div>
+            <div class="muted">${a.kcal_garmin} kcal</div>
+          </div>
+          <button class="x" onclick="deleteActivity(${a.id}, () => loadActivityList('${day}'))">✕</button>
+        </div>`;
+      });
+    }
+    if (garmin.length) {
+      html += "<h3>Z Garmina</h3>";
+      garmin.forEach(a => {
+        const dist = a.distance_m ? ` · ${(a.distance_m/1000).toFixed(1)} km` : "";
+        const mins = Math.round(a.duration_s / 60);
+        html += `<div class="entry" style="opacity:.7">
+          <div style="flex:1">
+            <div><b>${a.type}</b> ${mins} min${dist}</div>
+            <div class="muted">${a.kcal_garmin} kcal</div>
+          </div>
+        </div>`;
+      });
+    }
+    if (!manual.length && !garmin.length) {
+      html = '<p class="muted">Brak aktywności w tym dniu.</p>';
+    }
+    document.getElementById("a-list").innerHTML = html;
+
+    document.getElementById("a-garmin-warning").style.display = rep.garmin_connected ? "" : "none";
+  } catch(e) {
+    document.getElementById("a-list").innerHTML = `<p class="muted">Błąd: ${e.message}</p>`;
+  }
+}
+
+async function deleteActivity(id, callback) {
+  if (!confirm("Usunąć tę aktywność?")) return;
+  try {
+    await api(`/api/activities/${id}`, {method: "DELETE"});
+    if (callback) callback();
+  } catch(e) {
+    alert("Błąd: " + e.message);
+  }
 }
 
 /* ── init ── */
