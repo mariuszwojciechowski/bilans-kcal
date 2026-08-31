@@ -20,7 +20,7 @@ from .db import db_session, get_session, init_db
 from .models import Activity, DailySummary, Meal, PendingMeal, SavedMeal, User, UserProfile, WeightLog
 from .providers import garmin as garmin_provider
 from .providers.garmin import GarminNotLoggedIn, GarminProvider
-from .services import meal_queue, meal_vision, quips, transfer
+from .services import activity as activity_service, meal_queue, meal_vision, quips, transfer
 from .services import settings as settings_service
 from .services.balance import day_balance, deficit_warning, projected_weekly_change_kg
 from .services.charts import Series, bar_chart, line_chart
@@ -852,6 +852,12 @@ class SavedMealIn(BaseModel):
     assumptions: list | None = None
 
 
+class ActivityIn(BaseModel):
+    activity: str  # rower, pływanie, bieganie, ćwiczenia siłowe, marsz szybki
+    intensity: str  # lekka, umiarkowana, intensywna
+    duration_minutes: int
+
+
 @app.post("/api/settings/llm")
 def api_save_llm(data: LlmKeysIn, background: BackgroundTasks,
                  db: Session = Depends(db_session),
@@ -935,6 +941,44 @@ def use_saved_meal(meal_id: int, db: Session = Depends(db_session),
         "fiber_g": sm.fiber_g, "sugars_g": sm.sugars_g,
         "items": json.loads(sm.items_json) if sm.items_json else [],
         "assumptions": json.loads(sm.assumptions_json) if sm.assumptions_json else [],
+    }
+
+
+# ── Aktywność fizyczna (ręczny wpis) ───────────────────────────────────────
+
+@app.post("/api/activity")
+def add_manual_activity(data: ActivityIn, db: Session = Depends(db_session),
+                        user: User = Depends(auth.current_user)):
+    """Zapisz ręcznie logowaną aktywność na dzisiejszy dzień."""
+    # Get last weight measurement
+    last_weight = db.scalar(
+        select(WeightLog).where(WeightLog.user_id == user.id)
+        .order_by(WeightLog.date.desc())
+    )
+    if last_weight is None:
+        raise HTTPException(422, "Brak pomiaru wagi w bazie")
+
+    weight_kg = last_weight.weight_kg
+    kcal = activity_service.calculate_kcal(
+        data.activity, data.intensity, data.duration_minutes, weight_kg
+    )
+
+    activity = Activity(
+        user_id=user.id,
+        date=date.today(),
+        type=data.activity,
+        duration_s=data.duration_minutes * 60,
+        kcal_manual=kcal,
+        source="manual"
+    )
+    db.add(activity)
+    db.commit()
+    return {
+        "id": activity.id,
+        "type": activity.type,
+        "duration_min": data.duration_minutes,
+        "kcal": kcal,
+        "weight_used_kg": weight_kg,
     }
 
 
