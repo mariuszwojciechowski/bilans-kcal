@@ -863,7 +863,7 @@ class SavedMealIn(BaseModel):
 
 
 class ActivityIn(BaseModel):
-    type: str  # running, cycling, walking, strength_training
+    type: str  # running, cycling, walking, swimming, strength_training
     intensity: str  # lekka, umiarkowana, intensywna
     duration_min: int
     distance_km: float | None = None

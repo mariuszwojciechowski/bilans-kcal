@@ -75,6 +75,16 @@ def test_cycling_uses_met_even_with_distance(clients):
     assert resp.json()["kcal"] == 750          # MET 10.0 × 75 kg × 1 h
 
 
+def test_swimming_uses_met_even_with_distance(clients):
+    alice, _, _ = clients
+    resp = alice.post("/api/activities", json={
+        "type": "swimming", "intensity": "intensywna", "duration_min": 60,
+        "distance_km": 2,                      # informacyjny, ignorowany
+    })
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["kcal"] == 750          # MET 10.0 × 75 kg × 1 h
+
+
 def test_steps_default_when_no_entry(clients):
     alice, _, _ = clients
     today = date.today().isoformat()

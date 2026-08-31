@@ -126,6 +126,7 @@ MANUAL_MET = {
     "cycling": [5.5, 7.0, 10.0],
     "walking": [3.3, 4.3, 5.0],
     "strength_training": [3.5, 5.0, 6.0],
+    "swimming": [6.0, 8.0, 10.0],
 }
 
 INTENSITY_MAP = {"lekka": 0, "umiarkowana": 1, "intensywna": 2}
@@ -158,6 +159,10 @@ def manual_activity_kcal(activity_type: str, intensity: str, duration_s: int,
             kcal = met * weight_kg * duration_h
             explanation = f"MET {met} × {weight_kg:.0f} kg × {duration_h:.2f} h"
     elif activity_type == "strength_training":
+        met = MANUAL_MET[activity_type][intensity_idx]
+        kcal = met * weight_kg * duration_h
+        explanation = f"MET {met} × {weight_kg:.0f} kg × {duration_h:.2f} h"
+    elif activity_type == "swimming":
         met = MANUAL_MET[activity_type][intensity_idx]
         kcal = met * weight_kg * duration_h
         explanation = f"MET {met} × {weight_kg:.0f} kg × {duration_h:.2f} h"
