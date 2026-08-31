@@ -13,7 +13,7 @@ Przy każdym punkcie **szacowanie złożoności w skali 1-10**:
 
 ---
 
-## ~~Poprawki zakładki Aktywności po testach na produkcji~~ ✓ zrobione (SHA po commicie), pytest zielony (90 passed)
+## ~~Poprawki zakładki Aktywności po testach na produkcji~~ ✓ zrobione (commit aa623ca), pytest zielony (90 passed)
 
 Feedback właściciela z 2026-08-31 po używaniu na telefonie (działa) i desktopie
 (nie działa). Kroki dla implementującego LLM — wszystko w
@@ -70,7 +70,7 @@ fragmentami po wskazanych liniach, pełny pytest raz na koniec.
 6. **Weryfikacja:** pełny `pytest` zielony → commit + push → w GitHub
    Actions „Deploy na GCP" ma być `success` — sprawdź to, nie zakładaj.
 
-## ~~PILNE: naprawa testów aktywności — deploy zablokowany, produkcja wciąż leży~~ ✓ zrobione — plik przepisany wg wzorca `test_saved_meals_api.py`, prawdziwy strażnik migracji (SHA po commicie), pełny pytest zielony (89 passed)
+## ~~PILNE: naprawa testów aktywności — deploy zablokowany, produkcja wciąż leży~~ ✓ zrobione — plik przepisany wg wzorca `test_saved_meals_api.py`, prawdziwy strażnik migracji (commit 7400edf), pełny pytest zielony (89 passed)
 
 Commit `1a3401d` naprawił kod (kroki 1, 4–7 sekcji niżej), ale jego deploy
 **failował**: przywrócone `tests/test_activities_api.py` są czerwone — wszystkie
