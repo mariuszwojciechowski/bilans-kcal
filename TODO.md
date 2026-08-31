@@ -13,7 +13,7 @@ Przy każdym punkcie **szacowanie złożoności w skali 1-10**:
 
 ---
 
-## Poprawki zakładki Aktywności po testach na produkcji (3/10)
+## ~~Poprawki zakładki Aktywności po testach na produkcji~~ ✓ zrobione (SHA po commicie), pytest zielony (90 passed)
 
 Feedback właściciela z 2026-08-31 po używaniu na telefonie (działa) i desktopie
 (nie działa). Kroki dla implementującego LLM — wszystko w
