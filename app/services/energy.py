@@ -102,7 +102,7 @@ def tdee_theoretical(
     TEF (termogeneza poposiłkowa) ~10% spożycia — 0, gdy brak wpisów posiłków."""
     bmr = bmr_mifflin(weight_kg, height_cm, age, sex)
     act_kcal = sum(
-        activity_kcal_model(a["type"], a["duration_s"], a.get("distance_m"), weight_kg)
+        a.get("kcal", activity_kcal_model(a["type"], a["duration_s"], a.get("distance_m"), weight_kg))
         for a in activities
     )
     # kroki wykonane w ramach aktywności: przybliżenie — bieg/chód ~1400 kroków/km
@@ -116,3 +116,53 @@ def tdee_theoretical(
     neat = neat_from_steps(steps, weight_kg, activity_steps)
     tef = 0.10 * kcal_in
     return TheoreticalTdee(bmr=bmr, neat=neat, activities=act_kcal, tef=tef)
+
+
+DEFAULT_STEPS = 5000
+
+# MET values for manual activities (light, moderate, intense)
+MANUAL_MET = {
+    "running": [8.0, 10.0, 12.0],
+    "cycling": [5.5, 7.0, 10.0],
+    "walking": [3.3, 4.3, 5.0],
+    "strength_training": [3.5, 5.0, 6.0],
+}
+
+INTENSITY_MAP = {"lekka": 0, "umiarkowana": 1, "intensywna": 2}
+
+
+def manual_activity_kcal(activity_type: str, intensity: str, duration_s: int,
+                         distance_m: float | None, weight_kg: float) -> tuple[float, str]:
+    """Oblicza kcal dla ręcznej aktywności. Zwraca (kcal, wyjaśnienie)."""
+    intensity_idx = INTENSITY_MAP.get(intensity, 1)
+    duration_h = duration_s / 3600.0
+
+    if activity_type == "running":
+        if distance_m:
+            kcal = weight_kg * (distance_m / 1000.0)
+            explanation = f"bieg {distance_m/1000:.1f} km × {weight_kg:.0f} kg"
+        else:
+            met = MANUAL_MET[activity_type][intensity_idx]
+            kcal = met * weight_kg * duration_h
+            explanation = f"MET {met} × {weight_kg:.0f} kg × {duration_h:.2f} h"
+    elif activity_type == "cycling":
+        met = MANUAL_MET[activity_type][intensity_idx]
+        kcal = met * weight_kg * duration_h
+        explanation = f"MET {met} × {weight_kg:.0f} kg × {duration_h:.2f} h"
+    elif activity_type == "walking":
+        if distance_m:
+            kcal = 0.53 * weight_kg * (distance_m / 1000.0)
+            explanation = f"marsz {distance_m/1000:.1f} km × {weight_kg:.0f} kg × 0.53"
+        else:
+            met = MANUAL_MET[activity_type][intensity_idx]
+            kcal = met * weight_kg * duration_h
+            explanation = f"MET {met} × {weight_kg:.0f} kg × {duration_h:.2f} h"
+    elif activity_type == "strength_training":
+        met = MANUAL_MET[activity_type][intensity_idx]
+        kcal = met * weight_kg * duration_h
+        explanation = f"MET {met} × {weight_kg:.0f} kg × {duration_h:.2f} h"
+    else:
+        kcal = 0
+        explanation = "nieznana aktywność"
+
+    return round(kcal), explanation
