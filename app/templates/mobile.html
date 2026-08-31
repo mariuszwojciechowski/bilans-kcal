@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Fit Krasnal — mobile</title>
+<title>Fit Krasnal</title>
 {% if has_logo %}<link rel="icon" href="/static/favicon-32.png">{% endif %}
 <meta name="theme-color" content="#1A4D3A">
 <style>
@@ -64,15 +64,39 @@
   #draft { background: rgba(141,198,63,.10); }
   label { font-size: 13px; color: var(--stone); margin-top: 6px; display: block; }
   a { color: var(--green-med); }
+  .hdr-link { color: #C9D3CC; font-size: 14px; text-decoration: none;
+              padding: 6px 10px; border-radius: 6px; background: none; border: none;
+              cursor: pointer; width: auto; margin: 0; }
+  .hdr-link:hover { background: rgba(255,255,255,.12); }
+  @media (min-width: 800px) {
+    body { padding-bottom: 0; }
+    nav { display: none; }
+    header { padding: 0 16px 0 0; }
+    header .brand { padding: 8px 18px 8px 14px; }
+    header h1 { font-size: 18px; }
+    main { max-width: 1020px; grid-template-columns: 1fr 1fr; align-items: start; }
+    .page { display: grid !important; gap: 12px; }
+    #page-settings { display: none !important; }
+    .hdr-nav { display: flex !important; }
+  }
 </style>
 </head>
 <body>
 <header>
-  <a class="brand" href="/mobile" style="text-decoration:none">
+  <a class="brand" href="/" style="text-decoration:none">
     {% if has_logo %}<img class="logo" src="/static/logo-bw.png" alt="" style="width:32px;height:32px">{% endif %}
     <h1>Fit Krasnal</h1>
   </a>
-  <span class="muted" id="hdr-date"></span>
+  <span class="muted" id="hdr-date" style="align-self:center;padding:0 8px"></span>
+  <div class="hdr-nav" style="display:none;margin-left:auto;gap:2px;align-items:center">
+    <a class="hdr-link" href="#" onclick="show('today');return false">Dziś</a>
+    <a class="hdr-link" href="#" onclick="show('add');return false">Dodaj</a>
+    <a class="hdr-link" href="/trends">Trendy</a>
+    <a class="hdr-link" href="/settings">Ustawienia</a>
+    <form method="post" action="/logout" style="margin:0">
+      <button type="submit" class="hdr-link">Wyloguj</button>
+    </form>
+  </div>
 </header>
 <main>
 
@@ -104,6 +128,12 @@
   <section class="card">
     <h2>Posiłki</h2>
     <div id="t-meals"></div>
+    <div id="t-pending"></div>
+  </section>
+  <section class="card" id="sync-card">
+    <h2>Garmin</h2>
+    <button class="ghost" onclick="doSync()">Synchronizuj z Garminem</button>
+    <p class="muted" id="sync-status" style="margin:4px 0 0"></p>
   </section>
 </div>
 
@@ -150,10 +180,9 @@
 <!-- ── USTAWIENIA ───────────────────────────────────────────────────── -->
 <div class="page" id="page-settings">
   <section class="card">
-    <h2>Profil</h2>
-    <p class="muted">Profil, klucz LLM i konto Garmina konfigurujesz na
-      <a href="/settings">/settings</a> (widok desktopowy — pełny).</p>
-    <p><a href="/">Otwórz dashboard desktopowy</a></p>
+    <h2>Menu</h2>
+    <p><a href="/settings">Ustawienia</a> — profil, klucz LLM, konto Garmina</p>
+    <p><a href="/trends">Trendy</a> — wykresy wagi i bilansu</p>
     <p class="muted">Kontakt: <a href="mailto:krasnal@krasnal.cc">krasnal@krasnal.cc</a></p>
     <form method="post" action="/logout" style="margin-top:12px">
       <button type="submit" class="danger">Wyloguj</button>
@@ -240,7 +269,7 @@ async function renderToday() {
     document.getElementById("t-steps").value = rep.steps ?? "";
     document.getElementById("quip").textContent = rep.quip || "";
     renderMacros(rep.macros);
-    renderMeals(rep.meals);
+    renderMeals(rep.meals, rep.pending_meals || []);
   } catch (e) {
     document.getElementById("quip").textContent =
       "Brak danych. Uzupełnij profil i wagę na /settings albo tu poniżej.";
@@ -275,17 +304,40 @@ function renderMacros(m) {
   `).join("");
 }
 
-function renderMeals(meals) {
-  if (!meals || !meals.length) {
-    document.getElementById("t-meals").innerHTML = '<p class="muted">Brak posiłków dziś.</p>';
-    return;
+function renderMeals(meals, pending) {
+  document.getElementById("t-meals").innerHTML = (meals && meals.length)
+    ? meals.map(m => `
+        <div class="entry">
+          <div style="flex:1"><div>${esc(m.description)}</div>
+            <div class="muted">${m.time ? m.time.slice(0,5) : ""} · ${m.kcal} kcal · B/T/W ${r0(m.protein_g)}/${r0(m.fat_g)}/${r0(m.carbs_g)} g</div></div>
+          <button class="x" onclick="delMeal(${m.id})">✕</button>
+        </div>`).join("")
+    : '<p class="muted">Brak posiłków dziś.</p>';
+  document.getElementById("t-pending").innerHTML = (pending && pending.length) ? `
+    <p class="muted" style="margin:10px 0 4px;font-weight:600">W kolejce (czeka na LLM)</p>` +
+    pending.map(p => `
+      <div class="entry">
+        <div style="flex:1"><div class="muted">${esc(p.label)}${p.has_photo ? " 📷" : ""}</div></div>
+        <button class="x" onclick="delPending(${p.id})">✕</button>
+      </div>`).join("") : "";
+}
+
+async function doSync() {
+  const el = document.getElementById("sync-status");
+  el.textContent = "Synchronizuję…";
+  try {
+    await api("/api/sync?days=7", {method: "POST"});
+    el.textContent = "Zsynchronizowano ✓";
+    renderToday();
+  } catch(e) {
+    el.textContent = "Błąd: " + e.message;
   }
-  document.getElementById("t-meals").innerHTML = meals.map(m => `
-    <div class="entry">
-      <div style="flex:1"><div>${esc(m.description)}</div>
-        <div class="muted">${m.time ? m.time.slice(0,5) : ""} · ${m.kcal} kcal · B/T/W ${r0(m.protein_g)}/${r0(m.fat_g)}/${r0(m.carbs_g)} g</div></div>
-      <button class="x" onclick="delMeal(${m.id})">✕</button>
-    </div>`).join("");
+}
+
+async function delPending(id) {
+  if (!confirm("Usunąć wpis z kolejki?")) return;
+  await api(`/api/queue/${id}`, {method: "DELETE"});
+  renderToday();
 }
 
 async function delMeal(id) {

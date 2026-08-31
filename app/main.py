@@ -544,49 +544,18 @@ def delete_pending(pending_id: int, db: Session = Depends(db_session),
     return {"ok": True}
 
 
-# ── Dashboard (server-rendered) ───────────────────────────────────────────
+# ── Dashboard ─────────────────────────────────────────────────────────────
 
+@app.get("/", response_class=HTMLResponse)
 @app.get("/mobile", response_class=HTMLResponse)
-def mobile_view(request: Request,
-                user: User = Depends(auth.current_user)):
-    """Cienki klient (mobile) — wszystkie dane przez /api/*, ta sama sesja."""
+def dashboard(request: Request, background: BackgroundTasks,
+              user: User = Depends(auth.current_user)):
+    """Jedyny widok aplikacji — responsive, działa na telefonie i desktopie."""
+    background.add_task(maybe_sync, user.id)
     return templates.TemplateResponse(
         request,
         "mobile.html",
         {"has_logo": (STATIC_DIR / "logo.png").exists()},
-    )
-
-
-@app.get("/", response_class=HTMLResponse)
-def dashboard(
-    request: Request,
-    background: BackgroundTasks,
-    view: date | None = Query(None, alias="date"),
-    db: Session = Depends(db_session),
-    user: User = Depends(auth.current_user),
-):
-    background.add_task(maybe_sync, user.id)  # auto-odświeżenie przy wejściu (throttle 10 min)
-    view_day = min(view or date.today(), date.today())
-    profile = db.get(UserProfile, user.id)
-    report = None
-    error = None
-    if profile is not None:
-        try:
-            report = day_report(db, user.id, view_day)
-        except HTTPException as exc:
-            error = exc.detail
-    return templates.TemplateResponse(
-        request,
-        "dashboard.html",
-        {
-            "profile": profile,
-            "report": report,
-            "error": error,
-            "today": date.today().isoformat(),
-            "view_date": view_day.isoformat(),
-            "is_today": view_day == date.today(),
-            "has_logo": (STATIC_DIR / "logo.png").exists(),
-        },
     )
 
 

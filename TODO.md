@@ -94,7 +94,7 @@ bilans i TDEE od razu uwzględniają aktywność. Wyświetlać w dashboardzie
 i `/mobile` w sekcji bilansu obok kroków. Nie zastępuje synchronizacji
 Garmina — jest alternatywą dla tych, którzy go nie mają.
 
-## Dashboard lepiej wyglądający na telefonie (4/10)
+## ~~Dashboard lepiej wyglądający na telefonie~~ ✓ zrobione — jeden widok responsive (commit poniżej)
 
 Widok `/` (desktopowy) na iPhonie/Androidzie: tabele posiłków rozciągają się
 poza ekran, statystyki się gniotą. Dodać `@media (max-width: 640px)` który
