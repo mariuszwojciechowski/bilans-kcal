@@ -97,3 +97,54 @@ def test_settings_roundtrip_and_env(db, monkeypatch):
     assert settings_service.get_setting(db, 1, "gemini_api_key") is None
 
 
+# ── TESTY AKTYWNOŚCI ──
+
+def test_manual_activity_kcal_running_with_distance():
+    """Bieg z dystansem: kcal = masa × km (ignoruje intensywność)."""
+    from app.services.energy import manual_activity_kcal
+    kcal, exp = manual_activity_kcal("running", "lekka", 3600, 5000, 70)
+    assert kcal == 350  # 70 * 5
+    assert "bieg" in exp.lower()
+
+
+def test_manual_activity_kcal_running_without_distance():
+    """Bieg bez dystansu: MET 8/10/12 × masa × czas."""
+    from app.services.energy import manual_activity_kcal
+    kcal, exp = manual_activity_kcal("running", "umiarkowana", 3600, None, 70)
+    assert kcal == 700  # MET 10 * 70 * 1h
+
+
+def test_manual_activity_kcal_cycling_ignores_distance():
+    """Rower liczy z MET, dystans ignorowany."""
+    from app.services.energy import manual_activity_kcal
+    kcal, exp = manual_activity_kcal("cycling", "intensywna", 3600, 999, 70)
+    assert kcal == 700  # MET 10 * 70 * 1h
+
+
+def test_manual_activity_kcal_strength_training():
+    """Siłownia liczy z MET (maxy 3.5 < obwodowo 6.0)."""
+    from app.services.energy import manual_activity_kcal
+    kcal_maxy, _ = manual_activity_kcal("strength_training", "lekka", 3600, None, 70)
+    kcal_obwodo, _ = manual_activity_kcal("strength_training", "intensywna", 3600, None, 70)
+    assert kcal_maxy == 245  # MET 3.5 * 70 * 1h
+    assert kcal_obwodo == 420  # MET 6.0 * 70 * 1h
+    assert kcal_maxy < kcal_obwodo
+
+
+def test_manual_activity_kcal_walking():
+    """Marsz z dystansem: 0.53 × masa × km; bez: MET."""
+    from app.services.energy import manual_activity_kcal
+    kcal_dist, exp = manual_activity_kcal("walking", "umiarkowana", 3600, 10000, 70)
+    assert kcal_dist == 371  # 0.53 * 70 * 10 km
+    assert "marsz" in exp.lower()
+
+    kcal_no_dist, _ = manual_activity_kcal("walking", "umiarkowana", 3600, None, 70)
+    assert kcal_no_dist == 301  # MET 4.3 * 70 * 1h
+
+
+def test_default_steps_constant():
+    """DEFAULT_STEPS = 5000."""
+    from app.services.energy import DEFAULT_STEPS
+    assert DEFAULT_STEPS == 5000
+
+
