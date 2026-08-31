@@ -101,7 +101,7 @@
   <span class="muted" id="hdr-date" style="align-self:center;padding:0 8px"></span>
   <div class="hdr-nav" style="display:none;margin-left:auto;gap:2px;align-items:center">
     <a class="hdr-link" href="#" onclick="show('today');return false">Dziś</a>
-    <a class="hdr-link" href="#" onclick="show('add');return false">Dodaj</a>
+    <a class="hdr-link" href="#" onclick="show('add');showManual();return false">Dodaj</a>
     <a class="hdr-link" href="/trends">Trendy</a>
     <a class="hdr-link" href="/settings">Ustawienia</a>
     <form method="post" action="/logout" style="margin:0">
@@ -140,6 +140,7 @@
     <h2>Garmin</h2>
     <button class="ghost" onclick="doSync()">Synchronizuj z Garminem</button>
     <p class="muted" id="sync-status" style="margin:4px 0 0"></p>
+    <div id="tdee-breakdown"></div>
   </section>
   <section class="card">
     <h2>Posiłki</h2>
@@ -359,13 +360,37 @@ async function renderToday() {
     document.getElementById("quip").textContent = rep.quip || "";
     renderMacros(rep.macros);
     renderMeals(rep.meals, rep.pending_meals || []);
+    renderTdee(rep);
   } catch (e) {
     document.getElementById("quip").textContent =
       "Brak danych. Uzupełnij profil i wagę w Ustawieniach.";
     document.getElementById("macros").innerHTML =
       '<p class="muted">Brak profilu / pomiaru wagi.</p>';
     document.getElementById("t-meals").innerHTML = "";
+    document.getElementById("tdee-breakdown").innerHTML = "";
   }
+}
+
+function renderTdee(rep) {
+  const el = document.getElementById("tdee-breakdown");
+  if (!el) return;
+  const t = rep.tdee_model;
+  const src = rep.out_source === "garmin" ? "Garmin" : "model szacunkowy";
+  let html = `<div style="font-size:12px;color:var(--stone);margin-top:8px;line-height:1.8">`;
+  html += `Źródło: <b style="color:var(--ink)">${src}</b><br>`;
+  html += `BMR <b>${t.bmr}</b> + kroki <b>${t.neat}</b>`
+        + ` + aktywności <b>${t.activities}</b> + TEF <b>${t.tef}</b>`
+        + ` = <b style="color:var(--ink)">${t.total} kcal</b>`;
+  const acts = rep.activities || [];
+  if (acts.length) {
+    html += `<br>` + acts.map(a => {
+      const min = a.duration_s ? Math.round(a.duration_s / 60) + " min" : "";
+      const kcal = a.kcal_garmin ? `, ${a.kcal_garmin} kcal` : "";
+      return `${esc(a.type)}${min ? " " + min : ""}${kcal}`;
+    }).join(" · ");
+  }
+  html += `</div>`;
+  el.innerHTML = html;
 }
 
 function setColored(id, value, cls) {
