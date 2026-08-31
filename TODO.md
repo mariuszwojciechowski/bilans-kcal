@@ -130,6 +130,104 @@ tabeli tokenów resetu w bazie, szablonu maila, konfiguracji wysyłki
 w większości spoza samego kodu appki.
 
 
+## Kalibracja adaptacyjna — WYMAGANIA.md 6.2 (6/10)
+
+Jedyny duży brak z pierwotnego kontraktu ("przewaga produktu": model uczy się
+na danych użytkownika jak MacroFactor). Kroki dla implementującego LLM:
+
+1. **Model danych.** W `app/models.py` dodaj tabelę `Calibration` wg szkicu
+   z WYMAGANIA.md 8.4: `id`, `user_id` (FK + index), `period_start`,
+   `period_end` (Date), `expected_delta_kg`, `actual_delta_kg` (Float),
+   `factor` (Float), `created_at`. Nowa tabela nie wymaga migracji w
+   `app/db.py:_migrate()` — `create_all` ją utworzy.
+2. **Serwis.** Nowy plik `app/services/calibration.py`:
+   - `compute(db, user_id, period_days=14) -> Calibration | None` — dla okresu
+     kończącego się wczoraj: skumulowany bilans z dni **ważnych** (dzień ma
+     ≥1 posiłek w `Meal` i `DailySummary.complete == True` z
+     `kcal_total_garmin` — dni bez wpisów posiłków wykluczone wg reguły 6.3);
+     `expected_delta_kg = suma_bilansów / 7700` (stała `KCAL_PER_KG_FAT`
+     z `app/services/balance.py`); `actual_delta_kg` = różnica wygładzonej
+     wagi 7d (`energy.smoothed_weight` na oknie kończącym się na końcu i na
+     początku okresu). Współczynnik korekty wydatku:
+     `factor = (suma_kcal_in − actual_delta_kg·7700) / suma_kcal_out`,
+     przycięty do [0.85, 1.15]. Zwróć `None`, gdy < 10 dni ważnych albo brak
+     pomiarów wagi na obu końcach okresu.
+   - `current_factor(db, user_id) -> float` — `factor` z najnowszego wpisu
+     `Calibration` albo `1.0`.
+   - `maybe_recalibrate(db, user_id)` — liczy i zapisuje nowy wpis, jeśli
+     ostatni jest starszy niż 7 dni (albo nie istnieje); wołane w tle przy
+     wejściu na dashboard (wzorzec: `background.add_task`, jak `maybe_sync`
+     w `app/main.py`).
+3. **Zastosowanie.** W `app/main.py:day_report()`: pobierz
+   `factor = calibration.current_factor(db, user_id)` i licz
+   `e_target = bal.kcal_out * factor − profile.target_deficit_kcal`
+   (dziś: bez factora). Do odpowiedzi dodaj pola `calibration_factor`
+   i `calibration_updated` (data ostatniego wpisu) — UI ma pokazywać
+   "zapotrzebowanie skorygowane o ±X% względem pomiaru".
+4. **UI.** W `app/templates/mobile.html` (jedyny widok dzienny) pokaż korektę
+   przy zapotrzebowaniu; w `/trends` (`app/main.py:trends` +
+   `app/templates/trends.html`) dodaj do tygodniówki kartę "kalibracja":
+   oczekiwana vs rzeczywista zmiana ciężaru i factor (wymóg 6.4).
+5. **Transfer.** Kalibracji nie eksportuj w `app/services/transfer.py` —
+   po imporcie danych przelicza się z historii (dopisz `maybe_recalibrate`
+   po udanym imporcie).
+6. **Testy.** `tests/test_calibration.py`: syntetyczne 14 dni (posiłki +
+   `DailySummary` complete + `WeightLog`) o znanym bilansie; przypadki:
+   zgodność wag → factor ≈ 1.0, waga spada wolniej niż bilans obiecuje →
+   factor < 1.0, za mało dni → `None`, clamp na 0.85/1.15. Wszystko musi
+   być zielone — czerwony pytest blokuje deploy.
+
+## Moje posiłki — zapamiętane, jednym kliknięciem (WYMAGANIA.md 5.2) (3/10)
+
+1. **Model danych.** W `app/models.py` tabela `SavedMeal`: `id`, `user_id`
+   (FK + index), `name` (String), `kcal`, `kcal_min`, `kcal_max`, `protein_g`,
+   `fat_g`, `carbs_g`, `fiber_g`, `sugars_g`, `items_json`, `assumptions_json`,
+   `created_at`, `last_used_at` — kopia wartości posiłku, bez zdjęcia.
+2. **API** w `app/main.py` (wzorzec auth: `Depends(auth.current_user)`):
+   - `GET /api/saved-meals` — lista posortowana po `last_used_at` malejąco;
+   - `POST /api/saved-meals` — body jak `MealIn` + `name`;
+   - `DELETE /api/saved-meals/{id}` (sprawdź `user_id` jak w `delete_meal`);
+   - `POST /api/saved-meals/{id}/use` — aktualizuje `last_used_at` i zwraca
+     dane w formacie draftu (jak `estimate_meal_photo`), które klient
+     zapisuje istniejącym `POST /api/meals` z `source="saved"`.
+3. **UI** w `app/templates/mobile.html`: w panelu "Dodaj posiłek" trzecia
+   ścieżka obok zdjęcia i opisu — lista "Moje posiłki" (nazwa + kcal,
+   jeden klik → ekran korekty z wypełnionymi wartościami → zapis);
+   na ekranie korekty każdego posiłku checkbox "zapisz w moich posiłkach"
+   (poprosi o nazwę, domyślnie `description`).
+4. **Transfer.** Dodaj `saved_meals` do `export_payload` / `import_payload`
+   w `app/services/transfer.py` (idempotentnie po `name`, jak posiłki po
+   `external_id`).
+5. **Testy.** `tests/test_saved_meals.py`: zapis → lista → użycie →
+   `last_used_at` rośnie; izolacja między użytkownikami (wzorzec:
+   `tests/test_garmin_multiuser.py`).
+
+## Konwersja HEIC — zdjęcia z iPhone'ów (WYMAGANIA.md 5.1) (2/10)
+
+Dziś `app/services/meal_vision.py` zna tylko jpg/jpeg/png/webp/gif, a Pillow
+bez wtyczki nie otworzy HEIC — zdjęcie z iPhone'a wywala szacowanie.
+
+1. **Zależność.** `pillow-heif>=0.16` w `pyproject.toml` (+ instalacja
+   w `.venv`; deploy instaluje z pyproject automatycznie).
+2. **Rejestracja.** W `app/services/meal_queue.py` po imporcie PIL:
+   `from pillow_heif import register_heif_opener; register_heif_opener()` —
+   od tej pory `Image.open` czyta HEIC/HEIF, a istniejące
+   `downscale_photo()` konwertuje je do JPEG bez dalszych zmian.
+3. **Ujednolicenie wejścia.** W `app/main.py:estimate_meal_photo` przepuszczaj
+   każde zdjęcie przez `meal_queue.downscale_photo(data)` **przed**
+   `meal_vision.estimate_from_photo(..., ext="jpg", ...)` — dziś pełny
+   oryginał leci do LLM tylko przy skonfigurowanym kluczu, a downscale
+   robi wyłącznie kolejka; po zmianie format i rozmiar są zawsze
+   znormalizowane (mniejsze tokeny, jeden format). `ValueError` z Pillow
+   (nie-obraz) → istniejący HTTPException 422.
+4. **UI.** W `app/templates/mobile.html` sprawdź `accept` inputa zdjęcia —
+   ma zawierać `image/*` (iPhone poda wtedy HEIC bez konwersji po swojej
+   stronie); downscale w przeglądarce (canvas) HEIC nie obsłuży w każdej
+   przeglądarce — fallback: wyślij oryginał, serwer skonwertuje.
+5. **Testy.** W `tests/test_meal_vision.py` (albo nowy plik) wygeneruj mały
+   HEIC przez `pillow_heif` w teście i sprawdź, że `downscale_photo` zwraca
+   poprawny JPEG ≤1280 px.
+
 ## Integracja z innym zrodlami w zakresie spalanych kcal (??/10)
 
 Apple Watch, Fitbit, Whoop, Oura, Health Connect
