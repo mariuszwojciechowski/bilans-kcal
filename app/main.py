@@ -893,7 +893,8 @@ class SavedMealIn(BaseModel):
 class ActivityIn(BaseModel):
     type: str  # running, cycling, walking, swimming, strength_training
     intensity: str  # lekka, umiarkowana, intensywna
-    duration_min: int
+    duration_min: int  # zostaje dla kompatybilności — duration_s ma pierwszeństwo, gdy podane
+    duration_s: int | None = None
     distance_km: float | None = None
     day: date | None = None
 
@@ -993,6 +994,7 @@ def add_manual_activity(data: ActivityIn, db: Session = Depends(db_session),
     from .services.energy import manual_activity_kcal
 
     day = data.day or date.today()
+    duration_s = data.duration_s if data.duration_s is not None else data.duration_min * 60
     weights = [
         (w.date, w.weight_kg)
         for w in db.scalars(select(WeightLog).where(WeightLog.user_id == user.id)).all()
@@ -1002,7 +1004,7 @@ def add_manual_activity(data: ActivityIn, db: Session = Depends(db_session),
         raise HTTPException(409, "Brak pomiarów wagi w bazie")
 
     kcal, explanation = manual_activity_kcal(
-        data.type, data.intensity, data.duration_min * 60,
+        data.type, data.intensity, duration_s,
         data.distance_km * 1000 if data.distance_km else None, weight_kg
     )
 
@@ -1010,7 +1012,7 @@ def add_manual_activity(data: ActivityIn, db: Session = Depends(db_session),
         user_id=user.id,
         date=day,
         type=data.type,
-        duration_s=data.duration_min * 60,
+        duration_s=duration_s,
         distance_m=data.distance_km * 1000 if data.distance_km else None,
         garmin_id="manual-" + uuid.uuid4().hex,
         kcal_garmin=round(kcal),

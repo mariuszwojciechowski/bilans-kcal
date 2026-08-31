@@ -86,6 +86,22 @@ def test_swimming_uses_met_even_with_distance(clients):
     assert resp.json()["kcal"] == 750          # MET 10.0 × 75 kg × 1 h
 
 
+def test_duration_s_takes_precedence_over_duration_min(clients):
+    """mm:ss w UI parsuje się do sekund — duration_s musi wygrywać z duration_min,
+    które frontend wysyła tylko dla kompatybilności ze starszymi klientami."""
+    alice, _, _ = clients
+    from app.services.energy import manual_activity_kcal
+    expected_kcal, _ = manual_activity_kcal("cycling", "umiarkowana", 1798, None, WEIGHT_KG)
+
+    resp = alice.post("/api/activities", json={
+        "type": "cycling", "intensity": "umiarkowana",
+        "duration_min": 999,       # celowo błędne — duration_s ma pierwszeństwo
+        "duration_s": 1798,        # 29.97 min
+    })
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["kcal"] == round(expected_kcal)
+
+
 def test_steps_default_when_no_entry(clients):
     alice, _, _ = clients
     today = date.today().isoformat()

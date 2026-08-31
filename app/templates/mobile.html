@@ -133,9 +133,8 @@
       <input type="date" id="t-date" onchange="renderToday()" style="flex:1;margin:0">
       <button class="ghost" style="flex:none;padding:8px 14px;margin:0;width:auto" onclick="changeDay(1)">▶</button>
     </div>
-    <div class="row2">
-      <span style="flex:1"><label>&nbsp;</label>
-        <button class="ghost" style="margin:0" onclick="show('activities')">Aktywności/Kroki</button></span>
+    <div class="row2" style="align-items:flex-end">
+      <button class="ghost" style="flex:1;margin:0" onclick="show('activities')">Aktywności/Kroki</button>
       <span style="flex:1"><label>pomiar ciężaru [kg]</label>
         <input type="number" id="t-newweight" step="0.1" placeholder="—" onchange="saveWeighIn()"></span>
     </div>
@@ -227,6 +226,7 @@
       <div>
         <label>Liczba kroków w wybranym dniu</label>
         <input type="number" id="a-steps" step="100" placeholder="5000 (default)">
+        <p class="muted" id="a-steps-note" style="font-size:11px;margin:4px 0 0;display:none">Brak zapisanych kroków — pokazuję wartość domyślną (5000).</p>
         <p class="muted" style="font-size:11px;margin:4px 0 0">Synchronizacja z Garminem nadpisze tę wartość.</p>
       </div>
       <button class="primary sm" onclick="saveActivitySteps()" style="width:auto;margin-top:4px">Zapisz kroki</button>
@@ -250,32 +250,32 @@
         <label>Rodzaj</label>
         <select id="a-type">
           <option value="">— wybierz —</option>
-          <option value="running">Bieganie</option>
+          <option value="running">Bieg</option>
           <option value="cycling">Rower</option>
-          <option value="walking">Marsz/spacer</option>
+          <option value="walking">Marsz (z kijkami)</option>
           <option value="swimming">Pływanie</option>
           <option value="strength_training">Siłownia</option>
         </select>
       </div>
       <div>
-        <label>Czas [minuty]</label>
-        <input type="number" id="a-duration-min" min="1" placeholder="30">
+        <label>Czas [mm:ss albo minuty]</label>
+        <input type="text" inputmode="numeric" id="a-duration-min" placeholder="29:58 albo 30">
       </div>
       <div id="a-distance-div">
         <label>Dystans [km] (opcjonalnie)</label>
-        <input type="number" id="a-distance-km" step="0.1" placeholder="5">
+        <input type="text" inputmode="decimal" id="a-distance-km" placeholder="5 albo 5,3">
       </div>
       <div>
         <label style="margin-bottom:6px">Intensywność</label>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
           <label style="margin:0;border:1px solid var(--stone);padding:8px;border-radius:6px;text-align:center;cursor:pointer">
-            <input type="radio" name="a-intensity" value="lekka"> <span id="a-intensity-label-lekka">Lekka</span>
+            <input type="radio" name="a-intensity" value="lekka"> <span id="a-intensity-label-lekka">Lekka · 1–3/10</span>
           </label>
           <label style="margin:0;border:1px solid var(--stone);padding:8px;border-radius:6px;text-align:center;cursor:pointer">
-            <input type="radio" name="a-intensity" value="umiarkowana" checked> <span id="a-intensity-label-umiarkowana">Umiarkowana</span>
+            <input type="radio" name="a-intensity" value="umiarkowana" checked> <span id="a-intensity-label-umiarkowana">Umiarkowana · 4–7/10</span>
           </label>
           <label style="margin:0;border:1px solid var(--stone);padding:8px;border-radius:6px;text-align:center;cursor:pointer">
-            <input type="radio" name="a-intensity" value="intensywna"> <span id="a-intensity-label-intensywna">Intensywna</span>
+            <input type="radio" name="a-intensity" value="intensywna"> <span id="a-intensity-label-intensywna">Intensywna · 8–10/10</span>
           </label>
         </div>
       </div>
@@ -452,10 +452,11 @@ async function renderToday() {
       rep.to_goal_kg === null ? "—" : rep.to_goal_kg + " kg";
     document.getElementById("quip").textContent = rep.quip || "";
     document.getElementById("a-steps").value = rep.steps ?? "";
+    document.getElementById("a-steps-note").style.display = rep.steps_default ? "" : "none";
     renderMacros(rep.macros);
     renderMeals(rep.meals, rep.pending_meals || []);
-    renderTdee(rep);
-    renderActivityBreakdown(rep);
+    renderEnergyBreakdown(rep, "tdee-breakdown");
+    renderEnergyBreakdown(rep, "a-tdee-breakdown");
     loadActivityList(day);
   } catch (e) {
     document.getElementById("quip").textContent =
@@ -478,24 +479,14 @@ function changeDay(delta) {
   renderToday();
 }
 
-function renderTdee(rep) {
-  const el = document.getElementById("tdee-breakdown");
-  if (!el) return;
-  const t = rep.tdee_model;
+function renderEnergyBreakdown(rep, elId) {
+  const el = document.getElementById(elId);
+  if (!el || !rep.out_breakdown) return;
+  const b = rep.out_breakdown;
   const src = {garmin: "Garmin", mixed: "Garmin (dzień w toku)", model: "model szacunkowy"}[rep.out_source] || "model szacunkowy";
-  let html = `<div style="font-size:12px;color:var(--stone);margin-top:8px;line-height:1.8">`;
+  let html = `<div style="font-size:12px;color:var(--stone);line-height:1.8">`;
   html += `Źródło: <b style="color:var(--ink)">${src}</b><br>`;
-  html += `BMR <b>${t.bmr}</b> + kroki <b>${t.neat}</b>`
-        + ` + aktywności <b>${t.activities}</b> + TEF <b>${t.tef}</b>`
-        + ` = <b style="color:var(--ink)">${t.total} kcal</b>`;
-  const acts = rep.activities || [];
-  if (acts.length) {
-    html += `<br>` + acts.map(a => {
-      const min = a.duration_s ? Math.round(a.duration_s / 60) + " min" : "";
-      const kcal = a.kcal_garmin ? `, ${a.kcal_garmin} kcal` : "";
-      return `${esc(a.type)}${min ? " " + min : ""}${kcal}`;
-    }).join(" · ");
-  }
+  html += `BMR <b>${b.bmr}</b> + kroki <b>${b.steps_kcal} kcal</b> + aktywności <b>${b.activities_kcal}</b> + TEF <b>${b.tef}</b> = <b style="color:var(--ink)">${b.total} kcal</b>`;
   html += `</div>`;
   el.innerHTML = html;
 }
@@ -752,31 +743,6 @@ async function saveDraft() {
   renderToday();
 }
 
-async function addManualActivity() {
-  const activity = document.getElementById("a-activity").value;
-  const intensity = document.getElementById("a-intensity").value;
-  const duration = +document.getElementById("a-duration").value;
-  const msg = document.getElementById("a-msg");
-
-  if (!activity || !intensity || !duration) {
-    msg.textContent = "⚠ Wypełnij wszystkie pola";
-    return;
-  }
-
-  try {
-    const res = await apiJson("/api/activity", {activity, intensity, duration_minutes: duration});
-    msg.textContent = `✓ Zapisano: ${res.kcal} kcal`;
-    ["a-activity", "a-intensity", "a-duration"].forEach(id =>
-      document.getElementById(id).value = "");
-    setTimeout(() => {
-      msg.textContent = "";
-      renderToday();
-    }, 1500);
-  } catch(e) {
-    msg.textContent = `✗ ${e.message}`;
-  }
-}
-
 /* ── TRENDY ── */
 let _trendDays = 0;
 
@@ -910,15 +876,6 @@ async function saveLlmKey() {
 }
 
 /* ── AKTYWNOŚCI ── */
-function renderActivityBreakdown(rep) {
-  const el = document.getElementById("a-tdee-breakdown");
-  if (!el || !rep.out_breakdown) return;
-  const b = rep.out_breakdown;
-  let html = `<div style="font-size:12px;color:var(--stone);line-height:1.8">`;
-  html += `BMR <b>${b.bmr}</b> + kroki <b>${b.steps_kcal} kcal</b> (${b.steps_count} kroków${rep.steps_default ? ", domyślne" : ""}) + aktywności <b>${b.activities_kcal}</b> + TEF <b>${b.tef}</b> = <b style="color:var(--ink)">${b.total} kcal</b>`;
-  html += `</div>`;
-  el.innerHTML = html;
-}
 
 async function saveActivitySteps() {
   const val = +document.getElementById("a-steps").value;
@@ -935,12 +892,36 @@ async function saveActivitySteps() {
   }
 }
 
-const INTENSITY_LABELS_DEFAULT = {lekka: "Lekka", umiarkowana: "Umiarkowana", intensywna: "Intensywna"};
+const INTENSITY_LABELS_DEFAULT = {
+  lekka: "Lekka · 1–3/10", umiarkowana: "Umiarkowana · 4–7/10", intensywna: "Intensywna · 8–10/10",
+};
 const INTENSITY_LABELS_STRENGTH = {
   lekka: "Ciężko, długie przerwy (maxy)",
   umiarkowana: "Klasycznie, umiarkowane przerwy",
   intensywna: "Obwodowo, krótkie przerwy",
 };
+
+function parseDurationToSeconds(str) {
+  const parts = String(str).trim().split(":");
+  if (!parts.length || parts.some(p => p === "" || isNaN(+p))) return null;
+  const nums = parts.map(Number);
+  if (nums.length === 1) return Math.round(nums[0] * 60);              // "33" → minuty
+  if (nums.length === 2) return nums[0] * 60 + nums[1];                // "29:58" → mm:ss
+  if (nums.length === 3) return nums[0] * 3600 + nums[1] * 60 + nums[2]; // "1:05:00" → h:mm:ss
+  return null;
+}
+
+function formatSecondsAsMinSec(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60);
+  const s = Math.round(totalSeconds % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+document.getElementById("a-duration-min").addEventListener("blur", function() {
+  if (!this.value.trim()) return;
+  const secs = parseDurationToSeconds(this.value);
+  if (secs !== null && secs > 0) this.value = formatSecondsAsMinSec(secs);
+});
 
 document.getElementById("a-type").addEventListener("change", function() {
   const hideDistance = this.value === "strength_training";
@@ -953,12 +934,13 @@ document.getElementById("a-type").addEventListener("change", function() {
 
 async function addActivity() {
   const type = document.getElementById("a-type").value;
-  const duration = +document.getElementById("a-duration-min").value;
-  const distance = +document.getElementById("a-distance-km").value || null;
+  const durationSec = parseDurationToSeconds(document.getElementById("a-duration-min").value);
+  const distanceRaw = document.getElementById("a-distance-km").value.trim().replace(",", ".");
+  const distance = distanceRaw ? +distanceRaw : null;
   const intensity = document.querySelector("input[name='a-intensity']:checked").value;
   const msg = document.getElementById("a-msg");
 
-  if (!type || !duration || !intensity) {
+  if (!type || !durationSec || !intensity || (distanceRaw && isNaN(distance))) {
     msg.textContent = "⚠ Wypełnij wymagane pola";
     return;
   }
@@ -966,7 +948,8 @@ async function addActivity() {
   const day = document.getElementById("t-date").value || todayIso();
   try {
     const res = await apiJson("/api/activities", {
-      type, intensity, duration_min: duration, distance_km: distance, day
+      type, intensity, duration_min: Math.round(durationSec / 60), duration_s: durationSec,
+      distance_km: distance, day
     });
     msg.textContent = `✓ ${res.explanation}`;
     document.getElementById("a-type").value = "";
@@ -981,6 +964,11 @@ async function addActivity() {
     msg.textContent = `✗ ${e.message}`;
   }
 }
+
+const TYPE_LABELS = {
+  running: "bieg", walking: "marsz (z kijkami)", swimming: "pływanie",
+  cycling: "rower", strength_training: "siłownia",
+};
 
 function showLoadingInActivityList() {
   document.getElementById("a-list").innerHTML = '<p class="muted">Ładowanie…</p>';
@@ -1002,10 +990,10 @@ async function loadActivityList(day) {
         const mins = Math.round(a.duration_s / 60);
         html += `<div class="entry">
           <div style="flex:1">
-            <div><b>${a.type}</b> ${mins} min${dist}${steps}</div>
+            <div><b>${TYPE_LABELS[a.type] || esc(a.type)}</b> ${mins} min${dist}${steps}</div>
             <div class="muted">${a.kcal_garmin} kcal</div>
           </div>
-          <button class="x" onclick="deleteActivity(${a.id}, () => loadActivityList('${day}'))">✕</button>
+          <button class="x" onclick="deleteActivity(${a.id}, renderToday)">✕</button>
         </div>`;
       });
     }
