@@ -13,6 +13,60 @@ Przy każdym punkcie **szacowanie złożoności w skali 1-10**:
 
 ---
 
+## PILNE: naprawa dodania aktywności (3/10) — produkcja zwraca 500
+
+Implementacja zakładki Aktywności/Kroki (commity `985b41a`…`216b8ce`) położyła
+produkcję i zostawiła śmieci. Diagnoza wykonana 2026-08-31 na prod
+(fit.krasnal.cc, VM 34.56.100.135) — przyczyny są PEWNE, nie szukaj innych.
+Kroki dla implementującego LLM, w tej kolejności:
+
+1. **Usuń `kcal_manual` z modelu `Activity`** (`app/models.py:74`) — pole
+   dodane bez migracji w `app/db.py:_migrate()` i przez nic nieużywane
+   (kcal wpisów ręcznych trafiają do `kcal_garmin`). Na prodzie tabela
+   `activity` nie ma tej kolumny, więc KAŻDY SELECT/INSERT ORM na `Activity`
+   rzuca `sqlite3.OperationalError: no such column: activity.kcal_manual` —
+   to jest przyczyna obu 500 (`/api/day/{day}` → „nie widać dnia"
+   i `/api/sync`). Lokalne testy tego nie łapią, bo `create_all` buduje
+   świeże tabele z kompletem kolumn. Usunięcie pola wystarczy — NIE dodawaj
+   migracji na tę kolumnę.
+2. **Przywróć skasowane testy API** — commit `216b8ce` usunął
+   `tests/test_activities_api.py` (267 linii), żeby przepchnąć czerwony
+   deploy: `git show 1aad080:tests/test_activities_api.py > tests/test_activities_api.py`,
+   uruchom, i **napraw przyczyny czerwoności zamiast kasować testy** —
+   czerwony pytest to bramka deployu, kasowanie testów = wysłanie regresji
+   testerom (dokładnie to się stało).
+3. **Dodaj test-strażnik migracji** (do `tests/test_activities_api.py` albo
+   osobno): zbuduj bazę ze STAREGO schematu `activity` (ręczny
+   `CREATE TABLE` bez `source`), odpal `init_db()`/`_migrate()`, potem
+   ORM-owy `select(Activity)` i `db.add(Activity(...))` — ten test łapie
+   całą klasę „kolumna w modelu bez migracji", która właśnie położyła prod.
+4. **Usuń duplikat formularza aktywności spod „Dodaj"** — w
+   `app/templates/mobile.html` wewnątrz `page-add` jest sekcja
+   `<section class="card"><h2>Aktywność fizyczna</h2>…` (pozostałość
+   pierwszego podejścia `985b41a`); właściwy formularz żyje w
+   `page-activities`. Usuń też martwy serwis `app/services/activity.py`
+   (równoległa, niespójna tabela MET z polskimi kluczami) i nieużywany
+   import `activity as activity_service` w `app/main.py`.
+5. **Przycisk „Aktywności/Kroki →" na Dziś** (`mobile.html`, ~linia 133):
+   usuń strzałkę „ →" z etykiety — ma być samo „Aktywności/Kroki".
+6. **Martwy `saveDaySteps()`** (`mobile.html`, ~linia 603): czyta usunięte
+   pole `#t-steps` → `TypeError` przy wywołaniu. Pole kroków to teraz
+   `#a-steps` w zakładce Aktywności (zapis obsługuje osobna funkcja,
+   ~linia 957). Usuń `saveDaySteps` albo scal w jedną funkcję podpiętą
+   do `#a-steps` — sprawdź `onchange`/`onclick`, żeby nie został wiszący
+   handler.
+7. **Bug `steps_default` w `day_report`** (`app/main.py`):
+   `(summary and summary.steps is not None) == False` daje `False`, gdy
+   `summary is None` (bo `None == False` → `False`), a powinno być `True`
+   (brak wpisu = pokazujemy domyślne 5000). Zamień na
+   `not (summary and summary.steps is not None)`.
+8. **Weryfikacja:** pełny `pytest` zielony (razem z przywróconymi testami),
+   commit + push (deploy automatyczny), a po deployu potwierdź na prodzie,
+   że `/api/day/{dziś}` i `/api/sync` odpowiadają bez 500.
+
+Higiena tokenów jak w planie niżej: `main.py` i `mobile.html` czytaj
+fragmentami po numerach linii z tego planu, pełny pytest raz na krok.
+
 ## GitHub Pages — czerwony pipeline po skasowaniu docs/ (1/10)
 
 Po usunięciu katalogu `docs/` (commit `091844d`) workflow *pages build and
