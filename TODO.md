@@ -13,6 +13,39 @@ Przy każdym punkcie **szacowanie złożoności w skali 1-10**:
 
 ---
 
+## Przemeblowanie: równanie do Bilansu, karta GARMIN w zakładce, dwie kolumny (2/10)
+
+Feedback właściciela 2026-09-01, cztery punkty. Wszystko w
+`app/templates/mobile.html`. Po pushu stop — deploy i prod robi właściciel.
+
+1. **Dziś: równanie wynosi się do Bilansu.** `#tdee-breakdown` (linia ~150,
+   dziś w karcie `#sync-card`) przenieś do karty Bilans — bezpośrednio POD
+   wiersz z przyciskiem „Aktywności/Kroki" i polem ciężaru (linia ~136-140).
+   Render bez zmian (`renderEnergyBreakdown(rep, "tdee-breakdown")` —
+   id zostaje, zmienia się tylko miejsce w markupie).
+2. **Karta GARMIN przenosi się na zakładkę Aktywności.** Sekcja „Rozbicie
+   wydatku energetycznego" (linia ~236-238) staje się kartą „Garmin" —
+   dokładnie taką, jaka była na Dziś: nagłówek, przycisk „Synchronizuj
+   z Garminem" (`doSync()`), `<p id="sync-status">`, a pod nimi równanie
+   `#a-tdee-breakdown`. Karta `#sync-card` znika z Dziś w całości.
+   Uwaga: `doSync()` pisze do `#sync-status` — element jedzie razem
+   z przyciskiem; id `tdee-breakdown` i `a-tdee-breakdown` zostają, więc
+   `renderEnergyBreakdown` działa bez zmian.
+3. **Desktop: zakładka Aktywności w dwóch kolumnach.** W `@media
+   (min-width: 800px)`: `main.act #page-activities { grid-template-columns:
+   1fr 1fr; }` + przypisanie kolumn: sekcja „Dodaj aktywność" do PRAWEJ
+   (`grid-column: 2`), reszta (Kroki, Garmin z rozbiciem, „Aktywności
+   dzisiaj") do LEWEJ (`grid-column: 1`). Sekcje lewej kolumny mają się
+   układać jedna pod drugą (np. `grid-auto-flow: dense` albo dwa wrappery
+   kolumnowe — wybierz co prostsze; uważaj, że `.page` na desktopie już
+   jest gridem, linia ~88). Mobile bez zmian — jedna kolumna.
+4. **Ostrzeżenie do prawej kolumny.** `#a-garmin-warning` (linia ~287)
+   ląduje w prawej kolumnie, pod formularzem „Dodaj aktywność".
+5. **Weryfikacja:** pytest zielony + przeglądarka (375 px i desktop):
+   równanie widoczne w Bilansie na Dziś, karta Garmin z przyciskiem
+   i równaniem w zakładce, dwie kolumny tylko na desktopie, ostrzeżenie
+   po prawej. Deployu i produkcji nie ruszaj.
+
 ## Przycisk „Aktywności/Kroki" — wyrównanie, podejście trzecie (1/10)
 
 Dwa poprzednie fixy (pusty label, potem `align-items:flex-end`) nie
