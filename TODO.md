@@ -13,7 +13,70 @@ Przy każdym punkcie **szacowanie złożoności w skali 1-10**:
 
 ---
 
-## ~~Rozbicie wydatku: pomiar Garmina jako suma, kroki jako reszta~~ ✓ zrobione (SHA po commicie), pytest zielony (94 passed) — deploy nie zweryfikowany, zostawione właścicielowi
+## Szlif zakładki Aktywności — runda 2 po testach właściciela (3/10)
+
+Feedback z 2026-09-01. Backend rozbicia (commit `db4f6cf`: `out_breakdown`,
+kroki jako reszta, `manual_kcal` w bilansie) jest DOBRY — nie ruszaj go poza
+punktem 5. Wszystko poniżej to `app/templates/mobile.html`, chyba że napisano
+inaczej. Higiena tokenów: czytaj fragmentami po wskazanych liniach, pełny
+pytest raz na koniec. Po pushu ZATRZYMAJ SIĘ — deploy i weryfikację na
+produkcji wykonuje właściciel osobiście.
+
+1. **Widok Dziś dalej pokazuje stare rozbicie z modelu** (`renderTdee`,
+   linia ~481, cel `#tdee-breakdown` linia ~151): równanie liczone z
+   `rep.tdee_model` plus inline lista aktywności z kcal Garmina
+   („cycling 50 min, 206 kcal · swimming…"). Ma pokazywać TO SAMO co
+   zakładka: wydziel wspólną funkcję renderującą równanie z
+   `rep.out_breakdown` i użyj jej dla `#tdee-breakdown` i
+   `#a-tdee-breakdown`; inline'ową listę aktywności z Dziś usuń (lista
+   żyje w zakładce Aktywności). Czysty model zostaje w API
+   (`tdee_model`) — z UI znika.
+2. **Usunięcie ręcznej aktywności nie odświeża obliczeń**: callback
+   `deleteActivity` (linia ~1008) woła tylko `loadActivityList(day)` —
+   lista znika, ale równanie, SPALONE i bilans zostają stare. Zamień
+   callback na `renderToday()` (odświeża dzień, rozbicie i listę razem).
+3. **Równanie bez liczby kroków**: w `renderActivityBreakdown`
+   (linia ~917) usuń ` (${b.steps_count} kroków…)` — składnik ma brzmieć
+   „kroki <b>319</b> kcal"; liczba kroków jest już w polu Kroki na górze
+   zakładki (dopisek „domyślne" przenieś tam, np. pod input `#a-steps`).
+4. **Polskie nazwy ręcznych aktywności**: lista wpisów (`loadActivityList`,
+   linia ~996+) drukuje surowe `a.type` („swimming", „walking"). Dodaj
+   mapę `TYPE_LABELS = {running: "bieg", walking: "marsz (z kijkami)",
+   swimming: "pływanie", cycling: "rower", strength_training: "siłownia"}`
+   i używaj jej dla wpisów ręcznych w liście ORAZ w `<option>` selecta
+   `#a-type` (wartości `value` zostają angielskie — backend i Garmin nimi
+   mówią). Wpisy z Garmina drukuj po staremu (surowy typeKey, np.
+   cycling — one mogą być „obce").
+5. **Czas trwania jako [h:]mm[:ss]**: zamień `#a-duration-min`
+   (linia ~262, type=number) na input tekstowy z parserem: „29:58" →
+   29 min 58 s, „1:05:00" → 65 min, samo „33" → potraktuj jako minuty
+   i na blur znormalizuj do „33:00". Backend: do `ActivityIn`
+   (`app/main.py`) dodaj opcjonalne `duration_s: int | None` — gdy podane,
+   ma pierwszeństwo nad `duration_min` (które zostaje dla kompatybilności);
+   endpoint już liczy wszystko z sekund. Test: POST z `duration_s=1798`
+   daje te same kcal co 29.97 min.
+6. **Dystans z przecinkiem**: `#a-distance-km` (linia ~266) na input
+   tekstowy `inputmode="decimal"`, przed parsowaniem `value.replace(",",
+   ".")` — „5,3" i „5.3" równoważne.
+7. **Skala 1–10 w intensywności**: standardowe etykiety radio
+   (`INTENSITY_LABELS_DEFAULT`, linia ~938) rozszerz o skalę:
+   „Lekka · 1–3/10", „Umiarkowana · 4–7/10", „Intensywna · 8–10/10".
+   Etykiety siłowni (`INTENSITY_LABELS_STRENGTH`) zostają opisowe, bez
+   skali.
+8. **Przycisk „Aktywności/Kroki" — wyrównanie do DOLNEJ krawędzi inputa
+   ciężaru** (linia ~137): obecny hack z pustym `<label>&nbsp;</label>`
+   nie wyrównuje, bo button i input mają różne wysokości. Daj na tym
+   `.row2` `align-items:flex-end` (albo `align-self:flex-end` na spanie
+   przycisku), usuń pusty label i zrównaj wysokość przycisku z inputem
+   (wspólna reguła height/padding). Sprawdź wizualnie mobile i desktop.
+9. **Martwy kod**: linie ~758 i ~769 odwołują się do `#a-duration`
+   i `#a-activity` — pól, których nie ma w markupie (pozostałość
+   pierwszego formularza). Zweryfikuj, czy funkcja wokół nich jest w ogóle
+   osiągalna, i usuń ją wraz z odwołaniami.
+10. **Weryfikacja**: pełny `pytest` zielony → commit + push. NIE weryfikuj
+    produkcji i NIE sprawdzaj deployu — właściciel robi to sam.
+
+## ~~Rozbicie wydatku: pomiar Garmina jako suma, kroki jako reszta~~ ✓ zrobione (commit db4f6cf), pytest zielony (94 passed) — deploy nie zweryfikowany, zostawione właścicielowi
 
 Decyzja właściciela 2026-08-31 (wiążąca). Dziś równanie w zakładce Aktywności
 pokazuje CZYSTY model (aktywności z MET ~399), a lista pod nim pomiar Garmina
