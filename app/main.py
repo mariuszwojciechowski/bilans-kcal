@@ -17,7 +17,7 @@ from . import auth
 from .config import (DEBUG, INVITE_CODE, MAX_PHOTO_BYTES, PHOTOS_DIR, SECRET_KEY,
                      ensure_dirs)
 from .db import db_session, get_session, init_db
-from .models import Activity, DailySummary, Meal, PendingMeal, User, UserProfile, WeightLog
+from .models import Activity, DailySummary, Meal, PendingMeal, SavedMeal, User, UserProfile, WeightLog
 from .providers import garmin as garmin_provider
 from .providers.garmin import GarminNotLoggedIn, GarminProvider
 from .services import meal_queue, meal_vision, quips, transfer
@@ -433,7 +433,11 @@ async def estimate_meal_photo(
     data = await photo.read()
     if len(data) > MAX_PHOTO_BYTES:
         raise HTTPException(413, "Zdjęcie za duże (limit 15 MB)")
-    ext = (photo.filename or "jpg").rsplit(".", 1)[-1]
+    try:
+        data = meal_queue.downscale_photo(data)
+    except Exception as exc:
+        raise HTTPException(422, f"Nie można odczytać zdjęcia: {exc}")
+    ext = "jpg"
     target_day = day or date.today()
     if not meal_vision.llm_configured(keys.gemini, keys.anthropic):
         return _queue_meal(db, user.id, target_day, "brak klucza LLM",
@@ -834,6 +838,20 @@ class LlmKeysIn(BaseModel):
     anthropic_api_key: str = ""
 
 
+class SavedMealIn(BaseModel):
+    name: str
+    kcal: float
+    kcal_min: float | None = None
+    kcal_max: float | None = None
+    protein_g: float = 0
+    fat_g: float = 0
+    carbs_g: float = 0
+    fiber_g: float = 0
+    sugars_g: float = 0
+    items: list | None = None
+    assumptions: list | None = None
+
+
 @app.post("/api/settings/llm")
 def api_save_llm(data: LlmKeysIn, background: BackgroundTasks,
                  db: Session = Depends(db_session),
@@ -844,6 +862,70 @@ def api_save_llm(data: LlmKeysIn, background: BackgroundTasks,
         settings_service.set_setting(db, user.id, "anthropic_api_key", data.anthropic_api_key.strip())
     background.add_task(meal_queue.process_queue, user.id)
     return {"ok": True}
+
+
+# ── Moje posiłki (zapisane szablony) ─────────────────────────────────────
+
+@app.get("/api/saved-meals")
+def get_saved_meals(db: Session = Depends(db_session),
+                    user: User = Depends(auth.current_user)):
+    meals = db.scalars(
+        select(SavedMeal).where(SavedMeal.user_id == user.id)
+        .order_by(SavedMeal.last_used_at.desc())
+    ).all()
+    return [
+        {"id": m.id, "name": m.name, "kcal": m.kcal,
+         "kcal_min": m.kcal_min, "kcal_max": m.kcal_max,
+         "protein_g": m.protein_g, "fat_g": m.fat_g, "carbs_g": m.carbs_g,
+         "fiber_g": m.fiber_g, "sugars_g": m.sugars_g}
+        for m in meals
+    ]
+
+
+@app.post("/api/saved-meals", status_code=201)
+def create_saved_meal(data: SavedMealIn, db: Session = Depends(db_session),
+                      user: User = Depends(auth.current_user)):
+    sm = SavedMeal(
+        user_id=user.id, name=data.name, kcal=round(data.kcal),
+        kcal_min=round(data.kcal_min) if data.kcal_min else None,
+        kcal_max=round(data.kcal_max) if data.kcal_max else None,
+        protein_g=data.protein_g, fat_g=data.fat_g, carbs_g=data.carbs_g,
+        fiber_g=data.fiber_g, sugars_g=data.sugars_g,
+        items_json=json.dumps(data.items, ensure_ascii=False) if data.items else None,
+        assumptions_json=json.dumps(data.assumptions, ensure_ascii=False) if data.assumptions else None,
+    )
+    db.add(sm)
+    db.commit()
+    return {"id": sm.id}
+
+
+@app.delete("/api/saved-meals/{meal_id}")
+def delete_saved_meal(meal_id: int, db: Session = Depends(db_session),
+                      user: User = Depends(auth.current_user)):
+    sm = db.get(SavedMeal, meal_id)
+    if sm is None or sm.user_id != user.id:
+        raise HTTPException(404)
+    db.delete(sm)
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/api/saved-meals/{meal_id}/use")
+def use_saved_meal(meal_id: int, db: Session = Depends(db_session),
+                   user: User = Depends(auth.current_user)):
+    sm = db.get(SavedMeal, meal_id)
+    if sm is None or sm.user_id != user.id:
+        raise HTTPException(404)
+    sm.last_used_at = datetime.utcnow()
+    db.commit()
+    return {
+        "description": sm.name,
+        "kcal": sm.kcal, "kcal_min": sm.kcal_min, "kcal_max": sm.kcal_max,
+        "protein_g": sm.protein_g, "fat_g": sm.fat_g, "carbs_g": sm.carbs_g,
+        "fiber_g": sm.fiber_g, "sugars_g": sm.sugars_g,
+        "items": json.loads(sm.items_json) if sm.items_json else [],
+        "assumptions": json.loads(sm.assumptions_json) if sm.assumptions_json else [],
+    }
 
 
 # ── Trendy API (JSON + SVG) — dla mobilnego SPA ───────────────────────────

@@ -12,6 +12,7 @@ import logging
 from datetime import date, datetime, time, timedelta
 
 from PIL import Image, ImageOps
+import pillow_heif as _heif; _heif.register_heif_opener()
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 

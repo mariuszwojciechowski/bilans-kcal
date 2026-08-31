@@ -100,6 +100,26 @@ class PendingMeal(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class SavedMeal(Base):
+    __tablename__ = "saved_meal"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), index=True)
+    name: Mapped[str] = mapped_column(String)
+    kcal: Mapped[int] = mapped_column(Integer)
+    kcal_min: Mapped[int | None] = mapped_column(Integer)
+    kcal_max: Mapped[int | None] = mapped_column(Integer)
+    protein_g: Mapped[float] = mapped_column(Float, default=0)
+    fat_g: Mapped[float] = mapped_column(Float, default=0)
+    carbs_g: Mapped[float] = mapped_column(Float, default=0)
+    fiber_g: Mapped[float] = mapped_column(Float, default=0)
+    sugars_g: Mapped[float] = mapped_column(Float, default=0)
+    items_json: Mapped[str | None] = mapped_column(Text)
+    assumptions_json: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_used_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Meal(Base):
     __tablename__ = "meal"
 
