@@ -130,7 +130,7 @@
       <button class="ghost" style="flex:none;padding:8px 14px;margin:0;width:auto" onclick="changeDay(1)">▶</button>
     </div>
     <div class="row2">
-      <button class="ghost" style="flex:1;margin:4px 0" onclick="show('activities')">Aktywności/Kroki →</button>
+      <button class="ghost" style="flex:1;margin:4px 0" onclick="show('activities')">Aktywności/Kroki</button>
       <span style="flex:1"><label>pomiar ciężaru [kg]</label>
         <input type="number" id="t-newweight" step="0.1" placeholder="—" onchange="saveWeighIn()"></span>
     </div>
@@ -171,37 +171,6 @@
   <section class="card" id="saved-meals-panel" style="display:none">
     <h2>Moje posiłki</h2>
     <div id="saved-meals-list"><p class="muted">Ładowanie…</p></div>
-  </section>
-  <section class="card">
-    <h2>Aktywność fizyczna</h2>
-    <div style="display:grid;gap:8px">
-      <div>
-        <label>Rodzaj aktywności</label>
-        <select id="a-activity">
-          <option value="">— wybierz —</option>
-          <option value="rower">Rower</option>
-          <option value="pływanie">Pływanie</option>
-          <option value="bieganie">Bieganie</option>
-          <option value="ćwiczenia siłowe">Ćwiczenia siłowe</option>
-          <option value="marsz szybki">Marsz szybki</option>
-        </select>
-      </div>
-      <div>
-        <label>Intensywność</label>
-        <select id="a-intensity">
-          <option value="">— wybierz —</option>
-          <option value="lekka">Lekka</option>
-          <option value="umiarkowana">Umiarkowana</option>
-          <option value="intensywna">Intensywna</option>
-        </select>
-      </div>
-      <div>
-        <label>Czas [minuty]</label>
-        <input type="number" id="a-duration" min="1" placeholder="30">
-      </div>
-      <button class="primary" onclick="addManualActivity()">Dodaj aktywność</button>
-      <div id="a-msg" class="muted" style="font-size:12px;margin-top:4px"></div>
-    </div>
   </section>
   <section class="card" id="draft" style="display:none">
     <h2 id="d-title">Szacunek — sprawdź i popraw</h2>
@@ -596,15 +565,6 @@ async function saveWeighIn() {
   if (v > 0) {
     await apiJson("/api/weight", {date: day, weight_kg: v});
     document.getElementById("t-newweight").value = "";
-    renderToday();
-  }
-}
-
-async function saveDaySteps() {
-  const v = +document.getElementById("t-steps").value;
-  const day = document.getElementById("t-date").value || todayIso();
-  if (v >= 0) {
-    await apiJson(`/api/day/${day}/steps`, {steps: v});
     renderToday();
   }
 }
