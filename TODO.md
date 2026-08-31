@@ -13,6 +13,66 @@ Przy każdym punkcie **szacowanie złożoności w skali 1-10**:
 
 ---
 
+## Rozbicie wydatku: pomiar Garmina jako suma, kroki jako reszta (4/10)
+
+Decyzja właściciela 2026-08-31 (wiążąca). Dziś równanie w zakładce Aktywności
+pokazuje CZYSTY model (aktywności z MET ~399), a lista pod nim pomiar Garmina
+(206) — dwie liczby dla tej samej aktywności. Nowa semantyka: **równanie ma
+sumować się do SPALONE (tej samej liczby co na Dziś), a „kroki" są RESZTĄ.**
+
+**Definicje (wiążące):**
+
+- `SPALONE (kcal_out)`: dzień zamknięty z Garminem → `total Garmina + Σ kcal
+  wpisów ręcznych` (zakładamy, że Garmin ręcznych nie widział); dzień w toku →
+  `max(total Garmina + ręczne, model TDEE)`; brak Garmina → model TDEE.
+  UWAGA: to zmiana bilansu (M5) — ręczne wpisy u garminowca dotąd NIE
+  wchodziły do SPALONE, teraz wchodzą.
+- Rozbicie: `BMR (model Mifflin) + kroki (RESZTA) + aktywności (pomiar) +
+  TEF (model) = SPALONE`, gdzie `aktywności = Σ kcal_garmin wpisów
+  garminowych + Σ kcal wpisów ręcznych`, a `kroki = max(SPALONE − BMR −
+  aktywności − TEF, 0)` (podłoga na zerze — krótko noszony zegarek / wczesna
+  pora może dać ujemną resztę). Własność: bez Garmina reszta == modelowy
+  NEAT, więc jeden wzór obsługuje wszystkie przypadki.
+- Liczba kroków przy „kroki": efektywna — wpisane/zsynchronizowane MINUS
+  szacowane kroki aktywności biegowych/marszowych z Garmina (jak dziś,
+  ~1400/km w `tdee_theoretical`), PLUS dla garminowca kroki ręcznych
+  biegów/marszów NIE są odejmowane (Garmin ich nie zliczył) — przeciwnie,
+  szacunek kroków wpisu ręcznego DODAJEMY do wyświetlanej liczby kroków.
+
+**Kroki dla implementującego LLM:**
+
+1. **`app/services/balance.py`** — `day_balance(...)` dostaje parametr
+   `manual_kcal: float = 0`; pomiar = `garmin_total + manual_kcal`;
+   dzień zamknięty → pomiar, w toku → `max(pomiar, model_tdee)`, brak
+   Garmina → model (jak dziś). Zaktualizuj docstring.
+2. **`app/main.py:day_report`** — podziel `activities` na garminowe
+   i ręczne (`a.source`); `manual_kcal = Σ kcal_garmin ręcznych`;
+   `activities_kcal = Σ kcal_garmin garminowych + manual_kcal`; wołaj
+   `day_balance(..., manual_kcal=manual_kcal)`. Nowe pole odpowiedzi
+   `out_breakdown = {bmr, steps_kcal, activities_kcal, tef, total}` wg
+   definicji wyżej (`steps_kcal` = reszta z podłogą 0, `total ==
+   round(bal.kcal_out)`). Model `tdee_model` zostaje bez zmian (prognoza
+   na Dziś). Do pola `steps` dodaj szacowane kroki RĘCZNYCH biegów/marszów
+   (dystans × 1400), a per wpis ręczny w `activities` dodaj
+   `est_steps` (bieg/marsz z dystansem) do adnotacji w UI.
+3. **`app/templates/mobile.html`** — `renderActivityBreakdown` przechodzi
+   na `out_breakdown` (równanie = SPALONE z Dziś); linia kroków:
+   „kroki X kcal (N kroków)" — jawnie jednostka. Lista dzieli się na
+   „Z Garmina" i „Wprowadzone ręcznie — zakładamy, że Garmin o nich nie
+   wie" (✕ do kasowania już jest); przy ręcznym biegu/marszu dopisek
+   „(~N kroków)". Ostrzeżenie dla garminowca zmienia treść: ręczne wpisy
+   SĄ doliczane do pomiaru — „jeśli zegarek zarejestrował ten trening,
+   skasuj wpis ręczny, inaczej policzy się podwójnie".
+4. **Testy** (`tests/test_activities_api.py`, wzorzec `clients` już jest):
+   dzień zamknięty z Garminem + wpis ręczny → `kcal_out == total + ręczne`
+   i `out_breakdown.total == kcal_out`; reszta kroków floor na 0 (total
+   Garmina mniejszy niż BMR+TEF); bez Garmina → `steps_kcal` == modelowy
+   NEAT po odjęciu kroków aktywności; `est_steps` obecne dla ręcznego
+   biegu z dystansem, nieobecne dla siłowni.
+5. **Weryfikacja:** pełny `pytest` zielony → commit + push → w Actions
+   „Deploy na GCP" = `success` (sprawdź, nie zakładaj) → na prodzie
+   równanie w Aktywnościach sumuje się do SPALONE z Dziś.
+
 ## ~~Poprawki zakładki Aktywności po testach na produkcji~~ ✓ zrobione (commit aa623ca), pytest zielony (90 passed)
 
 Feedback właściciela z 2026-08-31 po używaniu na telefonie (działa) i desktopie
