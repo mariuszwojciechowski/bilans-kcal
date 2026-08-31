@@ -13,6 +13,63 @@ Przy każdym punkcie **szacowanie złożoności w skali 1-10**:
 
 ---
 
+## Poprawki zakładki Aktywności po testach na produkcji (3/10)
+
+Feedback właściciela z 2026-08-31 po używaniu na telefonie (działa) i desktopie
+(nie działa). Kroki dla implementującego LLM — wszystko w
+`app/templates/mobile.html`, chyba że napisano inaczej; czytaj plik
+fragmentami po wskazanych liniach, pełny pytest raz na koniec.
+
+1. **Desktop: zakładka Aktywności w ogóle niedostępna.** Mechanika: przy
+   `min-width: 800px` dolny `<nav>` jest ukryty, `.page { display: grid
+   !important }` (linia ~88) pokazuje WSZYSTKIE strony naraz (Ustawienia
+   i Trendy chowane po id), a `show()` (linia ~418) przełącza klasę
+   `visible`, którą `!important` nadpisuje — stąd „klik nic nie robi".
+   Naprawa w konwencji desktopu:
+   - w `@media (min-width: 800px)` dodaj `#page-activities { display: none
+     !important; }` oraz reguły sterowane klasą na `<main>`:
+     `main.act #page-activities { display: grid !important; }`,
+     `main.act #page-today, main.act #page-add { display: none !important; }`;
+   - w `show(page)` dodaj `document.querySelector("main").classList
+     .toggle("act", page === "activities")` (a `goToday()`/inne wywołania
+     `show` naturalnie ją zdejmą);
+   - do `hdr-nav` (linia ~102) dodaj link `Aktywności` między „Dodaj"
+     a „Trendy": `onclick="show('activities');return false"`.
+   Efekt: na desktopie przycisk „Aktywności/Kroki" i link w headerze
+   przełączają widok, jak na telefonie.
+2. **Aktywności (też garminowe) widoczne pod rozbiciem wydatku.** W
+   `page-activities` (linia ~218) kolejność sekcji to: Kroki → Rozbicie
+   wydatku → Dodaj aktywność → Aktywności dzisiaj. Przenieś sekcję
+   „Aktywności dzisiaj" (`#a-list`, linia ~276) bezpośrednio POD kartę
+   „Rozbicie wydatku energetycznego" — składniki równania (kroki,
+   aktywności — w tym garminowy np. cycling) mają być widoczne razem,
+   nad formularzem.
+3. **Siłownia: etykiety intensywności opisujące charakter treningu.**
+   Radio (linia ~258) ma stałe „Lekka/Umiarkowana/Intensywna". Gdy
+   `#a-type == "strength_training"`, podmieniaj JS-em TEKSTY etykiet
+   (wartości `lekka/umiarkowana/intensywna` zostają — backend mapuje je
+   w `INTENSITY_MAP`): `lekka` → „Ciężko, długie przerwy (maxy)",
+   `umiarkowana` → „Klasycznie, umiarkowane przerwy", `intensywna` →
+   „Obwodowo, krótkie przerwy". Uwaga na odwróconą semantykę: maxy =
+   najniższy MET 3.5 (indeks 0), obwodowy = 6.0 (indeks 2) — mapowanie
+   w `energy.MANUAL_MET["strength_training"]` już jest poprawne, zmienia
+   się tylko UI. Przy zmianie typu na inny przywróć standardowe etykiety.
+4. **Nowa aktywność: pływanie.** Jak rower (MET z intensywności, dystans
+   informacyjny): w `app/services/energy.py` dodaj
+   `MANUAL_MET["swimming"] = [6.0, 8.0, 10.0]` i gałąź w
+   `manual_activity_kcal` (MET × masa × h); w select `#a-type` opcja
+   `<option value="swimming">Pływanie</option>` z polami czas + dystans +
+   intensywność. Test w `tests/test_activities_api.py` obok rowerowego
+   (MET 10 × 75 kg × 1 h = 750 dla intensywnego).
+5. **Przycisk „Aktywności/Kroki" za wysoki** (linia ~133): w `row2` obok
+   stoi `<span>` z labelem + inputem ciężaru, a przycisk rozciąga się na
+   całą wysokość wiersza. Wyrównaj go do wysokości inputa: np. owiń
+   przycisk w `<span style="flex:1"><label>&nbsp;</label><button …>` (pusty
+   label jak u sąsiada) albo daj `align-self:flex-end` i wysokość taką jak
+   input. Sprawdź w obu szerokościach (mobile + desktop).
+6. **Weryfikacja:** pełny `pytest` zielony → commit + push → w GitHub
+   Actions „Deploy na GCP" ma być `success` — sprawdź to, nie zakładaj.
+
 ## ~~PILNE: naprawa testów aktywności — deploy zablokowany, produkcja wciąż leży~~ ✓ zrobione — plik przepisany wg wzorca `test_saved_meals_api.py`, prawdziwy strażnik migracji (SHA po commicie), pełny pytest zielony (89 passed)
 
 Commit `1a3401d` naprawił kod (kroki 1, 4–7 sekcji niżej), ale jego deploy
