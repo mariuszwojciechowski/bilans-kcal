@@ -70,7 +70,7 @@ serwera pod URL-em typu `/trends/embedded?days=30`.
 
 ## ~~Ręczne dodawanie posiłku (bez szacowania)~~ ✓ zrobione (commit b30b1eb + 2485da5)
 
-## Ręczny wpis aktywności + zakładka Aktywności/Kroki (5/10)
+## ~~Ręczny wpis aktywności + zakładka Aktywności/Kroki~~ ✓ zrobione (commit 1aad080) (5/10)
 
 Dla testerów bez zegarka sportowego: nowa zakładka z formularzem aktywności,
 polem kroków i rozbiciem dzisiejszego wydatku. Decyzje produktowe podjęte
