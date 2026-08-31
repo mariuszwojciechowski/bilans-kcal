@@ -13,7 +13,7 @@ Przy każdym punkcie **szacowanie złożoności w skali 1-10**:
 
 ---
 
-## ~~Szlif zakładki Aktywności — runda 2 po testach właściciela~~ ✓ zrobione (SHA po commicie), pytest zielony (95 passed) — deploy nie zweryfikowany, zostawione właścicielowi
+## ~~Szlif zakładki Aktywności — runda 2 po testach właściciela~~ ✓ zrobione (commit 443cb0b), pytest zielony (95 passed) — deploy nie zweryfikowany, zostawione właścicielowi
 
 Feedback z 2026-09-01. Backend rozbicia (commit `db4f6cf`: `out_breakdown`,
 kroki jako reszta, `manual_kcal` w bilansie) jest DOBRY — nie ruszaj go poza
