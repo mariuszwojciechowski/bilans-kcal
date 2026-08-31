@@ -13,7 +13,7 @@ Przy każdym punkcie **szacowanie złożoności w skali 1-10**:
 
 ---
 
-## Ujednolicenie nawigacji desktop ↔ mobile (3/10)
+## ~~Ujednolicenie nawigacji desktop ↔ mobile~~ ✓ zrobione (SHA po commicie), pytest zielony (95 passed), zweryfikowane w przeglądarce (375px: 5 zakładek bez zmian; 1200px: hdr-nav przełącza w miejscu, Dodaj scrolluje+focusuje bez showManual(), aktywny link podświetlony, etykieta widoku w headerze) — deploy nie zweryfikowany, zostawione właścicielowi
 
 Feedback właściciela 2026-09-01. MOBILE JEST WZORCEM — dolny navbar
 (Dziś / Dodaj / Aktywności / Trendy / Ustawienia jako zakładki SPA

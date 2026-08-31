@@ -77,6 +77,7 @@
               padding: 6px 10px; border-radius: 6px; background: none; border: none;
               cursor: pointer; width: auto; margin: 0; }
   .hdr-link:hover { background: rgba(255,255,255,.12); }
+  #hdr-view { display: none; font-weight: 600; color: #C9D3CC; font-size: 12px; }
   .trend-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
   .trend-btns button { flex: 1; min-width: 0; }
   @media (min-width: 800px) {
@@ -86,18 +87,28 @@
     header .brand { padding: 8px 18px 8px 14px; }
     header h1 { font-size: 18px; }
     main { max-width: 1020px; grid-template-columns: 1fr 1fr; align-items: start; }
-    .page { display: grid !important; gap: 12px; }
-    #page-settings { display: none !important; }
-    #page-trends { display: none !important; }
-    #page-activities { display: none !important; }
-    main.act #page-activities {
+    .page { display: none !important; gap: 12px; }
+    main[data-view="today"] #page-today, main:not([data-view]) #page-today,
+    main[data-view="today"] #page-add, main:not([data-view]) #page-add {
+      display: grid !important;
+    }
+    main[data-view="activities"] #page-activities {
       display: grid !important;
       grid-column: 1 / -1;
       grid-template-columns: 1fr 1fr;
       align-items: start;
     }
-    main.act #page-today, main.act #page-add { display: none !important; }
+    main[data-view="trends"] #page-trends,
+    main[data-view="settings"] #page-settings {
+      display: grid !important;
+      grid-column: 1 / -1;
+      max-width: 640px;
+      margin: 0 auto;
+      width: 100%;
+    }
     .hdr-nav { display: flex !important; }
+    .hdr-link.active { color: #fff; font-weight: 700; background: rgba(255,255,255,.12); }
+    #hdr-view { display: inline; }
   }
 </style>
 </head>
@@ -108,12 +119,13 @@
     <h1>Fit Krasnal</h1>
   </a>
   <span class="muted" id="hdr-date" style="align-self:center;padding:0 8px"></span>
+  <span id="hdr-view" style="align-self:center;padding:0 8px"></span>
   <div class="hdr-nav" style="display:none;margin-left:auto;gap:2px;align-items:center">
-    <a class="hdr-link" href="#" onclick="goToday();return false">Dziś</a>
-    <a class="hdr-link" href="#" onclick="show('add');showManual();return false">Dodaj</a>
-    <a class="hdr-link" href="#" onclick="goActivities();return false">Aktywności</a>
-    <a class="hdr-link" href="/trends">Trendy</a>
-    <a class="hdr-link" href="/settings">Ustawienia</a>
+    <a class="hdr-link" data-view-link="today" href="#" onclick="goToday();return false">Dziś</a>
+    <a class="hdr-link" data-view-link="add" href="#" onclick="goAdd();return false">Dodaj</a>
+    <a class="hdr-link" data-view-link="activities" href="#" onclick="goActivities();return false">Aktywności</a>
+    <a class="hdr-link" data-view-link="trends" href="#" onclick="show('trends');return false">Trendy</a>
+    <a class="hdr-link" data-view-link="settings" href="#" onclick="show('settings');return false">Ustawienia</a>
     <form method="post" action="/logout" style="margin:0">
       <button type="submit" class="hdr-link">Wyloguj</button>
     </form>
@@ -435,12 +447,33 @@ function goActivities() {
   doSync();
 }
 
+function goAdd() {
+  // hdr-nav only (desktop): Dziś+Dodaj już stoją obok siebie w widoku "today" —
+  // przełącz tam, przewiń i wejdź w formularz, bez showManual() (duplikowałoby przycisk).
+  show('today');
+  document.querySelectorAll(".hdr-link").forEach(a => a.classList.remove("active"));
+  const addLink = document.querySelector('.hdr-nav [data-view-link="add"]');
+  if (addLink) addLink.classList.add("active");
+  const viewLabel = document.getElementById("hdr-view");
+  if (viewLabel) viewLabel.textContent = VIEW_LABELS.add;
+  const card = document.querySelector("#page-add .card");
+  if (card) card.scrollIntoView({behavior: "smooth", block: "start"});
+  document.getElementById("f-desc")?.focus();
+}
+
+const VIEW_LABELS = {today: "Dziś", add: "Dodaj", activities: "Aktywności", trends: "Trendy", settings: "Ustawienia"};
+
 function show(page) {
   document.querySelectorAll(".page").forEach(p => p.classList.remove("visible"));
   document.getElementById("page-" + page).classList.add("visible");
   document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
   document.getElementById("nav-" + page).classList.add("active");
-  document.querySelector("main").classList.toggle("act", page === "activities");
+  document.querySelector("main").dataset.view = page;
+  document.querySelectorAll(".hdr-link").forEach(a => a.classList.remove("active"));
+  const hdrLink = document.querySelector(`.hdr-nav [data-view-link="${page}"]`);
+  if (hdrLink) hdrLink.classList.add("active");
+  const viewLabel = document.getElementById("hdr-view");
+  if (viewLabel) viewLabel.textContent = VIEW_LABELS[page] || "";
   if (page === "settings") renderSettings();
   if (page === "trends") renderTrends();
 }
@@ -1050,6 +1083,7 @@ async function deleteActivity(id, callback) {
 document.getElementById("t-date").value = todayIso();
 document.getElementById("f-date").value = todayIso();
 document.getElementById("f-time").value = localTime();
+show("today");
 renderToday();
 initTrendBtns([
   {days: 7, label: "Tydzień"}, {days: 30, label: "Miesiąc"},
