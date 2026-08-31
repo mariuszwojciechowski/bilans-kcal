@@ -125,15 +125,15 @@
     <h2>Makroskładniki (normy WHO)</h2>
     <div id="macros"><p class="muted">Ładowanie…</p></div>
   </section>
-  <section class="card">
-    <h2>Posiłki</h2>
-    <div id="t-meals"></div>
-    <div id="t-pending"></div>
-  </section>
   <section class="card" id="sync-card">
     <h2>Garmin</h2>
     <button class="ghost" onclick="doSync()">Synchronizuj z Garminem</button>
     <p class="muted" id="sync-status" style="margin:4px 0 0"></p>
+  </section>
+  <section class="card">
+    <h2>Posiłki</h2>
+    <div id="t-meals"></div>
+    <div id="t-pending"></div>
   </section>
 </div>
 
@@ -219,7 +219,14 @@ function downscale(file) {
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const r0 = (v) => Math.round(v || 0);
-const todayIso = () => new Date().toISOString().slice(0, 10);
+const todayIso = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
+const localTime = () => {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+};
 
 async function api(path, opts = {}) {
   opts.credentials = "same-origin";
@@ -435,8 +442,7 @@ function showManual() {
 
 async function saveDraft() {
   const day = document.getElementById("f-date").value || todayIso();
-  const time = document.getElementById("f-time").value ||
-    new Date().toISOString().slice(11, 16);
+  const time = document.getElementById("f-time").value || localTime();
   const desc = document.getElementById("d-desc").value.trim() || "posiłek";
   const kcal = +document.getElementById("d-kcal").value;
   await apiJson("/api/meals", {
@@ -468,7 +474,7 @@ async function saveDraft() {
 /* ── init ── */
 document.getElementById("t-date").value = todayIso();
 document.getElementById("f-date").value = todayIso();
-document.getElementById("f-time").value = new Date().toISOString().slice(11, 16);
+document.getElementById("f-time").value = localTime();
 renderToday();
 </script>
 </body>
