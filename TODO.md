@@ -70,19 +70,101 @@ serwera pod URL-em typu `/trends/embedded?days=30`.
 
 ## ~~Ręczne dodawanie posiłku (bez szacowania)~~ ✓ zrobione (commit b30b1eb + 2485da5)
 
-## Ręczny wpis aktywności fizycznej (bez Garmina) (4/10)
+## Ręczny wpis aktywności + zakładka Aktywności/Kroki (5/10)
 
-Dla testerów bez zegarka sportowego: formularz do wpisania czasu trwania
-i rodzaju aktywności, który przelicza go na spalone kcal metodą MET
-(Metabolic Equivalent of Task — standardowe tabele ACSM). Pola:
-aktywność (lista: rower, pływanie, bieganie, ćwiczenia siłowe, marsz szybki),
-czas [minuty], opcjonalnie intensywność (lekka/umiarkowana/intensywna —
-różne wartości MET). Wzór: `kcal = MET × masa_ciała_kg × czas_h`.
-Masa ciała z ostatniego pomiaru w bazie. Zapis do `Activity` (tabela już
-istnieje, `app/models.py`) z `source="manual"` — to samo co Garmin, więc
-bilans i TDEE od razu uwzględniają aktywność. Wyświetlać w dashboardzie
-i `/mobile` w sekcji bilansu obok kroków. Nie zastępuje synchronizacji
-Garmina — jest alternatywą dla tych, którzy go nie mają.
+Dla testerów bez zegarka sportowego: nowa zakładka z formularzem aktywności,
+polem kroków i rozbiciem dzisiejszego wydatku. Decyzje produktowe podjęte
+2026-08-31 (uzgodnione z właścicielem) — nie zmieniaj ich w trakcie
+implementacji. Kroki dla implementującego LLM:
+
+**Decyzje produktowe (wiążące):**
+
+- Typy aktywności: **bieg, rower, marsz/spacer** (czas + dystans +
+  odczuwalna intensywność — wszystkie trzy pola zawsze pokazywane, dystans
+  opcjonalny) oraz **siłownia** (czas + intensywność; BEZ pola typu ćwiczeń —
+  push/pull/nogi nie różnicuje kcal, świadomie uproszczone).
+- Kcal liczone raz, przy zapisie: bieg z dystansem `masa × km` (intensywność
+  ignorowana — kcal/km ~niezależne od tempa), bez dystansu MET 8/10/12;
+  rower zawsze MET z intensywności 5.5/7/10 (odczucie lepsze niż prędkość —
+  teren, wiatr), dystans tylko informacyjny; marsz z dystansem
+  `0.53 × masa × km`, bez MET 3.3/4.3/5; siłownia MET wg etykiet
+  **„ciężko, długie przerwy (maxy)" 3.5 / „klasycznie" 5.0 /
+  „obwodowo, krótkie przerwy" 6.0** (uwaga: maxy = MNIEJ kcal, nie więcej).
+- Pole kroków przenosi się z widoku Dziś do nowej zakładki: na samej górze,
+  wyróżnione, zawsze obecne. Gdy dzień nie ma zapisanych kroków, pole
+  pokazuje **domyślne 5000** i model liczy NEAT od 5000 (każdy jakieś kroki
+  robi); wartość wpisana przez użytkownika jest respektowana; synchronizacja
+  Garmina nadpisuje jak dotychczas.
+- W miejscu obecnego pola kroków na Dziś — przycisk **„Aktywności/Kroki"**
+  przenoszący do zakładki. Każdy ręczny wpis na liście ma **✕** do
+  skasowania; wpisów garminowych nie kasujemy (sync by je odtworzył).
+- Zakładka pokazuje rozbicie dzisiejszego wydatku:
+  `BMR 2002 + kroki 40 + aktywności 400 + TEF 300 = 2742`.
+- Użytkownik z podłączonym Garminem widzi w zakładce ostrzeżenie, że ręczne
+  wpisy mogą zawyżać spalone kcal (w dniu w toku bilans bierze
+  `max(pomiar, model)` — patrz `app/services/balance.py:day_balance`).
+
+**Kroki implementacji:**
+
+1. **Migracja.** W `app/models.py` do `Activity` kolumna
+   `source: Mapped[str] = mapped_column(String, default="garmin")`;
+   w `app/db.py:_migrate()` addytywnie `PRAGMA table_info` + `ALTER TABLE
+   activity ADD COLUMN source ... DEFAULT 'garmin'` (backfill istniejących).
+   Wpisy ręczne dostają `garmin_id = "manual-" + uuid4().hex` — spełnia
+   `UniqueConstraint(user_id, garmin_id)` i nie koliduje z upsertem
+   w `app/services/sync.py`; typy nazywaj po garminowsku (`running`,
+   `cycling`, `walking`, `strength_training`), żeby istniejące dopasowania
+   w `energy.activity_kcal_model` i odejmowanie kroków aktywności
+   (`~1400 kroków/km` dla running/walking w `tdee_theoretical`) działały
+   bez zmian.
+2. **`app/services/energy.py`.** Stała `DEFAULT_STEPS = 5000`; tabela
+   `MANUAL_MET = {typ: {light, moderate, intense}}` z wartościami z decyzji
+   wyżej; funkcja `manual_activity_kcal(type, intensity, duration_s,
+   distance_m, weight_kg) -> tuple[float, str]` — zwraca kcal i jednozdaniowe
+   wyjaśnienie skąd liczba (np. „bieg 5.0 km × 74 kg" albo „MET 7.0 × 74 kg
+   × 0.75 h"), w duchu `assumptions` przy posiłkach. W `tdee_theoretical`
+   dict aktywności może mieć opcjonalne pole `"kcal"` — gdy ustawione,
+   użyj go wprost zamiast `activity_kcal_model` (przekazywane tylko dla
+   wpisów ręcznych; ścieżka garminowa bez zmian — model ma zostać
+   niezależnym sanity-checkiem pomiaru).
+3. **API w `app/main.py`** (wzorzec auth i 404 jak przy saved-meals):
+   - `POST /api/activities` — body `{day?, type, duration_min,
+     distance_km?, intensity}`; masa = wygładzona waga jak w `day_report`
+     (409 gdy brak pomiarów); zapis `Activity(source="manual",
+     kcal_garmin=round(kcal))`; zwraca kcal + wyjaśnienie.
+   - `DELETE /api/activities/{id}` — 404 gdy cudzy lub nie istnieje,
+     404 także gdy `source != "manual"`.
+   - `day_report`: w `activities` dodaj `id` i `source`; dla wpisów
+     ręcznych przekaż `"kcal": a.kcal_garmin` do `tdee_theoretical`;
+     gdy dzień nie ma kroków (brak `summary` lub `steps is None`), licz
+     NEAT od `DEFAULT_STEPS` i zwróć `"steps": 5000, "steps_default": true`;
+     dodaj `"garmin_connected"` (z `garmin_provider.tokens_present(user_id)`)
+     do warunkowego ostrzeżenia w UI.
+4. **UI w `app/templates/mobile.html`.** Nowa strona w mechanizmie
+   `show(page)` + piąty przycisk w dolnym `<nav>` („Aktywności"). Na Dziś:
+   pole `#t-steps` (linia ~134) zastąp przyciskiem „Aktywności/Kroki" →
+   `show('activities')`. W zakładce, od góry: (a) wyróżnione pole kroków
+   (prefill z `rep.steps`, zapis istniejącym `POST /api/day/{day}/steps`
+   przez `saveDaySteps()`, dopisek że Garmin nadpisze przy synchronizacji),
+   (b) rozbicie wydatku z `rep.tdee_model` (render z tego samego
+   `day_report` co Dziś), (c) formularz: select typu, czas [min], dystans
+   [km] (ukryty dla siłowni), intensywność (radio; dla siłowni etykiety
+   z decyzji), po zapisie pokaż zwrócone kcal + wyjaśnienie i odśwież,
+   (d) lista aktywności wybranego dnia — ręczne z ✕ (DELETE + odśwież),
+   garminowe bez, (e) ostrzeżenie widoczne gdy `rep.garmin_connected`.
+5. **Transfer.** W `app/services/transfer.py` eksport/import wyłącznie
+   aktywności `source == "manual"` (garminowe odtworzy sync), idempotentnie
+   po `garmin_id` — wzorzec jak posiłki po `external_id`.
+6. **Testy.** `tests/test_activities_api.py` (fixture dwóch klientów jak
+   w `tests/test_saved_meals_api.py`): kcal per typ i ścieżka
+   (bieg z dystansem ignoruje intensywność; rower liczy z MET mimo
+   dystansu; siłownia „maxy" < „obwodowo"); wpis podbija
+   `tdee_model.activities` dokładnie o zapisane kcal; kroki: brak danych →
+   5000 i `steps_default`, wpisane 8000 → 8000; DELETE cudzego i
+   garminowego → 404; izolacja list między użytkownikami; migracja
+   backfilluje `source="garmin"`. Wszystko zielone — czerwony pytest
+   blokuje deploy.
+7. **TODO.md** — oznacz ten punkt jako zrobiony z SHA.
 
 ## ~~Dashboard lepiej wyglądający na telefonie~~ ✓ zrobione — jeden widok responsive (commit d5bb8e8)
 
