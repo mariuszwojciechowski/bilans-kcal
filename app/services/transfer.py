@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import PHOTOS_DIR
-from ..models import Meal, PendingMeal, SavedMeal, UserProfile, WeightLog
+from ..models import Activity, Meal, PendingMeal, SavedMeal, UserProfile, WeightLog
 from . import meal_queue
 
 FORMAT = "fit-krasnal-transfer"
@@ -87,6 +87,15 @@ def export_payload(db: Session, user_id: int) -> dict:
              "items_json": m.items_json, "assumptions_json": m.assumptions_json}
             for m in db.scalars(select(SavedMeal).where(SavedMeal.user_id == user_id)).all()
         ],
+        "activities": [
+            {"garmin_id": a.garmin_id,
+             "date": a.date.isoformat(), "type": a.type,
+             "duration_s": a.duration_s, "distance_m": a.distance_m,
+             "kcal_garmin": a.kcal_garmin}
+            for a in db.scalars(select(Activity).where(
+                Activity.user_id == user_id, Activity.source == "manual"
+            )).all()
+        ],
     }
 
 
@@ -100,7 +109,7 @@ def import_payload(db: Session, user_id: int, payload: dict) -> dict:
     if payload.get("version", 0) > VERSION:
         raise ValueError("Plik pochodzi z nowszej wersji aplikacji — zaktualizuj ją.")
 
-    counts = {"meals": 0, "weights": 0, "pending": 0, "profile": 0, "saved_meals": 0, "skipped": 0}
+    counts = {"meals": 0, "weights": 0, "pending": 0, "profile": 0, "saved_meals": 0, "activities": 0, "skipped": 0}
 
     if payload.get("profile") and db.get(UserProfile, user_id) is None:
         p = payload["profile"]
@@ -185,6 +194,26 @@ def import_payload(db: Session, user_id: int, payload: dict) -> dict:
         ))
         existing_saved_names.add(m["name"])
         counts["saved_meals"] += 1
+
+    existing_activity_ids = {
+        aid for (aid,) in db.execute(
+            select(Activity.garmin_id).where(Activity.user_id == user_id, Activity.source == "manual")
+        ).all()
+    }
+    for a in payload.get("activities", []):
+        aid = a.get("garmin_id")
+        if aid and aid in existing_activity_ids:
+            counts["skipped"] += 1
+            continue
+        db.add(Activity(
+            user_id=user_id, garmin_id=aid or ("manual-" + uuid.uuid4().hex),
+            date=date.fromisoformat(a["date"]), type=a["type"],
+            duration_s=a["duration_s"], distance_m=a.get("distance_m"),
+            kcal_garmin=a.get("kcal_garmin"), source="manual"
+        ))
+        if aid:
+            existing_activity_ids.add(aid)
+        counts["activities"] += 1
 
     db.commit()
     return counts
