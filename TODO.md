@@ -13,7 +13,54 @@ Przy każdym punkcie **szacowanie złożoności w skali 1-10**:
 
 ---
 
-## PILNE: naprawa dodania aktywności (3/10) — produkcja zwraca 500
+## PILNE: naprawa testów aktywności — deploy zablokowany, produkcja wciąż leży (3/10)
+
+Commit `1a3401d` naprawił kod (kroki 1, 4–7 sekcji niżej), ale jego deploy
+**failował**: przywrócone `tests/test_activities_api.py` są czerwone — wszystkie
+6 testów. Produkcja nadal działa na zepsutym `eefa2a4` (z `kcal_manual`).
+Analiza z 2026-08-31 — w testach jest KASKADA trzech błędów; naprawienie
+tylko pierwszego odsłoni kolejne. Kroki dla implementującego LLM:
+
+1. **Nie naprawiaj pliku warstwami — przepisz go wg działającego wzorca**
+   z `tests/test_saved_meals_api.py` (fixture `clients`: własny engine na
+   `tmp_path`, `app.dependency_overrides[db_session]`, rejestracja przez
+   `POST /register`, sesja w TestClient). Kaskada błędów w obecnym pliku,
+   dla świadomości co musi zniknąć:
+   - `setup_db` to `@pytest.fixture` z `yield`, a testy wołają je WPROST
+     (`engine, Session = setup_db(tmp_path)`) — pytest to zabrania, stąd
+     natychmiastowy fail wszystkich 6 testów (to dlatego były czerwone już
+     w `1aad080` i zostały wtedy skasowane zamiast naprawione);
+   - hasło rejestracji `pass123` ma 7 znaków, a `auth.MIN_PASSWORD_LEN = 8`
+     — rejestracja odbija na `?error=short`, klient nie ma sesji, każdy
+     kolejny request = 401 (użyj `tajnehaslo1` jak w `tests/test_auth.py`);
+   - testy rejestrują NOWEGO użytkownika, a dane (profil, waga 75 kg)
+     seedują użytkownikom 1 i 2 z bcryptowo nieprawidłowymi hashami —
+     zarejestrowany user nie ma profilu ani wagi, więc `/api/activities`
+     i `/api/day` zwrócą 409. Po rejestracji seeduj przez API:
+     `PUT /api/profile` + `POST /api/weight {date, weight_kg: 75}` —
+     wtedy oczekiwane wartości się zgadzają (bieg 5 km × 75 kg = 375).
+2. **Zachowaj pokrycie z obecnego pliku** (nazwy testów są dobre, treść do
+   przepisania): bieg z dystansem ignoruje intensywność (375 kcal),
+   rower liczy z MET mimo dystansu (MET 10 × 75 × 1 h = 750), kroki:
+   brak wpisu → `steps == 5000` i `steps_default == true`, DELETE tylko
+   ręcznych (cudzy i garminowy → 404), izolacja list między użytkownikami.
+3. **Zastąp atrapę testu migracji prawdziwym strażnikiem** —
+   `test_migration_backfills_garmin_source` buduje bazę przez `create_all`
+   (nowy schemat), więc niczego nie pilnuje. Prawdziwy strażnik: zbuduj
+   tabelę `activity` STARYM DDL-em (surowy `CREATE TABLE` bez `source`,
+   kolumny jak w `app/models.py` sprzed `985b41a`), wywołaj
+   `app.db._migrate(engine)` wprost, potem ORM-owo `select(Activity)`
+   i `db.add(Activity(...)); commit()` — każda kolumna dodana do modelu
+   bez migracji wywali ten test (dokładnie klasa błędu `kcal_manual`,
+   która położyła prod).
+4. **Weryfikacja końcowa:** pełny `pytest` zielony lokalnie → commit + push
+   → sprawdź w GitHub Actions, że „Deploy na GCP" jest `success`
+   (`https://api.github.com/repos/mariuszwojciechowski/bilans-kcal/actions/runs?per_page=2`)
+   — POPRZEDNIA sesja pushnęła i nie sprawdziła, przez co produkcja leżała
+   dalej. Po deployu potwierdź, że `/api/day/{dziś}` i `/api/sync` na
+   fit.krasnal.cc odpowiadają bez 500.
+
+## ~~PILNE: naprawa dodania aktywności (3/10) — produkcja zwraca 500~~ ✓ kroki 1, 4–7 zrobione (commit 1a3401d); kroki 2–3 i 8 NIE — patrz sekcja wyżej
 
 Implementacja zakładki Aktywności/Kroki (commity `985b41a`…`216b8ce`) położyła
 produkcję i zostawiła śmieci. Diagnoza wykonana 2026-08-31 na prod
