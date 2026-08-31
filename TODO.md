@@ -41,10 +41,20 @@ Feedback właściciela 2026-09-01, cztery punkty. Wszystko w
    jest gridem, linia ~88). Mobile bez zmian — jedna kolumna.
 4. **Ostrzeżenie do prawej kolumny.** `#a-garmin-warning` (linia ~287)
    ląduje w prawej kolumnie, pod formularzem „Dodaj aktywność".
-5. **Weryfikacja:** pytest zielony + przeglądarka (375 px i desktop):
+5. **Klik w „Dziś" i „Aktywności" na navbarze odpala synchronizację —
+   w OBU wersjach nav** (dolny mobile `<nav>` i desktopowy `hdr-nav`).
+   Stan: „Dziś" już to robi (`goToday()` woła `doSync()` — oba navbary
+   używają `goToday`), ale `show('activities')` nie synchronizuje ani nie
+   odświeża danych. Zrób analogicznie do `goToday`: funkcja
+   `goActivities()` = `show('activities')` + `renderToday()` + `doSync()`,
+   podpięta pod oba przyciski „Aktywności" (mobile `#nav-activities`
+   i link w `hdr-nav`) ORAZ pod przycisk „Aktywności/Kroki" w Bilansie.
+   `doSync` po sukcesie już odświeża widok — nie zdubluj renderów.
+6. **Weryfikacja:** pytest zielony + przeglądarka (375 px i desktop):
    równanie widoczne w Bilansie na Dziś, karta Garmin z przyciskiem
    i równaniem w zakładce, dwie kolumny tylko na desktopie, ostrzeżenie
-   po prawej. Deployu i produkcji nie ruszaj.
+   po prawej, klik w Dziś/Aktywności widocznie odpala sync (status
+   „Synchronizuję…"). Deployu i produkcji nie ruszaj.
 
 ## Przycisk „Aktywności/Kroki" — wyrównanie, podejście trzecie (1/10)
 
