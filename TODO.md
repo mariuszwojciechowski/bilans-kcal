@@ -104,6 +104,12 @@ implementacji. Kroki dla implementującego LLM:
   wpisy mogą zawyżać spalone kcal (w dniu w toku bilans bierze
   `max(pomiar, model)` — patrz `app/services/balance.py:day_balance`).
 
+**Higiena tokenów dla implementującego modelu:** `app/main.py` i
+`app/templates/mobile.html` są duże — czytaj je fragmentami (offset/limit,
+grep po nazwach z tego planu), nie w całości i nie ponownie po każdej
+edycji. Pełny `pytest` uruchamiaj raz, po skończeniu kroku, nie po każdej
+zmianie pliku.
+
 **Kroki implementacji:**
 
 1. **Migracja.** W `app/models.py` do `Activity` kolumna
