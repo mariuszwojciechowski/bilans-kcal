@@ -100,7 +100,7 @@
   </a>
   <span class="muted" id="hdr-date" style="align-self:center;padding:0 8px"></span>
   <div class="hdr-nav" style="display:none;margin-left:auto;gap:2px;align-items:center">
-    <a class="hdr-link" href="#" onclick="show('today');return false">Dziś</a>
+    <a class="hdr-link" href="#" onclick="goToday();return false">Dziś</a>
     <a class="hdr-link" href="#" onclick="show('add');showManual();return false">Dodaj</a>
     <a class="hdr-link" href="/trends">Trendy</a>
     <a class="hdr-link" href="/settings">Ustawienia</a>
@@ -273,7 +273,7 @@
 </main>
 
 <nav>
-  <button id="nav-today" class="active" onclick="show('today')">Dziś</button>
+  <button id="nav-today" class="active" onclick="goToday()">Dziś</button>
   <button id="nav-add" onclick="show('add')">Dodaj</button>
   <button id="nav-trends" onclick="show('trends')">Trendy</button>
   <button id="nav-settings" onclick="show('settings')">Ustawienia</button>
@@ -333,6 +333,13 @@ async function apiForm(path, formData) {
 }
 
 /* ── nawigacja ── */
+function goToday() {
+  show('today');
+  document.getElementById("t-date").value = todayIso();
+  renderToday();
+  doSync();
+}
+
 function show(page) {
   document.querySelectorAll(".page").forEach(p => p.classList.remove("visible"));
   document.getElementById("page-" + page).classList.add("visible");
