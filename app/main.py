@@ -309,6 +309,20 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
             act_dict["kcal"] = a.kcal_garmin
         activities_for_tdee.append(act_dict)
 
+    def _est_steps(a: Activity) -> int:
+        """Szacunek kroków biegu/marszu z dystansu (~1400 kroków/km), jak w tdee_theoretical."""
+        if a.distance_m and ("running" in a.type.lower() or "walking" in a.type.lower()):
+            return round(a.distance_m / 1000.0 * 1400)
+        return 0
+
+    manual_kcal = sum(a.kcal_garmin or 0 for a in activities if a.source == "manual")
+    activities_kcal = sum(a.kcal_garmin or 0 for a in activities)
+    # Kroki Garmina z biegów/marszów już policzone przez zegarek — nie dublujemy; kroki
+    # ręcznych biegów/marszów Garmin nie widział, więc dopisujemy je do wyświetlanej liczby.
+    garmin_activity_steps = sum(_est_steps(a) for a in activities if a.source != "manual")
+    manual_activity_steps = sum(_est_steps(a) for a in activities if a.source == "manual")
+    steps_effective = max(steps - garmin_activity_steps, 0) + manual_activity_steps
+
     tdee = tdee_theoretical(
         weight_kg=weight,
         height_cm=profile.height_cm,
@@ -323,7 +337,17 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
         garmin_total=(summary.kcal_total_garmin if summary else None),
         model_tdee=tdee.total,
         day_complete=bool(summary and summary.complete),
+        manual_kcal=manual_kcal,
     )
+    steps_kcal = max(bal.kcal_out - tdee.bmr - activities_kcal - tdee.tef, 0)
+    out_breakdown = {
+        "bmr": round(tdee.bmr),
+        "steps_kcal": round(steps_kcal),
+        "steps_count": steps_effective,
+        "activities_kcal": round(activities_kcal),
+        "tef": round(tdee.tef),
+        "total": round(bal.kcal_out),
+    }
     e_target = bal.kcal_out - profile.target_deficit_kcal
     targets = who_targets(e_target, weight, sex=profile.sex,
                           age=age_years(profile.birth_date, day),
@@ -355,6 +379,7 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
             "tef": round(tdee.tef),
             "total": round(tdee.total),
         },
+        "out_breakdown": out_breakdown,
         "steps": steps,
         "steps_default": not (summary and summary.steps is not None),
         "garmin_connected": garmin_provider.tokens_present(user_id),
@@ -400,8 +425,11 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
             for m in meals
         ],
         "activities": [
-            {"id": a.id, "type": a.type, "duration_s": a.duration_s, "distance_m": a.distance_m,
-             "kcal_garmin": a.kcal_garmin, "source": a.source}
+            {
+                "id": a.id, "type": a.type, "duration_s": a.duration_s, "distance_m": a.distance_m,
+                "kcal_garmin": a.kcal_garmin, "source": a.source,
+                **({"est_steps": _est_steps(a)} if a.source == "manual" and _est_steps(a) else {}),
+            }
             for a in activities
         ],
     }

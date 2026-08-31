@@ -25,14 +25,18 @@ def day_balance(
     garmin_total: float | None,
     model_tdee: float,
     day_complete: bool,
+    manual_kcal: float = 0.0,
 ) -> DayBalance:
+    """manual_kcal: suma kcal ręcznie wpisanych aktywności — Garmin ich nie widział,
+    więc u użytkownika z zegarkiem dolicza się do pomiaru osobno."""
     if garmin_total is None:
         return DayBalance(kcal_in, model_tdee, "model", True)
+    measured = garmin_total + manual_kcal
     if day_complete:
-        return DayBalance(kcal_in, garmin_total, "garmin", False)
+        return DayBalance(kcal_in, measured, "garmin", False)
     # Dzień w toku: częściowy pomiar Garmina albo prognoza z modelu — bierzemy większe,
     # żeby nie zaniżać wydatku przed końcem dnia (Garmin dosyła dane co kilka godzin).
-    return DayBalance(kcal_in, max(garmin_total, model_tdee), "mixed", True)
+    return DayBalance(kcal_in, max(measured, model_tdee), "mixed", True)
 
 
 def projected_weekly_change_kg(avg_daily_balance: float) -> float:

@@ -13,7 +13,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app import auth
 from app.db import Base, _migrate, db_session
-from app.models import Activity, WeightLog
+from app.models import Activity, DailySummary, WeightLog
+from app.services.energy import DEFAULT_STEPS, age_years, bmr_mifflin, tdee_theoretical
 
 INVITE = "test-invite-code"
 WEIGHT_KG = 75
@@ -134,6 +135,88 @@ def test_activity_isolation_between_users(clients):
 
     assert len(a_activities) == 1
     assert b_activities == []
+
+
+def _user_id(SessionLocal, email):
+    from app.models import User
+    db = SessionLocal()
+    try:
+        return db.scalar(select(User).where(User.email == email)).id
+    finally:
+        db.close()
+
+
+def _seed_summary(SessionLocal, user_id, day, **kwargs):
+    db = SessionLocal()
+    try:
+        db.add(DailySummary(user_id=user_id, date=day, **kwargs))
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_closed_garmin_day_plus_manual_activity_sums_to_kcal_out(clients):
+    alice, _, SessionLocal = clients
+    today = date.today()
+
+    resp = alice.post("/api/activities", json={
+        "type": "running", "intensity": "umiarkowana", "duration_min": 30,
+    })
+    manual_kcal = resp.json()["kcal"]                # MET 10.0 × 75 kg × 0.5 h = 375
+
+    _seed_summary(SessionLocal, _user_id(SessionLocal, "alice@example.com"), today,
+                  kcal_total_garmin=2000, steps=8000, complete=True)
+
+    body = alice.get(f"/api/day/{today.isoformat()}").json()
+    assert body["kcal_out"] == 2000 + manual_kcal    # Garmin nie widział ręcznego wpisu
+    assert body["out_breakdown"]["total"] == body["kcal_out"]
+
+
+def test_steps_kcal_floors_at_zero_when_measured_below_bmr(clients):
+    alice, _, SessionLocal = clients
+    today = date.today()
+
+    _seed_summary(SessionLocal, _user_id(SessionLocal, "alice@example.com"), today,
+                  kcal_total_garmin=1000, steps=8000, complete=True)  # < BMR sam w sobie
+
+    body = alice.get(f"/api/day/{today.isoformat()}").json()
+    assert body["kcal_out"] == 1000
+    assert body["out_breakdown"]["steps_kcal"] == 0
+    assert body["out_breakdown"]["total"] == 1000
+
+
+def test_steps_kcal_matches_model_neat_without_garmin(clients):
+    alice, _, _ = clients
+    today = date.today()
+
+    age = age_years(date(1990, 1, 1), today)
+    tdee = tdee_theoretical(
+        weight_kg=WEIGHT_KG, height_cm=180, age=age, sex="M",
+        steps=DEFAULT_STEPS, activities=[], kcal_in=0,
+    )
+
+    body = alice.get(f"/api/day/{today.isoformat()}").json()
+    assert body["out_breakdown"]["steps_kcal"] == round(tdee.neat)
+    assert body["out_breakdown"]["total"] == round(tdee.total)
+
+
+def test_est_steps_present_for_manual_run_absent_for_strength(clients):
+    alice, _, _ = clients
+    today = date.today()
+
+    alice.post("/api/activities", json={
+        "type": "running", "intensity": "lekka", "duration_min": 40, "distance_km": 5,
+    })
+    alice.post("/api/activities", json={
+        "type": "strength_training", "intensity": "umiarkowana", "duration_min": 45,
+    })
+
+    activities = alice.get(f"/api/day/{today.isoformat()}").json()["activities"]
+    running = next(a for a in activities if a["type"] == "running")
+    strength = next(a for a in activities if a["type"] == "strength_training")
+
+    assert running["est_steps"] == 7000        # 5 km × 1400 kroków/km
+    assert "est_steps" not in strength
 
 
 def test_migration_backfills_garmin_source(tmp_path):

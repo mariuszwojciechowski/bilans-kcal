@@ -13,7 +13,7 @@ Przy każdym punkcie **szacowanie złożoności w skali 1-10**:
 
 ---
 
-## Rozbicie wydatku: pomiar Garmina jako suma, kroki jako reszta (4/10)
+## ~~Rozbicie wydatku: pomiar Garmina jako suma, kroki jako reszta~~ ✓ zrobione (SHA po commicie), pytest zielony (94 passed) — deploy nie zweryfikowany, zostawione właścicielowi
 
 Decyzja właściciela 2026-08-31 (wiążąca). Dziś równanie w zakładce Aktywności
 pokazuje CZYSTY model (aktywności z MET ~399), a lista pod nim pomiar Garmina
