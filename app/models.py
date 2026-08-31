@@ -71,7 +71,6 @@ class Activity(Base):
     duration_s: Mapped[int] = mapped_column(Integer)
     distance_m: Mapped[float | None] = mapped_column(Float)
     kcal_garmin: Mapped[int | None] = mapped_column(Integer)
-    kcal_manual: Mapped[int | None] = mapped_column(Integer)
     avg_hr: Mapped[int | None] = mapped_column(Integer)
     source: Mapped[str] = mapped_column(String, default="garmin")  # garmin | manual
 

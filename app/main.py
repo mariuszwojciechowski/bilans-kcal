@@ -21,7 +21,7 @@ from .db import db_session, get_session, init_db
 from .models import Activity, DailySummary, Meal, PendingMeal, SavedMeal, User, UserProfile, WeightLog
 from .providers import garmin as garmin_provider
 from .providers.garmin import GarminNotLoggedIn, GarminProvider
-from .services import activity as activity_service, meal_queue, meal_vision, quips, transfer
+from .services import meal_queue, meal_vision, quips, transfer
 from .services import settings as settings_service
 from .services.balance import day_balance, deficit_warning, projected_weekly_change_kg
 from .services.charts import Series, bar_chart, line_chart
@@ -356,7 +356,7 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
             "total": round(tdee.total),
         },
         "steps": steps,
-        "steps_default": (summary and summary.steps is not None) == False,
+        "steps_default": not (summary and summary.steps is not None),
         "garmin_connected": garmin_provider.tokens_present(user_id),
         "last_sync_ago": humanize_ago(last_sync),
         "macros": macros,
