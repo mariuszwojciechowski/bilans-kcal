@@ -52,14 +52,14 @@ sam wzorzec błędów co formularze rejestracji.
 
 ## ~~Redirect po zalogowaniu w zależności od urządzenia~~ ✓ nieaktualne — jeden widok pod `/` (commit d5bb8e8)
 
-## Widok Ustawienia w wersji mobilnej (3/10)
+## ~~Widok Ustawienia w wersji mobilnej~~ ✓ zrobione (commit TBD)
 
 Obecny `/mobile` w zakładce *Ustawienia* linkuje do desktopowego `/settings`,
 który jest ciasny na małym ekranie. Zrobić natywną wersję: formularz profilu
 (płeć, data ur., wzrost, ciężar), styl życia, cel, klucz Gemini, przycisk
 połączenia z Garminem. Wszystko przez fetch do istniejących endpointów.
 
-## Widok Trendy w wersji mobilnej (3/10)
+## ~~Widok Trendy w wersji mobilnej~~ ✓ zrobione (commit TBD)
 
 `/mobile` nie ma trendów — testerzy chcący zobaczyć postęp wagi/bilansu muszą
 przełączać się na `/trends` (widok desktopowy). Dodać czwartą zakładkę
@@ -95,7 +95,7 @@ liczba synców Garmina, liczba szacowań przez Gemini, ostatnia aktywność,
 wielkość bazy per user. Do orientacji, ilu testerów faktycznie używa
 i jak intensywnie.
 
-## Instalowanie na ekranie głównym telefonu (4/10)
+## ~~Instalowanie na ekranie głównym telefonu~~ ✓ zrobione (commit TBD)
 
 Żeby `fit.krasnal.cc/mobile` można było "dodać do ekranu głównego" jak zwykłą
 aplikację (ikona krasnala na home screen, otwiera się na pełnym ekranie bez

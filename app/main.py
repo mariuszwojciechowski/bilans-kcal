@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi import (BackgroundTasks, Depends, FastAPI, File, Form, HTTPException,
                      Query, Request, UploadFile)
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -796,6 +796,130 @@ def trends(
             "has_logo": (STATIC_DIR / "logo.png").exists(),
         },
     )
+
+
+# ── PWA — pliki publiczne (bez auth) ─────────────────────────────────────
+
+@app.get("/manifest.webmanifest")
+def pwa_manifest():
+    return FileResponse(STATIC_DIR / "manifest.webmanifest",
+                        media_type="application/manifest+json")
+
+
+@app.get("/sw.js")
+def pwa_sw():
+    return FileResponse(STATIC_DIR / "sw.js", media_type="application/javascript",
+                        headers={"Service-Worker-Allowed": "/"})
+
+
+# ── Ustawienia API (JSON) — dla mobilnego SPA ─────────────────────────────
+
+@app.get("/api/settings")
+def api_get_settings(db: Session = Depends(db_session),
+                     user: User = Depends(auth.current_user)):
+    stored = settings_service.all_settings(db, user.id)
+    keys = settings_service.get_llm_keys(db, user.id)
+    return {
+        "gemini_masked": settings_service.masked(stored.get("gemini_api_key")),
+        "anthropic_masked": settings_service.masked(stored.get("anthropic_api_key")),
+        "backend": (meal_vision.pick_backend(keys.gemini, keys.anthropic)
+                    if meal_vision.llm_configured(keys.gemini, keys.anthropic) else None),
+        "garmin_connected": garmin_provider.tokens_present(user.id),
+        "lifestyle_options": lifestyle_options(),
+    }
+
+
+class LlmKeysIn(BaseModel):
+    gemini_api_key: str = ""
+    anthropic_api_key: str = ""
+
+
+@app.post("/api/settings/llm")
+def api_save_llm(data: LlmKeysIn, background: BackgroundTasks,
+                 db: Session = Depends(db_session),
+                 user: User = Depends(auth.current_user)):
+    if data.gemini_api_key.strip():
+        settings_service.set_setting(db, user.id, "gemini_api_key", data.gemini_api_key.strip())
+    if data.anthropic_api_key.strip():
+        settings_service.set_setting(db, user.id, "anthropic_api_key", data.anthropic_api_key.strip())
+    background.add_task(meal_queue.process_queue, user.id)
+    return {"ok": True}
+
+
+# ── Trendy API (JSON + SVG) — dla mobilnego SPA ───────────────────────────
+
+@app.get("/api/trends")
+def api_trends_data(days: int = 30, db: Session = Depends(db_session),
+                    user: User = Depends(auth.current_user)):
+    days = max(2, min(days, 366))
+    today = date.today()
+    start = today - timedelta(days=days - 1)
+    profile = db.get(UserProfile, user.id)
+    target_weight = profile.target_weight_kg if profile else None
+
+    weights = [
+        (w.date, w.weight_kg)
+        for w in db.scalars(
+            select(WeightLog).where(WeightLog.user_id == user.id, WeightLog.date >= start)
+        ).all()
+    ]
+    all_weights = sorted(
+        (w.date, w.weight_kg)
+        for w in db.scalars(select(WeightLog).where(WeightLog.user_id == user.id)).all()
+    )
+    smoothed = []
+    for d, _ in weights:
+        window = [kg for wd, kg in all_weights if 0 <= (d - wd).days < 7]
+        if window:
+            smoothed.append((d, sum(window) / len(window)))
+
+    summaries = db.scalars(
+        select(DailySummary).where(DailySummary.user_id == user.id, DailySummary.date >= start)
+    ).all()
+    kcal_out = [(s.date, float(s.kcal_total_garmin)) for s in summaries if s.kcal_total_garmin]
+
+    meals = db.scalars(
+        select(Meal).where(Meal.user_id == user.id, Meal.date >= start)
+    ).all()
+    kcal_in_by_day: dict[date, float] = {}
+    for m in meals:
+        kcal_in_by_day[m.date] = kcal_in_by_day.get(m.date, 0) + m.kcal
+    kcal_in = sorted(kcal_in_by_day.items())
+
+    out_by_day = dict(kcal_out)
+    balance = [(d, kcal - out_by_day[d]) for d, kcal in kcal_in if d in out_by_day]
+
+    weight_series = [
+        Series("pomiary", "#8DC63F", weights, dots=True, width=1.5),
+        Series("średnia 7 dni", "#1A4D3A", smoothed),
+    ]
+    if target_weight and weights:
+        weight_series.append(
+            Series("cel", "#DC3545", [(start, target_weight), (today, target_weight)],
+                   dash=True, width=1.5)
+        )
+
+    period_change = None
+    if len(smoothed) >= 2:
+        period_change = round(smoothed[-1][1] - smoothed[0][1], 1)
+    avg_balance = round(sum(v for _, v in balance) / len(balance)) if balance else None
+
+    return {
+        "days": days,
+        "ranges": [{"days": d, "label": l} for d, l in TREND_RANGES],
+        "chart_weight": line_chart(weight_series, start, today, y_fmt="{:.1f}"),
+        "chart_energy": line_chart(
+            [Series("spożyte", "#8DC63F", kcal_in, dots=True),
+             Series("spalone (Garmin)", "#3A7A5C", kcal_out, dots=True)],
+            start, today,
+        ),
+        "chart_balance": bar_chart(balance, start, today),
+        "period_change": period_change,
+        "avg_balance": avg_balance,
+        "balance_days": len(balance),
+        "to_goal_kg": (round(smoothed[-1][1] - target_weight, 1)
+                       if target_weight and smoothed else None),
+    }
 
 
 @app.post("/profile-form")
