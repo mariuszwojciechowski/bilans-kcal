@@ -549,8 +549,9 @@ function showDraft(e) {
     `• ${esc(i.name)}: ${r0(i.mass_g)}g, ${r0(i.kcal)} kcal`).join("<br>");
   document.getElementById("d-assumptions").innerHTML = (e.assumptions || []).map(a =>
     `<li>${esc(a)}</li>`).join("");
-  const sum = k => (e.items || []).reduce((s, i) => s + (i[k] || 0), 0);
-  document.getElementById("d-kcal").value = r0(sum("kcal"));
+  const items = e.items || [];
+  const sum = k => items.length ? items.reduce((s, i) => s + (i[k] || 0), 0) : (e[k] || 0);
+  document.getElementById("d-kcal").value = r0(items.length ? sum("kcal") : (e.kcal || 0));
   document.getElementById("d-protein").value = sum("protein_g").toFixed(1);
   document.getElementById("d-fat").value = sum("fat_g").toFixed(1);
   document.getElementById("d-carbs").value = sum("carbs_g").toFixed(1);
