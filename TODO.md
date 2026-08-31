@@ -25,7 +25,7 @@ minimalny `index.html` który redirectuje na `fit.krasnal.cc` (zabija starą
 wersję po naszej stronie), (c) ignorować pipeline — nic to nie psuje,
 tylko brzydko wygląda w Actions.
 
-## Landing page — drobne poprawki (1/10)
+## ~~Landing page — drobne poprawki~~ ✓ zrobione (commit 3c99a77)
 
 - Do karty *Fit Krasnal* dopisać informację o wygodniejszym widoku dla
   telefonu: `fit.krasnal.cc/mobile`.
