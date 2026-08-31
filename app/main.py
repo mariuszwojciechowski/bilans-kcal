@@ -885,16 +885,26 @@ def get_saved_meals(db: Session = Depends(db_session),
 @app.post("/api/saved-meals", status_code=201)
 def create_saved_meal(data: SavedMealIn, db: Session = Depends(db_session),
                       user: User = Depends(auth.current_user)):
-    sm = SavedMeal(
-        user_id=user.id, name=data.name, kcal=round(data.kcal),
-        kcal_min=round(data.kcal_min) if data.kcal_min else None,
-        kcal_max=round(data.kcal_max) if data.kcal_max else None,
-        protein_g=data.protein_g, fat_g=data.fat_g, carbs_g=data.carbs_g,
-        fiber_g=data.fiber_g, sugars_g=data.sugars_g,
-        items_json=json.dumps(data.items, ensure_ascii=False) if data.items else None,
-        assumptions_json=json.dumps(data.assumptions, ensure_ascii=False) if data.assumptions else None,
+    """Upsert po nazwie: zapis pod istniejącą nazwą nadpisuje wartości
+    zamiast tworzyć duplikat (import w transfer.py deduplikuje tak samo)."""
+    name = data.name.strip()
+    sm = db.scalar(
+        select(SavedMeal).where(SavedMeal.user_id == user.id, SavedMeal.name == name)
     )
-    db.add(sm)
+    if sm is None:
+        sm = SavedMeal(user_id=user.id, name=name)
+        db.add(sm)
+    sm.kcal = round(data.kcal)
+    sm.kcal_min = round(data.kcal_min) if data.kcal_min else None
+    sm.kcal_max = round(data.kcal_max) if data.kcal_max else None
+    sm.protein_g = data.protein_g
+    sm.fat_g = data.fat_g
+    sm.carbs_g = data.carbs_g
+    sm.fiber_g = data.fiber_g
+    sm.sugars_g = data.sugars_g
+    sm.items_json = json.dumps(data.items, ensure_ascii=False) if data.items else None
+    sm.assumptions_json = json.dumps(data.assumptions, ensure_ascii=False) if data.assumptions else None
+    sm.last_used_at = datetime.utcnow()
     db.commit()
     return {"id": sm.id}
 
