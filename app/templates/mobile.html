@@ -285,7 +285,8 @@
   </section>
 
   <div id="a-garmin-warning" style="display:none;background:rgba(220,53,69,.1);border:1px solid var(--danger);padding:10px;border-radius:8px;margin:0 12px;color:var(--danger);font-size:12px">
-    ⚠ Posiadasz podłączone Garmin. Ręczne wpisy mogą zawyżać spalone kcal w dniu w toku.
+    ⚠ Posiadasz podłączone Garmin. Ręczne wpisy SĄ doliczane do spalonych kcal — jeśli
+    zegarek zarejestrował ten trening, skasuj wpis ręczny, inaczej policzy się podwójnie.
   </div>
 </div>
 
@@ -911,11 +912,10 @@ async function saveLlmKey() {
 /* ── AKTYWNOŚCI ── */
 function renderActivityBreakdown(rep) {
   const el = document.getElementById("a-tdee-breakdown");
-  if (!el || !rep.tdee_model) return;
-  const t = rep.tdee_model;
+  if (!el || !rep.out_breakdown) return;
+  const b = rep.out_breakdown;
   let html = `<div style="font-size:12px;color:var(--stone);line-height:1.8">`;
-  html += `BMR <b>${t.bmr}</b> + kroki <b>${t.neat}</b> + aktywności <b>${t.activities}</b> + TEF <b>${t.tef}</b> = <b style="color:var(--ink)">${t.total} kcal</b><br>`;
-  html += `Kroki: <b>${rep.steps}${rep.steps_default ? " (domyślne)" : ""}</b>`;
+  html += `BMR <b>${b.bmr}</b> + kroki <b>${b.steps_kcal} kcal</b> (${b.steps_count} kroków${rep.steps_default ? ", domyślne" : ""}) + aktywności <b>${b.activities_kcal}</b> + TEF <b>${b.tef}</b> = <b style="color:var(--ink)">${b.total} kcal</b>`;
   html += `</div>`;
   el.innerHTML = html;
 }
@@ -995,13 +995,14 @@ async function loadActivityList(day) {
 
     let html = "";
     if (manual.length) {
-      html += "<h3>Moje wpisy</h3>";
+      html += "<h3>Wprowadzone ręcznie — zakładamy, że Garmin o nich nie wie</h3>";
       manual.forEach(a => {
         const dist = a.distance_m ? ` · ${(a.distance_m/1000).toFixed(1)} km` : "";
+        const steps = a.est_steps ? ` (~${a.est_steps} kroków)` : "";
         const mins = Math.round(a.duration_s / 60);
         html += `<div class="entry">
           <div style="flex:1">
-            <div><b>${a.type}</b> ${mins} min${dist}</div>
+            <div><b>${a.type}</b> ${mins} min${dist}${steps}</div>
             <div class="muted">${a.kcal_garmin} kcal</div>
           </div>
           <button class="x" onclick="deleteActivity(${a.id}, () => loadActivityList('${day}'))">✕</button>
