@@ -13,7 +13,61 @@ Przy każdym punkcie **szacowanie złożoności w skali 1-10**:
 
 ---
 
-## ~~Przemeblowanie: równanie do Bilansu, karta GARMIN w zakładce, dwie kolumny~~ ✓ zrobione (SHA po commicie), pytest zielony (95 passed), zweryfikowane w przeglądarce (mobile 375px + desktop 1200px) — deploy nie zweryfikowany, zostawione właścicielowi
+## Ujednolicenie nawigacji desktop ↔ mobile (3/10)
+
+Feedback właściciela 2026-09-01. MOBILE JEST WZORCEM — dolny navbar
+(Dziś / Dodaj / Aktywności / Trendy / Ustawienia jako zakładki SPA
+w `mobile.html`) zachowuje się dobrze i MA ZOSTAĆ DOKŁADNIE JAK JEST.
+Problem jest na desktopie: Dziś/Aktywności przełączają widok w miejscu
+(nagłówek i nawigacja zostają — dobrze), ale Trendy i Ustawienia linkują
+do OSOBNYCH stron serwerowych `/trends` i `/settings`, które zabierają
+nawigację (źle), a „Dodaj" woła `show('add')+showManual()`, co na
+desktopie (gdzie formularz Dodaj i tak jest widoczny obok Dziś) tylko
+otwiera draft ręczny i duplikuje przycisk „Wpisz wartości ręcznie".
+
+**Docelowy model (decyzje):**
+
+- Desktop dostaje TE SAME zakładki co mobile i wszystkie przełączają widok
+  w miejscu — nagłówek + `hdr-nav` zawsze zostają.
+- Trendy i Ustawienia na desktopie używają SPA-owych stron, które mobile
+  już ma (`page-trends` + `renderTrends()`, `page-settings` +
+  `renderSettings()`) — koniec z uciekaniem na `/trends` i `/settings`
+  z nawigacji. Strony serwerowe zostają jako deep-linki (m.in. link
+  „Zarządzaj połączeniem z Garminem" → `/settings#garmin` zostaje).
+- „Dodaj" na desktopie: widok Dziś nadal pokazuje formularz Dodaj obok
+  (dwie kolumny — najlepsze użycie szerokiego ekranu, zostaje). Klik
+  „Dodaj" w `hdr-nav` = przełącz na widok Dziś (jeśli jesteś gdzie
+  indziej) + `scrollIntoView` + focus na formularzu — BEZ `showManual()`
+  (to usuwa duplikację przycisku). Na mobile „Dodaj" bez zmian.
+
+**Kroki implementacji (`app/templates/mobile.html`):**
+
+1. Uogólnij mechanizm `main.act` na atrybut: `show(page)` ustawia
+   `document.querySelector("main").dataset.view = page` (klasę `act`
+   usuń). Desktopowy CSS (`@media min-width:800px`) steruje widokami po
+   `main[data-view=...]`: `today` (i brak atrybutu) → `page-today` +
+   `page-add` obok siebie jak dziś; `activities` → `page-activities`
+   (dwie kolumny, już jest); `trends` → `page-trends`; `settings` →
+   `page-settings`; pozostałe strony w danym widoku ukryte. Usuń
+   `#page-settings, #page-trends { display:none !important }` (linie ~89-90).
+2. `hdr-nav`: Trendy → `onclick="show('trends');return false"`,
+   Ustawienia → `show('settings')` (zamiast href na strony serwerowe);
+   „Dodaj" → `goAdd()`: na desktopie `show('today')` + scroll/focus do
+   karty Dodaj, na mobile dotychczasowe `show('add')` (rozpoznaj po
+   `matchMedia('(min-width:800px)')`); bez `showManual()` na desktopie.
+3. `renderTrends()`/`renderSettings()` na szerokim viewporcie: sprawdź,
+   że wykresy SVG i formularz nie rozjeżdżają się na 1020 px (max-width
+   main) — ewentualnie ogranicz szerokość kart tych widoków.
+4. Wskaźnik aktywnego widoku obok loga: `show()` ustawia tekst w headerze
+   (np. w `#hdr-date` obok daty albo osobny span) — na wzór tego, co
+   strony serwerowe robiły tytułem; aktywny link w `hdr-nav` podświetlaj
+   (klasa active jak w dolnym nav).
+5. Weryfikacja w przeglądarce: 375 px (mobile navbar bez zmian zachowania,
+   wszystkie 5 zakładek) i 1200 px (5 zakładek w hdr-nav, żadna nie gubi
+   nawigacji, „Dodaj" focusuje formularz bez otwierania draftu ręcznego).
+   Pytest zielony. Deploy i prod — właściciel.
+
+## ~~Przemeblowanie: równanie do Bilansu, karta GARMIN w zakładce, dwie kolumny~~ ✓ zrobione (commit 02cc6f2), pytest zielony (95 passed), zweryfikowane w przeglądarce (mobile 375px + desktop 1200px) — deploy nie zweryfikowany, zostawione właścicielowi
 
 Feedback właściciela 2026-09-01, cztery punkty. Wszystko w
 `app/templates/mobile.html`. Po pushu stop — deploy i prod robi właściciel.
@@ -56,7 +110,7 @@ Feedback właściciela 2026-09-01, cztery punkty. Wszystko w
    po prawej, klik w Dziś/Aktywności widocznie odpala sync (status
    „Synchronizuję…"). Deployu i produkcji nie ruszaj.
 
-## ~~Przycisk „Aktywności/Kroki" — wyrównanie, podejście trzecie~~ ✓ zrobione (SHA po commicie) — zweryfikowane getBoundingClientRect() w przeglądarce: bottom i height przycisku i inputa równe co do piksela na 375px i 1200px
+## ~~Przycisk „Aktywności/Kroki" — wyrównanie, podejście trzecie~~ ✓ zrobione (commit 02cc6f2) — zweryfikowane getBoundingClientRect() w przeglądarce: bottom i height przycisku i inputa równe co do piksela na 375px i 1200px
 
 Dwa poprzednie fixy (pusty label, potem `align-items:flex-end`) nie
 wyrównały — screenshot właściciela z 2026-09-01 pokazuje przycisk wciąż
@@ -74,7 +128,7 @@ przeglądarce (preview + javascript_tool), nie na oko: porównaj
 być RÓWNE co do piksela, w szerokości mobilnej (375px) i desktopowej;
 dopiero równość = zrobione.
 
-## ~~Skala intensywności w nowej linii~~ ✓ zrobione (SHA po commicie), zweryfikowane w przeglądarce
+## ~~Skala intensywności w nowej linii~~ ✓ zrobione (commit 02cc6f2), zweryfikowane w przeglądarce
 
 W przyciskach intensywności (radio w formularzu aktywności,
 `app/templates/mobile.html`) liczbowe wskazanie ma być w NOWEJ LINII pod
