@@ -13,6 +13,24 @@ Przy każdym punkcie **szacowanie złożoności w skali 1-10**:
 
 ---
 
+## Przycisk „Aktywności/Kroki" — wyrównanie, podejście trzecie (1/10)
+
+Dwa poprzednie fixy (pusty label, potem `align-items:flex-end`) nie
+wyrównały — screenshot właściciela z 2026-09-01 pokazuje przycisk wciąż
+niżej i o innej wysokości niż input ciężaru. PRZYCZYNA (z CSS, nie zgaduj
+innej): bazowa reguła (`mobile.html` ~linia 39) daje inputom
+`margin: 4px 0` i `border: 1px solid`, a przycisk w tym wierszu ma inline
+`margin:0`, zaś `button.ghost` zeruje border — przy `align-items:flex-end`
+dolna krawędź przycisku wypada 4 px NIŻEJ (brak dolnego marginesu),
+a pudełko jest 2 px niższe (brak obramowania). FIX: przyciskowi w tym
+wierszu (~linia 137) daj `margin:4px 0` (jak input, zamiast `margin:0`)
+i `border:1px solid transparent` — wtedy box przycisku jest identyczny
+z boxem inputa i `flex-end` domyka resztę. WERYFIKACJA OBOWIĄZKOWA w
+przeglądarce (preview + javascript_tool), nie na oko: porównaj
+`getBoundingClientRect()` przycisku i inputa — `.bottom` i `.height` mają
+być RÓWNE co do piksela, w szerokości mobilnej (375px) i desktopowej;
+dopiero równość = zrobione.
+
 ## Skala intensywności w nowej linii (1/10)
 
 W przyciskach intensywności (radio w formularzu aktywności,
