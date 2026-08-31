@@ -5,7 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Fit Krasnal</title>
 {% if has_logo %}<link rel="icon" href="/static/favicon-32.png">{% endif %}
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <meta name="theme-color" content="#1A4D3A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fit Krasnal">
+<meta name="mobile-web-app-capable" content="yes">
 <style>
   :root {
     --green: #1A4D3A; --green-med: #3A7A5C; --lime: #8DC63F;
@@ -29,11 +35,13 @@
           box-shadow: 0 1px 3px rgba(33,37,41,.15); }
   h2 { font-size: 13px; margin: 0 0 8px; text-transform: uppercase;
        letter-spacing: .05em; color: var(--stone); }
+  h3 { font-size: 12px; color: var(--stone); margin: 10px 0 4px; }
   input, textarea, select, button { font: inherit; padding: 10px; border-radius: 8px; width: 100%;
     border: 1px solid var(--stone); background: var(--card); color: var(--ink); margin: 4px 0; }
   button.primary { background: var(--lime); color: var(--green); font-weight: 700; border: none; }
   button.ghost { background: var(--green-med); color: #fff; border: none; }
   button.danger { background: none; border: 1px solid var(--danger); color: var(--danger); }
+  button.sm { padding: 6px 12px; width: auto; font-size: 13px; }
   .muted { color: var(--stone); font-size: 13px; }
   .pos { color: var(--success); } .neg { color: var(--danger); } .mid { color: var(--green-med); }
   .macro-below { color: var(--ink); }
@@ -41,8 +49,8 @@
   .macro-above { color: var(--danger); font-weight: 700; font-style: italic; }
   nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex;
         background: var(--green); z-index: 5; }
-  nav button { flex: 1; background: none; border: none; color: #C9D3CC; padding: 12px 4px;
-               border-radius: 0; font-size: 13px; margin: 0; }
+  nav button { flex: 1; background: none; border: none; color: #C9D3CC; padding: 10px 2px;
+               border-radius: 0; font-size: 11px; margin: 0; }
   nav button.active { color: #fff; font-weight: 700; background: rgba(255,255,255,.12); }
   .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
@@ -68,6 +76,8 @@
               padding: 6px 10px; border-radius: 6px; background: none; border: none;
               cursor: pointer; width: auto; margin: 0; }
   .hdr-link:hover { background: rgba(255,255,255,.12); }
+  .trend-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .trend-btns button { flex: 1; min-width: 0; }
   @media (min-width: 800px) {
     body { padding-bottom: 0; }
     nav { display: none; }
@@ -77,6 +87,7 @@
     main { max-width: 1020px; grid-template-columns: 1fr 1fr; align-items: start; }
     .page { display: grid !important; gap: 12px; }
     #page-settings { display: none !important; }
+    #page-trends { display: none !important; }
     .hdr-nav { display: flex !important; }
   }
 </style>
@@ -177,14 +188,78 @@
   </section>
 </div>
 
+<!-- ── TRENDY ───────────────────────────────────────────────────────── -->
+<div class="page" id="page-trends">
+  <section class="card">
+    <h2>Trendy</h2>
+    <div class="trend-btns" id="trend-btns"></div>
+    <div class="stats" style="margin-bottom:8px">
+      <div class="stat"><b id="tr-change">—</b><span>zmiana ciężaru [kg]</span></div>
+      <div class="stat"><b id="tr-balance">—</b><span>śr. bilans [kcal/d]</span></div>
+      <div class="stat" id="tr-goal-stat" style="display:none">
+        <b id="tr-goal">—</b><span>do celu ciężaru</span>
+      </div>
+    </div>
+    <div id="trends-charts"><p class="muted">Wybierz okres powyżej.</p></div>
+  </section>
+</div>
+
 <!-- ── USTAWIENIA ───────────────────────────────────────────────────── -->
 <div class="page" id="page-settings">
+  <p class="muted" id="s-status" style="padding:0 4px"></p>
+
   <section class="card">
-    <h2>Menu</h2>
-    <p><a href="/settings">Ustawienia</a> — profil, klucz LLM, konto Garmina</p>
-    <p><a href="/trends">Trendy</a> — wykresy wagi i bilansu</p>
+    <h2>Profil</h2>
+    <label>Data urodzenia</label>
+    <input type="date" id="s-birth">
+    <div class="row2">
+      <span style="flex:1">
+        <label>Płeć</label>
+        <select id="s-sex">
+          <option value="M">Mężczyzna</option>
+          <option value="F">Kobieta</option>
+        </select>
+      </span>
+      <span style="flex:1">
+        <label>Wzrost [cm]</label>
+        <input type="number" id="s-height" step="0.5" min="100" max="250">
+      </span>
+    </div>
+    <div class="row2">
+      <span style="flex:1">
+        <label>Deficyt [kcal]</label>
+        <input type="number" id="s-deficit" step="50" min="0" max="1500">
+      </span>
+      <span style="flex:1">
+        <label>Cel ciężaru [kg]</label>
+        <input type="number" id="s-goalweight" step="0.5" min="30" max="250" placeholder="—">
+      </span>
+    </div>
+    <label>Styl życia</label>
+    <select id="s-lifestyle"></select>
+    <button class="primary" id="s-profile-btn" onclick="saveProfile()">Zapisz profil</button>
+  </section>
+
+  <section class="card">
+    <h2>Klucz LLM (Gemini)</h2>
+    <p class="muted">Aktualny: <span id="s-gemini-masked">—</span> · <span id="s-llm-status"></span></p>
+    <input type="text" id="s-gemini-key" placeholder="Wklej nowy klucz Gemini (AIza…)"
+           autocomplete="off" autocorrect="off" spellcheck="false">
+    <button class="ghost" id="s-llm-btn" onclick="saveLlmKey()">Zapisz klucz</button>
+  </section>
+
+  <section class="card">
+    <h2>Garmin Connect</h2>
+    <p class="muted">Status: <span id="s-garmin-status">sprawdzanie…</span></p>
+    <a href="/settings#garmin" style="display:block;margin-top:4px">
+      Zarządzaj połączeniem z Garminem →
+    </a>
+  </section>
+
+  <section class="card">
+    <h2>Konto</h2>
     <p class="muted">Kontakt: <a href="mailto:krasnal@krasnal.cc">krasnal@krasnal.cc</a></p>
-    <form method="post" action="/logout" style="margin-top:12px">
+    <form method="post" action="/logout" style="margin-top:8px">
       <button type="submit" class="danger">Wyloguj</button>
     </form>
   </section>
@@ -194,13 +269,18 @@
 
 <nav>
   <button id="nav-today" class="active" onclick="show('today')">Dziś</button>
-  <button id="nav-add" onclick="show('add')">Dodaj posiłek</button>
+  <button id="nav-add" onclick="show('add')">Dodaj</button>
+  <button id="nav-trends" onclick="show('trends')">Trendy</button>
   <button id="nav-settings" onclick="show('settings')">Ustawienia</button>
 </nav>
 
 <script>
 /* Cienki klient backendu: żadnego IndexedDB, żadnego bezpośredniego LLM.
    Wszystko przez /api/* pod tą samą sesją co dashboard. */
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js", {scope: "/"}).catch(() => {});
+}
 
 function downscale(file) {
   return new Promise((resolve, reject) => {
@@ -239,8 +319,8 @@ async function api(path, opts = {}) {
   const ct = r.headers.get("content-type") || "";
   return ct.includes("json") ? r.json() : r.text();
 }
-async function apiJson(path, body) {
-  return api(path, {method: "POST", headers: {"content-type": "application/json"},
+async function apiJson(path, body, method = "POST") {
+  return api(path, {method, headers: {"content-type": "application/json"},
                     body: JSON.stringify(body)});
 }
 async function apiForm(path, formData) {
@@ -253,6 +333,8 @@ function show(page) {
   document.getElementById("page-" + page).classList.add("visible");
   document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
   document.getElementById("nav-" + page).classList.add("active");
+  if (page === "settings") renderSettings();
+  if (page === "trends") renderTrends();
 }
 
 /* ── DZIŚ: renderowanie ── */
@@ -279,9 +361,9 @@ async function renderToday() {
     renderMeals(rep.meals, rep.pending_meals || []);
   } catch (e) {
     document.getElementById("quip").textContent =
-      "Brak danych. Uzupełnij profil i wagę na /settings albo tu poniżej.";
+      "Brak danych. Uzupełnij profil i wagę w Ustawieniach.";
     document.getElementById("macros").innerHTML =
-      '<p class="muted">Brak profilu / pomiaru wagi. Wpisz wagę i sprawdź ustawienia.</p>';
+      '<p class="muted">Brak profilu / pomiaru wagi.</p>';
     document.getElementById("t-meals").innerHTML = "";
   }
 }
@@ -295,15 +377,15 @@ function setColored(id, value, cls) {
 function renderMacros(m) {
   if (!m) return;
   const rows = [
-    ["Białko", m.protein, "protein", "#FFFFFF", `${r0(m.protein.range_g[0])}–${r0(m.protein.range_g[1])} g`],
-    ["Węglowodany", m.carbs, "carbs", "#000000", `${r0(m.carbs.range_g[0])}–${r0(m.carbs.range_g[1])} g`],
-    ["Tłuszcze", m.fat, "fat", "#FFEB3B", `${r0(m.fat.range_g[0])}–${r0(m.fat.range_g[1])} g`],
-    ["Błonnik", m.fiber, "fiber", "#28A745", `≥ ${r0(m.fiber.min_g)} g`],
-    ["Cukry wolne", m.sugars, "sugars", "#DC3545", `< ${r0(m.sugars.max_g)} g`],
+    ["Białko", m.protein, "#FFFFFF", `${r0(m.protein.range_g[0])}–${r0(m.protein.range_g[1])} g`],
+    ["Węglowodany", m.carbs, "#000000", `${r0(m.carbs.range_g[0])}–${r0(m.carbs.range_g[1])} g`],
+    ["Tłuszcze", m.fat, "#FFEB3B", `${r0(m.fat.range_g[0])}–${r0(m.fat.range_g[1])} g`],
+    ["Błonnik", m.fiber, "#28A745", `≥ ${r0(m.fiber.min_g)} g`],
+    ["Cukry wolne", m.sugars, "#DC3545", `< ${r0(m.sugars.max_g)} g`],
   ];
   const statusText = {ok: "w normie", below: "poniżej", above: "powyżej"};
   const statusClass = {ok: "macro-ok", below: "macro-below", above: "macro-above"};
-  document.getElementById("macros").innerHTML = rows.map(([label, item, key, color, range]) => `
+  document.getElementById("macros").innerHTML = rows.map(([label, item, color, range]) => `
     <div style="display:flex;justify-content:space-between">
       <span>${label} — ${item.consumed_g.toFixed(1)} g <span class="muted">(${range})</span></span>
       <span class="${statusClass[item.status]}">${statusText[item.status]}</span></div>
@@ -471,11 +553,147 @@ async function saveDraft() {
   renderToday();
 }
 
+/* ── TRENDY ── */
+let _trendDays = 0;
+
+function _fmtChange(v, suffix) {
+  if (v === null || v === undefined) return "—";
+  return (v >= 0 ? "+" : "") + v + " " + suffix;
+}
+
+async function renderTrends(days) {
+  days = days || _trendDays || 30;
+  if (days === _trendDays) return;  // already loaded this period
+  _trendDays = days;
+  document.getElementById("trends-charts").innerHTML = '<p class="muted">Ładowanie…</p>';
+  // update button styles
+  document.querySelectorAll(".trend-btn").forEach(b => {
+    const active = +b.dataset.days === days;
+    b.className = active ? "ghost sm trend-btn" : "sm trend-btn";
+    b.style.opacity = active ? "1" : "0.65";
+  });
+  try {
+    const d = await api(`/api/trends?days=${days}`);
+    document.getElementById("tr-change").textContent = _fmtChange(d.period_change, "kg");
+    document.getElementById("tr-change").className = d.period_change < 0 ? "pos" : (d.period_change > 0 ? "neg" : "");
+    document.getElementById("tr-balance").textContent = _fmtChange(d.avg_balance, "kcal");
+    document.getElementById("tr-balance").className = d.avg_balance < 0 ? "pos" : (d.avg_balance > 0 ? "neg" : "");
+    if (d.to_goal_kg !== null) {
+      document.getElementById("tr-goal").textContent = d.to_goal_kg + " kg";
+      document.getElementById("tr-goal-stat").style.display = "";
+    }
+    document.getElementById("trends-charts").innerHTML =
+      `<h3>Ciężar [kg]</h3>${d.chart_weight}` +
+      `<h3>Kalorie</h3>${d.chart_energy}` +
+      `<h3>Bilans dzienny [kcal]</h3>${d.chart_balance}`;
+  } catch(e) {
+    document.getElementById("trends-charts").innerHTML =
+      `<p class="muted">Błąd ładowania: ${esc(e.message)}</p>`;
+  }
+}
+
+function initTrendBtns(ranges) {
+  const container = document.getElementById("trend-btns");
+  ranges.forEach(r => {
+    const btn = document.createElement("button");
+    btn.className = "sm trend-btn";
+    btn.style.opacity = "0.65";
+    btn.dataset.days = r.days;
+    btn.textContent = r.label;
+    btn.onclick = () => { _trendDays = 0; renderTrends(r.days); };
+    container.appendChild(btn);
+  });
+}
+
+/* ── USTAWIENIA ── */
+let _settingsLoaded = false;
+
+async function renderSettings() {
+  if (_settingsLoaded) return;
+  const status = document.getElementById("s-status");
+  status.textContent = "Ładowanie…";
+  try {
+    const [profile, settings] = await Promise.all([
+      api("/api/profile").catch(() => null),
+      api("/api/settings"),
+    ]);
+    // populate lifestyle select
+    const sel = document.getElementById("s-lifestyle");
+    sel.innerHTML = "";
+    Object.entries(settings.lifestyle_options || {}).forEach(([val, label]) => {
+      const opt = document.createElement("option");
+      opt.value = val; opt.textContent = label;
+      sel.appendChild(opt);
+    });
+    if (profile) {
+      document.getElementById("s-birth").value = profile.birth_date || "";
+      document.getElementById("s-sex").value = profile.sex || "M";
+      document.getElementById("s-height").value = profile.height_cm || "";
+      document.getElementById("s-deficit").value = profile.target_deficit_kcal ?? 500;
+      sel.value = profile.lifestyle || "active";
+      document.getElementById("s-goalweight").value = profile.target_weight_kg || "";
+    }
+    document.getElementById("s-gemini-masked").textContent = settings.gemini_masked || "—";
+    document.getElementById("s-llm-status").textContent =
+      settings.backend ? `backend: ${settings.backend}` : "brak klucza";
+    document.getElementById("s-garmin-status").textContent =
+      settings.garmin_connected ? "Połączony ✓" : "Niepołączony";
+    status.textContent = "";
+    _settingsLoaded = true;
+  } catch(e) {
+    status.textContent = "Błąd ładowania: " + e.message;
+  }
+}
+
+async function saveProfile() {
+  const btn = document.getElementById("s-profile-btn");
+  btn.disabled = true; btn.textContent = "Zapisuję…";
+  try {
+    const goalStr = document.getElementById("s-goalweight").value;
+    await apiJson("/api/profile", {
+      birth_date: document.getElementById("s-birth").value,
+      sex: document.getElementById("s-sex").value,
+      height_cm: +document.getElementById("s-height").value,
+      target_deficit_kcal: +document.getElementById("s-deficit").value,
+      lifestyle: document.getElementById("s-lifestyle").value,
+      target_weight_kg: goalStr ? +goalStr : null,
+    }, "PUT");
+    btn.textContent = "Zapisano ✓";
+    _settingsLoaded = false; _trendDays = 0;  // odśwież trendy po zapisie profilu
+  } catch(e) {
+    btn.textContent = "Błąd — spróbuj ponownie";
+  }
+  btn.disabled = false;
+  setTimeout(() => btn.textContent = "Zapisz profil", 2500);
+}
+
+async function saveLlmKey() {
+  const btn = document.getElementById("s-llm-btn");
+  const key = document.getElementById("s-gemini-key").value.trim();
+  if (!key) return;
+  btn.disabled = true; btn.textContent = "Zapisuję…";
+  try {
+    await apiJson("/api/settings/llm", {gemini_api_key: key});
+    document.getElementById("s-gemini-key").value = "";
+    _settingsLoaded = false;
+    renderSettings();
+    btn.textContent = "Zapisano ✓";
+  } catch(e) {
+    btn.textContent = "Błąd";
+  }
+  btn.disabled = false;
+  setTimeout(() => btn.textContent = "Zapisz klucz", 2500);
+}
+
 /* ── init ── */
 document.getElementById("t-date").value = todayIso();
 document.getElementById("f-date").value = todayIso();
 document.getElementById("f-time").value = localTime();
 renderToday();
+initTrendBtns([
+  {days: 7, label: "Tydzień"}, {days: 30, label: "Miesiąc"},
+  {days: 90, label: "Kwartał"}, {days: 180, label: "Pół roku"},
+]);
 </script>
 </body>
 </html>

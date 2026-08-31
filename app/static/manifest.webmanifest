@@ -1,0 +1,31 @@
+{
+  "name": "Fit Krasnal",
+  "short_name": "Fit Krasnal",
+  "description": "Bilans kalorii, makro i dane z Garmina",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F9FAF8",
+  "theme_color": "#1A4D3A",
+  "lang": "pl-PL",
+  "icons": [
+    {
+      "src": "/static/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
