@@ -39,13 +39,7 @@ Analogiczny do `scripts/adopt_local_user.py`, tyle że dla dowolnego użytkownik
 lądowało w historii bash), haszuje i zapisuje w bazie. Do użycia, gdy tester
 zapomni hasła i napisze do Ciebie.
 
-## Edytowanie liczby kroków w wersji desktopowej (1/10)
-
-Dashboard desktopowy wyświetla kroki z Garmina, ale nie ma pola do ręcznego
-wpisania — jest tylko w `/mobile`. Dodać input liczbowy obok statystyki kroków
-(analogicznie do `saveDaySteps()` w `mobile.html`) z `POST /api/day/{day}/steps`.
-Przydatne gdy krok Garmina nie zsynchronizował się albo użytkownik nie ma
-zegarka.
+## ~~Edytowanie liczby kroków w wersji desktopowej~~ ✓ nieaktualne — jeden widok ma pole kroków (commit d5bb8e8)
 
 ## Zmiana hasła z poziomu Ustawień (2/10)
 
@@ -56,11 +50,7 @@ sam wzorzec błędów co formularze rejestracji.
 
 ## ~~Zmniejszanie zdjęcia w przeglądarce przed wysłaniem na serwer~~ ✓ zrobione (commit b30b1eb)
 
-## Redirect po zalogowaniu w zależności od urządzenia (2/10)
-
-Dziś każdy po `/login` ląduje na dashboardzie desktopowym. Prosta heurystyka
-po `User-Agent`: telefon → `/mobile`, komputer → `/`. Sam tester może to
-i tak przełączyć w każdej chwili — chodzi o pierwsze wrażenie.
+## ~~Redirect po zalogowaniu w zależności od urządzenia~~ ✓ nieaktualne — jeden widok pod `/` (commit d5bb8e8)
 
 ## Widok Ustawienia w wersji mobilnej (3/10)
 
@@ -94,13 +84,7 @@ bilans i TDEE od razu uwzględniają aktywność. Wyświetlać w dashboardzie
 i `/mobile` w sekcji bilansu obok kroków. Nie zastępuje synchronizacji
 Garmina — jest alternatywą dla tych, którzy go nie mają.
 
-## ~~Dashboard lepiej wyglądający na telefonie~~ ✓ zrobione — jeden widok responsive (commit poniżej)
-
-Widok `/` (desktopowy) na iPhonie/Androidzie: tabele posiłków rozciągają się
-poza ekran, statystyki się gniotą. Dodać `@media (max-width: 640px)` który
-zamienia tabele na listy kart (jedna karta = jeden posiłek), zwęża statystyki
-do dwóch kolumn. Alternatywa: po prostu przekierowywać telefon na `/mobile`
-(punkt "Redirect po zalogowaniu" wyżej).
+## ~~Dashboard lepiej wyglądający na telefonie~~ ✓ zrobione — jeden widok responsive (commit d5bb8e8)
 
 ## Statystyki użycia — widok dla Ciebie (4/10)
 
