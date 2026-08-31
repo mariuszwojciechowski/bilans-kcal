@@ -36,7 +36,7 @@ Etap 1: web app (weryfikacja pomysłu, single-user). Etap 2: aplikacja mobilna
 | M7 Ustawienia | Podłączenie konta Garmin (z obsługą MFA), klucze LLM z instrukcją, stan kolejki offline |
 | M8 Kolejka offline | Posiłki bez klucza LLM/internetu czekają (opis + zdjęcie zredukowane do ≤1280 px JPEG); auto-przetworzenie po podaniu klucza; retencja nieprzetworzonych: **21 dni**; przetworzone zdjęcia są kasowane (use case: wakacje z drogim roamingiem) |
 | M9 Historia | Widok dowolnego dnia (kalendarz) + trendy (ciężar, energia, bilans) w zakresach tydzień/miesiąc/kwartał/pół roku |
-| M10 Transfer | „Przygotuj dane do przeniesienia" / „Wczytaj dane z innego urządzenia" (plik JSON; nośnik dowolny, np. Google Drive) + paczka mobilna: strona HTML bez instalacji (IndexedDB, zdjęcia zmniejszane w telefonie) do zbierania posiłków offline |
+| M10 Transfer | „Przygotuj dane do przeniesienia" / „Wczytaj dane z innego urządzenia" (plik JSON; nośnik dowolny, np. Google Drive). ~~Paczka mobilna: strona HTML bez instalacji (IndexedDB) do zbierania posiłków offline~~ — **wycofana z wymagań 2026-08-31**: równoległy klient PWA (`docs/`) podwajał utrzymanie i został usunięty; telefon obsługuje widok `/mobile` z tego samego backendu, a scenariusz offline zostaje przy kolejce serwerowej (M8) |
 | M11 Motywacja | Cel ciężaru (ustawienia): linia celu na trendach, licznik „do celu" i żartobliwe teksty krasnala w panelu „Dodaj posiłek" dobierane do sytuacji dnia i dystansu do celu, losowane przy każdym odświeżeniu |
 
 **Terminologia UI:** wielkość mierzona to **ciężar** (nie „waga" — waga to przyrząd);
