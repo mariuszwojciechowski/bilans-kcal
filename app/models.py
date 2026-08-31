@@ -65,13 +65,15 @@ class Activity(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), index=True)
-    garmin_id: Mapped[str] = mapped_column(String)
+    garmin_id: Mapped[str | None] = mapped_column(String)
     date: Mapped[date] = mapped_column(Date, index=True)
     type: Mapped[str] = mapped_column(String)  # running | cycling | strength_training | ...
     duration_s: Mapped[int] = mapped_column(Integer)
     distance_m: Mapped[float | None] = mapped_column(Float)
     kcal_garmin: Mapped[int | None] = mapped_column(Integer)
+    kcal_manual: Mapped[int | None] = mapped_column(Integer)
     avg_hr: Mapped[int | None] = mapped_column(Integer)
+    source: Mapped[str] = mapped_column(String, default="garmin")  # garmin | manual
 
 
 class AppSetting(Base):

@@ -173,6 +173,37 @@
     <h2>Moje posiłki</h2>
     <div id="saved-meals-list"><p class="muted">Ładowanie…</p></div>
   </section>
+  <section class="card">
+    <h2>Aktywność fizyczna</h2>
+    <div style="display:grid;gap:8px">
+      <div>
+        <label>Rodzaj aktywności</label>
+        <select id="a-activity">
+          <option value="">— wybierz —</option>
+          <option value="rower">Rower</option>
+          <option value="pływanie">Pływanie</option>
+          <option value="bieganie">Bieganie</option>
+          <option value="ćwiczenia siłowe">Ćwiczenia siłowe</option>
+          <option value="marsz szybki">Marsz szybki</option>
+        </select>
+      </div>
+      <div>
+        <label>Intensywność</label>
+        <select id="a-intensity">
+          <option value="">— wybierz —</option>
+          <option value="lekka">Lekka</option>
+          <option value="umiarkowana">Umiarkowana</option>
+          <option value="intensywna">Intensywna</option>
+        </select>
+      </div>
+      <div>
+        <label>Czas [minuty]</label>
+        <input type="number" id="a-duration" min="1" placeholder="30">
+      </div>
+      <button class="primary" onclick="addManualActivity()">Dodaj aktywność</button>
+      <div id="a-msg" class="muted" style="font-size:12px;margin-top:4px"></div>
+    </div>
+  </section>
   <section class="card" id="draft" style="display:none">
     <h2 id="d-title">Szacunek — sprawdź i popraw</h2>
     <input type="text" id="d-desc" placeholder="Opis posiłku"
@@ -678,6 +709,31 @@ async function saveDraft() {
   document.getElementById("msg").textContent = "Zapisano ✓";
   show("today");
   renderToday();
+}
+
+async function addManualActivity() {
+  const activity = document.getElementById("a-activity").value;
+  const intensity = document.getElementById("a-intensity").value;
+  const duration = +document.getElementById("a-duration").value;
+  const msg = document.getElementById("a-msg");
+
+  if (!activity || !intensity || !duration) {
+    msg.textContent = "⚠ Wypełnij wszystkie pola";
+    return;
+  }
+
+  try {
+    const res = await apiJson("/api/activity", {activity, intensity, duration_minutes: duration});
+    msg.textContent = `✓ Zapisano: ${res.kcal} kcal`;
+    ["a-activity", "a-intensity", "a-duration"].forEach(id =>
+      document.getElementById(id).value = "");
+    setTimeout(() => {
+      msg.textContent = "";
+      renderToday();
+    }, 1500);
+  } catch(e) {
+    msg.textContent = `✗ ${e.message}`;
+  }
 }
 
 /* ── TRENDY ── */
