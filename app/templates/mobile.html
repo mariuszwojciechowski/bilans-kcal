@@ -69,6 +69,7 @@
   .entry .x { width: auto; padding: 6px 10px; margin: 0; }
   .row2 { display: flex; gap: 8px; }
   .page { display: none; } .page.visible { display: grid; gap: 12px; }
+  .activities-col-left, .activities-col-right { display: grid; gap: 12px; align-content: start; }
   #draft { background: rgba(141,198,63,.10); }
   label { font-size: 13px; color: var(--stone); margin-top: 6px; display: block; }
   a { color: var(--green-med); }
@@ -89,7 +90,12 @@
     #page-settings { display: none !important; }
     #page-trends { display: none !important; }
     #page-activities { display: none !important; }
-    main.act #page-activities { display: grid !important; }
+    main.act #page-activities {
+      display: grid !important;
+      grid-column: 1 / -1;
+      grid-template-columns: 1fr 1fr;
+      align-items: start;
+    }
     main.act #page-today, main.act #page-add { display: none !important; }
     .hdr-nav { display: flex !important; }
   }
@@ -105,7 +111,7 @@
   <div class="hdr-nav" style="display:none;margin-left:auto;gap:2px;align-items:center">
     <a class="hdr-link" href="#" onclick="goToday();return false">Dziś</a>
     <a class="hdr-link" href="#" onclick="show('add');showManual();return false">Dodaj</a>
-    <a class="hdr-link" href="#" onclick="show('activities');return false">Aktywności</a>
+    <a class="hdr-link" href="#" onclick="goActivities();return false">Aktywności</a>
     <a class="hdr-link" href="/trends">Trendy</a>
     <a class="hdr-link" href="/settings">Ustawienia</a>
     <form method="post" action="/logout" style="margin:0">
@@ -134,20 +140,15 @@
       <button class="ghost" style="flex:none;padding:8px 14px;margin:0;width:auto" onclick="changeDay(1)">▶</button>
     </div>
     <div class="row2" style="align-items:flex-end">
-      <button class="ghost" style="flex:1;margin:0" onclick="show('activities')">Aktywności/Kroki</button>
+      <button class="ghost" style="flex:1;margin:4px 0;border:1px solid transparent" onclick="goActivities()">Aktywności/Kroki</button>
       <span style="flex:1"><label>pomiar ciężaru [kg]</label>
         <input type="number" id="t-newweight" step="0.1" placeholder="—" onchange="saveWeighIn()"></span>
     </div>
+    <div id="tdee-breakdown"></div>
   </section>
   <section class="card">
     <h2>Makroskładniki (normy WHO)</h2>
     <div id="macros"><p class="muted">Ładowanie…</p></div>
-  </section>
-  <section class="card" id="sync-card">
-    <h2>Garmin</h2>
-    <button class="ghost" onclick="doSync()">Synchronizuj z Garminem</button>
-    <p class="muted" id="sync-status" style="margin:4px 0 0"></p>
-    <div id="tdee-breakdown"></div>
   </section>
   <section class="card">
     <h2>Posiłki</h2>
@@ -220,6 +221,7 @@
 
 <!-- ── AKTYWNOŚCI/KROKI ────────────────────────────────────────────── -->
 <div class="page" id="page-activities">
+<div class="activities-col-left">
   <section class="card">
     <h2>Kroki</h2>
     <div style="display:grid;gap:8px">
@@ -234,7 +236,9 @@
   </section>
 
   <section class="card">
-    <h2>Rozbicie wydatku energetycznego</h2>
+    <h2>Garmin</h2>
+    <button class="ghost" onclick="doSync()">Synchronizuj z Garminem</button>
+    <p class="muted" id="sync-status" style="margin:4px 0 0"></p>
     <div id="a-tdee-breakdown"><p class="muted">Ładowanie…</p></div>
   </section>
 
@@ -242,8 +246,10 @@
     <h2>Aktywności dzisiaj</h2>
     <div id="a-list"><p class="muted">Ładowanie…</p></div>
   </section>
+</div>
 
-  <section class="card">
+<div class="activities-col-right">
+  <section class="card" id="a-add-card">
     <h2>Dodaj aktywność</h2>
     <div style="display:grid;gap:8px">
       <div>
@@ -269,13 +275,13 @@
         <label style="margin-bottom:6px">Intensywność</label>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
           <label style="margin:0;border:1px solid var(--stone);padding:8px;border-radius:6px;text-align:center;cursor:pointer">
-            <input type="radio" name="a-intensity" value="lekka"> <span id="a-intensity-label-lekka">Lekka · 1–3/10</span>
+            <input type="radio" name="a-intensity" value="lekka"> <span id="a-intensity-label-lekka">Lekka<br><small>1–3/10</small></span>
           </label>
           <label style="margin:0;border:1px solid var(--stone);padding:8px;border-radius:6px;text-align:center;cursor:pointer">
-            <input type="radio" name="a-intensity" value="umiarkowana" checked> <span id="a-intensity-label-umiarkowana">Umiarkowana · 4–7/10</span>
+            <input type="radio" name="a-intensity" value="umiarkowana" checked> <span id="a-intensity-label-umiarkowana">Umiarkowana<br><small>4–7/10</small></span>
           </label>
           <label style="margin:0;border:1px solid var(--stone);padding:8px;border-radius:6px;text-align:center;cursor:pointer">
-            <input type="radio" name="a-intensity" value="intensywna"> <span id="a-intensity-label-intensywna">Intensywna · 8–10/10</span>
+            <input type="radio" name="a-intensity" value="intensywna"> <span id="a-intensity-label-intensywna">Intensywna<br><small>8–10/10</small></span>
           </label>
         </div>
       </div>
@@ -288,6 +294,7 @@
     ⚠ Posiadasz podłączone Garmin. Ręczne wpisy SĄ doliczane do spalonych kcal — jeśli
     zegarek zarejestrował ten trening, skasuj wpis ręczny, inaczej policzy się podwójnie.
   </div>
+</div>
 </div>
 
 <!-- ── USTAWIENIA ───────────────────────────────────────────────────── -->
@@ -356,7 +363,7 @@
 <nav>
   <button id="nav-today" class="active" onclick="goToday()">Dziś</button>
   <button id="nav-add" onclick="show('add')">Dodaj</button>
-  <button id="nav-activities" onclick="show('activities')">Aktywności</button>
+  <button id="nav-activities" onclick="goActivities()">Aktywności</button>
   <button id="nav-trends" onclick="show('trends')">Trendy</button>
   <button id="nav-settings" onclick="show('settings')">Ustawienia</button>
 </nav>
@@ -418,6 +425,12 @@ async function apiForm(path, formData) {
 function goToday() {
   show('today');
   document.getElementById("t-date").value = todayIso();
+  renderToday();
+  doSync();
+}
+
+function goActivities() {
+  show('activities');
   renderToday();
   doSync();
 }
@@ -893,7 +906,9 @@ async function saveActivitySteps() {
 }
 
 const INTENSITY_LABELS_DEFAULT = {
-  lekka: "Lekka · 1–3/10", umiarkowana: "Umiarkowana · 4–7/10", intensywna: "Intensywna · 8–10/10",
+  lekka: "Lekka<br><small>1–3/10</small>",
+  umiarkowana: "Umiarkowana<br><small>4–7/10</small>",
+  intensywna: "Intensywna<br><small>8–10/10</small>",
 };
 const INTENSITY_LABELS_STRENGTH = {
   lekka: "Ciężko, długie przerwy (maxy)",
@@ -928,7 +943,7 @@ document.getElementById("a-type").addEventListener("change", function() {
   document.getElementById("a-distance-div").style.display = hideDistance ? "none" : "";
   const labels = this.value === "strength_training" ? INTENSITY_LABELS_STRENGTH : INTENSITY_LABELS_DEFAULT;
   for (const [value, text] of Object.entries(labels)) {
-    document.getElementById("a-intensity-label-" + value).textContent = text;
+    document.getElementById("a-intensity-label-" + value).innerHTML = text;
   }
 });
 

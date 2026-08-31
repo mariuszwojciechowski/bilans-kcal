@@ -13,7 +13,7 @@ Przy każdym punkcie **szacowanie złożoności w skali 1-10**:
 
 ---
 
-## Przemeblowanie: równanie do Bilansu, karta GARMIN w zakładce, dwie kolumny (2/10)
+## ~~Przemeblowanie: równanie do Bilansu, karta GARMIN w zakładce, dwie kolumny~~ ✓ zrobione (SHA po commicie), pytest zielony (95 passed), zweryfikowane w przeglądarce (mobile 375px + desktop 1200px) — deploy nie zweryfikowany, zostawione właścicielowi
 
 Feedback właściciela 2026-09-01, cztery punkty. Wszystko w
 `app/templates/mobile.html`. Po pushu stop — deploy i prod robi właściciel.
@@ -56,7 +56,7 @@ Feedback właściciela 2026-09-01, cztery punkty. Wszystko w
    po prawej, klik w Dziś/Aktywności widocznie odpala sync (status
    „Synchronizuję…"). Deployu i produkcji nie ruszaj.
 
-## Przycisk „Aktywności/Kroki" — wyrównanie, podejście trzecie (1/10)
+## ~~Przycisk „Aktywności/Kroki" — wyrównanie, podejście trzecie~~ ✓ zrobione (SHA po commicie) — zweryfikowane getBoundingClientRect() w przeglądarce: bottom i height przycisku i inputa równe co do piksela na 375px i 1200px
 
 Dwa poprzednie fixy (pusty label, potem `align-items:flex-end`) nie
 wyrównały — screenshot właściciela z 2026-09-01 pokazuje przycisk wciąż
@@ -74,7 +74,7 @@ przeglądarce (preview + javascript_tool), nie na oko: porównaj
 być RÓWNE co do piksela, w szerokości mobilnej (375px) i desktopowej;
 dopiero równość = zrobione.
 
-## Skala intensywności w nowej linii (1/10)
+## ~~Skala intensywności w nowej linii~~ ✓ zrobione (SHA po commicie), zweryfikowane w przeglądarce
 
 W przyciskach intensywności (radio w formularzu aktywności,
 `app/templates/mobile.html`) liczbowe wskazanie ma być w NOWEJ LINII pod
