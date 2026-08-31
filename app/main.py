@@ -1,5 +1,6 @@
 import json
 import secrets
+import uuid
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -298,16 +299,23 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
     )
 
     kcal_in = sum(m.kcal for m in meals)
+    from .services.energy import DEFAULT_STEPS
+
+    steps = summary.steps if summary and summary.steps else DEFAULT_STEPS
+    activities_for_tdee = []
+    for a in activities:
+        act_dict = {"type": a.type, "duration_s": a.duration_s, "distance_m": a.distance_m}
+        if a.source == "manual" and a.kcal_garmin:
+            act_dict["kcal"] = a.kcal_garmin
+        activities_for_tdee.append(act_dict)
+
     tdee = tdee_theoretical(
         weight_kg=weight,
         height_cm=profile.height_cm,
         age=age_years(profile.birth_date, day),
         sex=profile.sex,
-        steps=(summary.steps if summary and summary.steps else 0),
-        activities=[
-            {"type": a.type, "duration_s": a.duration_s, "distance_m": a.distance_m}
-            for a in activities
-        ],
+        steps=steps,
+        activities=activities_for_tdee,
         kcal_in=kcal_in,
     )
     bal = day_balance(
@@ -347,7 +355,9 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
             "tef": round(tdee.tef),
             "total": round(tdee.total),
         },
-        "steps": summary.steps if summary else None,
+        "steps": steps,
+        "steps_default": (summary and summary.steps is not None) == False,
+        "garmin_connected": garmin_provider.tokens_present(user_id),
         "last_sync_ago": humanize_ago(last_sync),
         "macros": macros,
         "target_weight_kg": profile.target_weight_kg,
@@ -390,8 +400,8 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
             for m in meals
         ],
         "activities": [
-            {"type": a.type, "duration_s": a.duration_s, "distance_m": a.distance_m,
-             "kcal_garmin": a.kcal_garmin}
+            {"id": a.id, "type": a.type, "duration_s": a.duration_s, "distance_m": a.distance_m,
+             "kcal_garmin": a.kcal_garmin, "source": a.source}
             for a in activities
         ],
     }
@@ -853,9 +863,11 @@ class SavedMealIn(BaseModel):
 
 
 class ActivityIn(BaseModel):
-    activity: str  # rower, pływanie, bieganie, ćwiczenia siłowe, marsz szybki
+    type: str  # running, cycling, walking, strength_training
     intensity: str  # lekka, umiarkowana, intensywna
-    duration_minutes: int
+    duration_min: int
+    distance_km: float | None = None
+    day: date | None = None
 
 
 @app.post("/api/settings/llm")
@@ -946,40 +958,57 @@ def use_saved_meal(meal_id: int, db: Session = Depends(db_session),
 
 # ── Aktywność fizyczna (ręczny wpis) ───────────────────────────────────────
 
-@app.post("/api/activity")
+@app.post("/api/activities")
 def add_manual_activity(data: ActivityIn, db: Session = Depends(db_session),
                         user: User = Depends(auth.current_user)):
-    """Zapisz ręcznie logowaną aktywność na dzisiejszy dzień."""
-    # Get last weight measurement
-    last_weight = db.scalar(
-        select(WeightLog).where(WeightLog.user_id == user.id)
-        .order_by(WeightLog.date.desc())
-    )
-    if last_weight is None:
-        raise HTTPException(422, "Brak pomiaru wagi w bazie")
+    """Zapisz ręcznie logowaną aktywność."""
+    from .services.energy import manual_activity_kcal
 
-    weight_kg = last_weight.weight_kg
-    kcal = activity_service.calculate_kcal(
-        data.activity, data.intensity, data.duration_minutes, weight_kg
+    day = data.day or date.today()
+    weights = [
+        (w.date, w.weight_kg)
+        for w in db.scalars(select(WeightLog).where(WeightLog.user_id == user.id)).all()
+    ]
+    weight_kg = smoothed_weight(weights)
+    if weight_kg is None:
+        raise HTTPException(409, "Brak pomiarów wagi w bazie")
+
+    kcal, explanation = manual_activity_kcal(
+        data.type, data.intensity, data.duration_min * 60,
+        data.distance_km * 1000 if data.distance_km else None, weight_kg
     )
 
     activity = Activity(
         user_id=user.id,
-        date=date.today(),
-        type=data.activity,
-        duration_s=data.duration_minutes * 60,
-        kcal_manual=kcal,
+        date=day,
+        type=data.type,
+        duration_s=data.duration_min * 60,
+        distance_m=data.distance_km * 1000 if data.distance_km else None,
+        garmin_id="manual-" + uuid.uuid4().hex,
+        kcal_garmin=round(kcal),
         source="manual"
     )
     db.add(activity)
     db.commit()
     return {
         "id": activity.id,
-        "type": activity.type,
-        "duration_min": data.duration_minutes,
-        "kcal": kcal,
-        "weight_used_kg": weight_kg,
+        "kcal": round(kcal),
+        "explanation": explanation,
     }
+
+
+@app.delete("/api/activities/{activity_id}")
+def delete_manual_activity(activity_id: int, db: Session = Depends(db_session),
+                          user: User = Depends(auth.current_user)):
+    """Usuń ręcznie logowaną aktywność (tylko manualne)."""
+    activity = db.get(Activity, activity_id)
+    if activity is None or activity.user_id != user.id:
+        raise HTTPException(404)
+    if activity.source != "manual":
+        raise HTTPException(404, "Można usuwać tylko ręcznie dodane aktywności")
+    db.delete(activity)
+    db.commit()
+    return {"ok": True}
 
 
 # ── Trendy API (JSON + SVG) — dla mobilnego SPA ───────────────────────────

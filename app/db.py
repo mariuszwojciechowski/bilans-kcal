@@ -62,6 +62,11 @@ def _migrate(engine) -> None:
             ))
             conn.commit()
 
+        activity_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(activity)"))]
+        if activity_cols and "source" not in activity_cols:
+            conn.execute(text("ALTER TABLE activity ADD COLUMN source VARCHAR DEFAULT 'garmin'"))
+            conn.commit()
+
 
 def get_session() -> Session:
     get_engine()
