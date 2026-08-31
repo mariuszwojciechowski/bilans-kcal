@@ -13,6 +13,17 @@ Przy każdym punkcie **szacowanie złożoności w skali 1-10**:
 
 ---
 
+## Skala intensywności w nowej linii (1/10)
+
+W przyciskach intensywności (radio w formularzu aktywności,
+`app/templates/mobile.html`) liczbowe wskazanie ma być w NOWEJ LINII pod
+nazwą, nie w jednym ciągu: zamiast „Lekka · 1–3/10" →
+„Lekka<br><small>1–3/10</small>" (analogicznie umiarkowana 4–7/10,
+intensywna 8–10/10). Etykiety siłowni bez zmian (opisowe, bez skali).
+Uwaga: etykiety są podmieniane JS-em przy zmianie typu
+(`INTENSITY_LABELS_DEFAULT`, ~linia 895) — zmiana i w markupie startowym,
+i w mapie; wstawiaj przez innerHTML, nie textContent.
+
 ## ~~Szlif zakładki Aktywności — runda 2 po testach właściciela~~ ✓ zrobione (commit 443cb0b), pytest zielony (95 passed) — deploy nie zweryfikowany, zostawione właścicielowi
 
 Feedback z 2026-09-01. Backend rozbicia (commit `db4f6cf`: `out_breakdown`,
