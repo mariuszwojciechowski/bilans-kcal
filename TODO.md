@@ -13,7 +13,7 @@ Przy każdym punkcie **szacowanie złożoności w skali 1-10**:
 
 ---
 
-## PILNE: naprawa testów aktywności — deploy zablokowany, produkcja wciąż leży (3/10)
+## ~~PILNE: naprawa testów aktywności — deploy zablokowany, produkcja wciąż leży~~ ✓ zrobione — plik przepisany wg wzorca `test_saved_meals_api.py`, prawdziwy strażnik migracji (SHA po commicie), pełny pytest zielony (89 passed)
 
 Commit `1a3401d` naprawił kod (kroki 1, 4–7 sekcji niżej), ale jego deploy
 **failował**: przywrócone `tests/test_activities_api.py` są czerwone — wszystkie
