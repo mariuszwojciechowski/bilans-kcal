@@ -72,6 +72,22 @@ def test_saved_meals_not_shared_between_users(clients):
     assert [m["name"] for m in export_a["saved_meals"]] == ["Sekretna jajecznica Alice"]
 
 
+def test_save_same_name_upserts_instead_of_duplicating(clients):
+    alice, bob = clients
+
+    first = alice.post("/api/saved-meals", json=MEAL).json()["id"]
+    second = alice.post("/api/saved-meals", json={**MEAL, "kcal": 300}).json()["id"]
+
+    assert first == second                      # ten sam wpis, nie duplikat
+    meals = alice.get("/api/saved-meals").json()
+    assert len(meals) == 1
+    assert meals[0]["kcal"] == 300              # wartości nadpisane
+
+    # ta sama nazwa u innego użytkownika to osobny wpis
+    bob_id = bob.post("/api/saved-meals", json=MEAL).json()["id"]
+    assert bob_id != first
+
+
 def test_saved_meals_require_auth(clients):
     from app.main import app
     with TestClient(app, follow_redirects=False) as anon:
