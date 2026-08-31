@@ -70,6 +70,21 @@ def test_delete_pending_removes_row_and_photo(db):
     assert [r.id for r in db.scalars(select(PendingMeal)).all()] == [keep.id]
 
 
+def test_downscale_accepts_heic():
+    """HEIC z iPhone → downscale zwraca poprawny JPEG."""
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+    img = Image.new("RGB", (2000, 1500), (80, 120, 200))
+    heif_img = pillow_heif.from_pillow(img)
+    buf = io.BytesIO()
+    heif_img.save(buf)
+    heic_bytes = buf.getvalue()
+    result = meal_queue.downscale_photo(heic_bytes)
+    out = Image.open(io.BytesIO(result))
+    assert out.format == "JPEG"
+    assert max(out.size) <= meal_queue.MAX_EDGE_PX
+
+
 def test_settings_roundtrip_and_env(db, monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     settings_service.set_setting(db, 1, "gemini_api_key", "AQ.test123")

@@ -166,7 +166,12 @@
     <textarea id="f-desc" rows="2" placeholder="albo opisz posiłek: 2 jajka sadzone i kromka żytniego"></textarea>
     <button class="primary" onclick="estimate()">Szacuj</button>
     <button class="ghost" onclick="showManual()" style="margin-top:4px">Wpisz wartości ręcznie</button>
+    <button class="ghost" onclick="toggleSavedMeals()" style="margin-top:4px">Moje posiłki ▼</button>
     <p class="muted" id="msg"></p>
+  </section>
+  <section class="card" id="saved-meals-panel" style="display:none">
+    <h2>Moje posiłki</h2>
+    <div id="saved-meals-list"><p class="muted">Ładowanie…</p></div>
   </section>
   <section class="card" id="draft" style="display:none">
     <h2 id="d-title">Szacunek — sprawdź i popraw</h2>
@@ -189,6 +194,7 @@
       <span style="flex:1"><label>cukry wolne g</label><input type="number" step="0.1" id="d-sugars" value="0"></span>
     </div>
     <p class="muted" id="d-range"></p>
+    <button class="ghost sm" id="save-to-my-meals-btn" onclick="saveToMyMeals()" style="margin-bottom:6px">Zapisz w moich posiłkach</button>
     <button class="primary" onclick="saveDraft()">Zapisz posiłek</button>
   </section>
 </div>
@@ -510,7 +516,8 @@ async function estimate() {
     let est;
     if (file) {
       const fd = new FormData();
-      const blob = await downscale(file);
+      let blob;
+      try { blob = await downscale(file); } catch(e) { blob = file; }
       fd.append("photo", blob, "photo.jpg");
       if (document.getElementById("f-note").value.trim()) fd.append("note", document.getElementById("f-note").value.trim());
       const day = document.getElementById("f-date").value;
@@ -565,6 +572,80 @@ function showManual() {
   document.getElementById("d-range").textContent = "";
   document.getElementById("msg").textContent = "";
   document.getElementById("d-desc").focus();
+}
+
+/* ── MOJE POSIŁKI ── */
+async function loadSavedMeals() {
+  const list = document.getElementById("saved-meals-list");
+  list.innerHTML = '<p class="muted">Ładowanie…</p>';
+  try {
+    const meals = await api("/api/saved-meals");
+    if (!meals.length) {
+      list.innerHTML = '<p class="muted">Brak zapisanych posiłków.</p>';
+      return;
+    }
+    list.innerHTML = meals.map(m => `
+      <div class="entry">
+        <div style="flex:1;cursor:pointer" onclick="useSavedMeal(${m.id})">
+          <div>${esc(m.name)}</div>
+          <div class="muted">${m.kcal} kcal · B/T/W ${r0(m.protein_g)}/${r0(m.fat_g)}/${r0(m.carbs_g)} g</div>
+        </div>
+        <button class="x" onclick="deleteSavedMeal(${m.id})">✕</button>
+      </div>`).join("");
+  } catch(e) {
+    list.innerHTML = `<p class="muted">Błąd: ${esc(e.message)}</p>`;
+  }
+}
+
+function toggleSavedMeals() {
+  const panel = document.getElementById("saved-meals-panel");
+  const wasHidden = panel.style.display === "none";
+  panel.style.display = wasHidden ? "" : "none";
+  if (wasHidden) loadSavedMeals();
+}
+
+async function useSavedMeal(id) {
+  try {
+    const est = await api(`/api/saved-meals/${id}/use`, {method: "POST"});
+    showDraft(est);
+    document.getElementById("saved-meals-panel").style.display = "none";
+    document.getElementById("msg").textContent = "";
+  } catch(e) {
+    document.getElementById("msg").textContent = "Błąd: " + e.message;
+  }
+}
+
+async function deleteSavedMeal(id) {
+  if (!confirm("Usunąć z moich posiłków?")) return;
+  await api(`/api/saved-meals/${id}`, {method: "DELETE"});
+  loadSavedMeals();
+}
+
+async function saveToMyMeals() {
+  const desc = document.getElementById("d-desc").value.trim() || "posiłek";
+  const name = prompt("Nazwa w Moich posiłkach:", desc);
+  if (!name) return;
+  const btn = document.getElementById("save-to-my-meals-btn");
+  try {
+    await apiJson("/api/saved-meals", {
+      name,
+      kcal: +document.getElementById("d-kcal").value,
+      kcal_min: _manual ? null : (draft ? r0(draft.kcal_min) : null),
+      kcal_max: _manual ? null : (draft ? r0(draft.kcal_max) : null),
+      protein_g: +document.getElementById("d-protein").value,
+      fat_g: +document.getElementById("d-fat").value,
+      carbs_g: +document.getElementById("d-carbs").value,
+      fiber_g: +document.getElementById("d-fiber").value,
+      sugars_g: +document.getElementById("d-sugars").value,
+      items: _manual ? [] : (draft?.items || []),
+      assumptions: _manual ? [] : (draft?.assumptions || []),
+    });
+    btn.textContent = "Zapisano ✓";
+    setTimeout(() => btn.textContent = "Zapisz w moich posiłkach", 2000);
+  } catch(e) {
+    btn.textContent = "Błąd";
+    setTimeout(() => btn.textContent = "Zapisz w moich posiłkach", 2000);
+  }
 }
 
 async function saveDraft() {

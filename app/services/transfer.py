@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import PHOTOS_DIR
-from ..models import Meal, PendingMeal, UserProfile, WeightLog
+from ..models import Meal, PendingMeal, SavedMeal, UserProfile, WeightLog
 from . import meal_queue
 
 FORMAT = "fit-krasnal-transfer"
@@ -79,6 +79,14 @@ def export_payload(db: Session, user_id: int) -> dict:
             for m in meals
         ],
         "pending": pending_out,
+        "saved_meals": [
+            {"name": m.name, "kcal": m.kcal,
+             "kcal_min": m.kcal_min, "kcal_max": m.kcal_max,
+             "protein_g": m.protein_g, "fat_g": m.fat_g, "carbs_g": m.carbs_g,
+             "fiber_g": m.fiber_g, "sugars_g": m.sugars_g,
+             "items_json": m.items_json, "assumptions_json": m.assumptions_json}
+            for m in db.scalars(select(SavedMeal).where(SavedMeal.user_id == user_id)).all()
+        ],
     }
 
 
@@ -92,7 +100,7 @@ def import_payload(db: Session, user_id: int, payload: dict) -> dict:
     if payload.get("version", 0) > VERSION:
         raise ValueError("Plik pochodzi z nowszej wersji aplikacji — zaktualizuj ją.")
 
-    counts = {"meals": 0, "weights": 0, "pending": 0, "profile": 0, "skipped": 0}
+    counts = {"meals": 0, "weights": 0, "pending": 0, "profile": 0, "saved_meals": 0, "skipped": 0}
 
     if payload.get("profile") and db.get(UserProfile, user_id) is None:
         p = payload["profile"]
@@ -157,6 +165,26 @@ def import_payload(db: Session, user_id: int, payload: dict) -> dict:
                            description=p.get("description"), note=p.get("note"),
                            photo_bytes=photo_bytes)
         counts["pending"] += 1
+
+    existing_saved_names = {
+        m.name for m in db.scalars(
+            select(SavedMeal).where(SavedMeal.user_id == user_id)
+        ).all()
+    }
+    for m in payload.get("saved_meals", []):
+        if m["name"] in existing_saved_names:
+            counts["skipped"] += 1
+            continue
+        db.add(SavedMeal(
+            user_id=user_id, name=m["name"], kcal=m["kcal"],
+            kcal_min=m.get("kcal_min"), kcal_max=m.get("kcal_max"),
+            protein_g=m.get("protein_g", 0), fat_g=m.get("fat_g", 0),
+            carbs_g=m.get("carbs_g", 0), fiber_g=m.get("fiber_g", 0),
+            sugars_g=m.get("sugars_g", 0),
+            items_json=m.get("items_json"), assumptions_json=m.get("assumptions_json"),
+        ))
+        existing_saved_names.add(m["name"])
+        counts["saved_meals"] += 1
 
     db.commit()
     return counts

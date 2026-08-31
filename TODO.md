@@ -177,7 +177,7 @@ na danych użytkownika jak MacroFactor). Kroki dla implementującego LLM:
    factor < 1.0, za mało dni → `None`, clamp na 0.85/1.15. Wszystko musi
    być zielone — czerwony pytest blokuje deploy.
 
-## Moje posiłki — zapamiętane, jednym kliknięciem (WYMAGANIA.md 5.2) (3/10)
+## ~~Moje posiłki — zapamiętane, jednym kliknięciem (WYMAGANIA.md 5.2)~~ ✓ zrobione (3/10)
 
 1. **Model danych.** W `app/models.py` tabela `SavedMeal`: `id`, `user_id`
    (FK + index), `name` (String), `kcal`, `kcal_min`, `kcal_max`, `protein_g`,
@@ -202,7 +202,7 @@ na danych użytkownika jak MacroFactor). Kroki dla implementującego LLM:
    `last_used_at` rośnie; izolacja między użytkownikami (wzorzec:
    `tests/test_garmin_multiuser.py`).
 
-## Konwersja HEIC — zdjęcia z iPhone'ów (WYMAGANIA.md 5.1) (2/10)
+## ~~Konwersja HEIC — zdjęcia z iPhone'ów (WYMAGANIA.md 5.1)~~ ✓ zrobione (2/10)
 
 Dziś `app/services/meal_vision.py` zna tylko jpg/jpeg/png/webp/gif, a Pillow
 bez wtyczki nie otworzy HEIC — zdjęcie z iPhone'a wywala szacowanie.
