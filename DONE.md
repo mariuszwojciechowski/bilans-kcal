@@ -10,6 +10,24 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Rok urodzenia zamiast pełnej daty — minimalizacja danych~~ ✓ zrobione (commit aba6c7f), pytest zielony (107 passed)
+
+Profil `UserProfile` trzyma teraz `birth_year: int` — pełna data urodzenia
+(silny identyfikator w połączeniu z e-mailem i danymi o zdrowiu) nie jest
+nigdzie w kodzie czytana: idzie tylko do BMR (5 kcal/rok) i do progu senior
+65+ w normach makro. Wiek liczony konwencją „środka roku"
+(`energy.age_from_year`, 1 lipca) — błąd ≤ 1 rok, symetryczny.
+
+`UserProfile.birth_date` zostaje w schemacie jako pochodna
+(`date(birth_year, 7, 1)`), migracja addytywna z backfillem z istniejącej
+`birth_date` (`app/db.py:_migrate()`). `ProfileIn` przyjmuje `birth_date`
+wyłącznie jako wejście zgodnościowe (stary klient/plik transferu) —
+`GET /api/profile` i eksport transferu wystawiają tylko `birth_year`.
+UI (`mobile.html`, `#page-settings`) ma teraz pole liczbowe „Rok urodzenia"
+z jednym zdaniem wyjaśnienia, zamiast `<input type="date">`.
+
+---
+
 ## ~~Ujednolicenie nawigacji desktop ↔ mobile~~ ✓ zrobione (SHA po commicie), pytest zielony (95 passed), zweryfikowane w przeglądarce (375px: 5 zakładek bez zmian; 1200px: hdr-nav przełącza w miejscu, Dodaj scrolluje+focusuje bez showManual(), aktywny link podświetlony, etykieta widoku w headerze) — deploy nie zweryfikowany, zostawione właścicielowi
 
 Feedback właściciela 2026-09-01. MOBILE JEST WZORCEM — dolny navbar
