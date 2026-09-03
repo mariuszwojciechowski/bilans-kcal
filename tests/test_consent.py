@@ -17,6 +17,7 @@ from app.services import consent, meal_queue
 from app.services.meal_vision import MealEstimate, MealItem
 
 INVITE = "test-invite-code"
+ADMIN_EMAIL = "admin@example.com"
 
 
 @pytest.fixture
@@ -25,6 +26,7 @@ def client(tmp_path, monkeypatch):
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine)
     monkeypatch.setattr("app.main.INVITE_CODE", INVITE)
+    monkeypatch.setattr("app.main.ADMIN_EMAIL", ADMIN_EMAIL)
     auth._failed.clear()
     from app.main import app
 
@@ -135,6 +137,25 @@ def test_transfer_export_never_contains_llm_keys(client):
     assert r.status_code == 200
     payload = client.get("/api/transfer/export").json()
     assert "AIzaSecretTestKey123" not in str(payload)
+
+
+def test_admin_consents_page_for_non_admin_is_404(client):
+    _register(client, consent_checked=True)
+    r = client.get("/admin/consents")
+    assert r.status_code == 404
+
+
+def test_admin_consents_page_lists_email_and_status(client):
+    _register(client, email="alice@example.com", consent_checked=True)
+    _register(client, email="bob@example.com", consent_checked=False)
+    _register(client, email=ADMIN_EMAIL, consent_checked=False)
+
+    r = client.get("/admin/consents")
+    assert r.status_code == 200
+    assert "alice@example.com" in r.text
+    assert "bob@example.com" in r.text
+    assert "aktualna" in r.text
+    assert "brak zgody" in r.text
 
 
 def test_process_queue_skips_without_consent(tmp_path, monkeypatch):

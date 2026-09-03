@@ -981,6 +981,19 @@ def usage_page(request: Request, db: Session = Depends(db_session),
     )
 
 
+@app.get("/admin/consents", response_class=HTMLResponse)
+def admin_consents_page(request: Request, db: Session = Depends(db_session),
+                        user: User = Depends(require_admin)):
+    """Rozliczalność RODO: kto i na co wyraził zgodę — z e-mailem, w
+    przeciwieństwie do zanonimizowanego /usage."""
+    return templates.TemplateResponse(
+        request,
+        "admin_consents.html",
+        {"rows": consent_service.admin_overview(db), "privacy_version": PRIVACY_VERSION,
+         "has_logo": (STATIC_DIR / "logo.png").exists()},
+    )
+
+
 class UsageEventIn(BaseModel):
     event: str
 

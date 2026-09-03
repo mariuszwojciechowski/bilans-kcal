@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fit Krasnal — zgody RODO</title>
+{% if has_logo %}<link rel="icon" href="/static/favicon-32.png">
+{% endif %}<style>
+  :root {
+    --green: #1A4D3A; --green-med: #3A7A5C; --lime: #8DC63F;
+    --bg: #F9FAF8; --card: #FFFFFF; --ink: #212529; --stone: #6C757D;
+    --danger: #DC3545; --success: #28A745;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #131715; --card: #1B211D; --ink: #E8ECE9; --stone: #9AA39D; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Inter, sans-serif;
+         background: var(--bg); color: var(--ink); }
+  header { background: var(--green); color: #F9FAF8; padding: 0 24px 0 0;
+           display: flex; align-items: stretch; gap: 12px; }
+  header > :not(.brand) { align-self: center; }
+  header a.brand { background: #fff; display: flex; align-items: center; gap: 12px;
+                   padding: 8px 22px 8px 18px; text-decoration: none; }
+  header img.logo { width: 52px; height: 52px; }
+  header h1 { font-size: 18px; font-weight: 600; margin: 0; color: var(--green); }
+  header a.nav { color: #C9D3CC; font-size: 14px; text-decoration: none;
+                 padding: 6px 10px; border-radius: 6px; }
+  header a.nav:hover { background: rgba(255,255,255,.12); }
+  main { max-width: 900px; margin: 24px auto; padding: 0 16px; display: grid; gap: 16px; }
+  .card { background: var(--card); border-radius: 10px; padding: 18px 20px;
+          box-shadow: 0 1px 3px rgba(33,37,41,.12); }
+  h2 { font-size: 15px; margin: 0 0 10px; text-transform: uppercase;
+       letter-spacing: .05em; color: var(--stone); }
+  .muted { color: var(--stone); font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(108,117,125,.2); }
+  th { color: var(--stone); font-weight: 500; font-size: 12px; text-transform: uppercase; }
+  .ok { color: var(--success); } .bad { color: var(--danger); } .warn { color: #B8860B; }
+</style>
+</head>
+<body>
+<header><a class="brand" href="/" title="Dziś">{% if has_logo %}<img class="logo" src="/static/logo-bw.png" alt="">{% endif %}<h1>Zgody RODO</h1></a>
+  <span style="margin-left:auto"></span>
+  <a class="nav" href="/usage">Statystyki →</a>
+  <a class="nav" href="/settings">← Ustawienia</a>
+</header>
+<main>
+
+<p class="muted">Widok wyłącznie dla admina — zawiera e-maile, w przeciwieństwie do
+<a href="/usage">/usage</a> (celowo zanonimizowanego). Bieżąca wersja noty:
+<code>{{ privacy_version }}</code>.</p>
+
+<section class="card">
+  <h2>Zgody per użytkownik</h2>
+  <table>
+    <thead><tr>
+      <th>E-mail</th><th>Rodzaj zgody</th><th>Status</th>
+      <th>Wersja noty</th><th>Udzielona</th><th>Wycofana</th>
+    </tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.email }}</td>
+        <td>{{ r.kind }}</td>
+        <td>
+          {% if r.status == "aktualna" %}<b class="ok">aktualna</b>
+          {% elif r.status == "wycofana" %}<b class="bad">wycofana</b>
+          {% elif r.status == "brak zgody" %}<b class="bad">brak zgody</b>
+          {% else %}<b class="warn">{{ r.status }}</b>{% endif %}
+        </td>
+        <td>{{ r.version or "—" }}</td>
+        <td>{{ r.granted_at.strftime("%d.%m.%Y %H:%M") if r.granted_at else "—" }}</td>
+        <td>{{ r.withdrawn_at.strftime("%d.%m.%Y %H:%M") if r.withdrawn_at else "—" }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted">Brak kont.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+</main>
+</body>
+</html>
