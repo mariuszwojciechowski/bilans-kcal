@@ -39,7 +39,7 @@ istnieje, nie dopisuj drugiego planu na to samo**, bo się rozjadą.
 
 | Wymóg | Stan | Gdzie plan |
 |---|---|---|
-| 6.2 Kalibracja adaptacyjna | brak tabeli `Calibration`; `day_report` liczy `e_target = kcal_out − deficyt` bez współczynnika (`app/main.py:413`) | „Kalibracja adaptacyjna" (6/10) |
+| 6.2 Kalibracja adaptacyjna | brak tabeli `Calibration`; `day_report` liczy `e_target = kcal_out − deficyt` bez współczynnika (`app/routers/day.py:day_report()`) | „Kalibracja adaptacyjna" (6/10) |
 | 6.4 Karta kalibracji w tygodniówce | pochodna 6.2 — średni bilans i ETA celu w `/trends` są | krok 4 planu kalibracji |
 | 8.3 Strefa czasowa jako granica dnia | `user_profile.tz` zapisywane i eksportowane, nieczytane — wszędzie `date.today()` procesu | „Strefa czasowa użytkownika…" (4/10) |
 | 8.3 Prawo do usunięcia (samoobsługowe) | realizowane mailem; nota `/prywatnosc` mówi o tym wprost, więc nie jest to kłamstwo — tylko brak | „«Usuń moje dane i konto»…" (6/10) |
@@ -145,11 +145,11 @@ samo jak przy `who_norms.json`.
    `cycling_met`, `activity_kcal_model`, `manual_activity_kcal`,
    `tdee_theoretical` czytają `_met()` zamiast stałych.
 3. **Zachowaj publiczne nazwy.** `DEFAULT_STEPS` jest importowany w trzech
-   miejscach (`app/main.py:364`, `tests/test_activities_api.py:17`,
+   miejscach (`app/routers/day.py`, `tests/test_activities_api.py:17`,
    `tests/test_queue_settings.py:147`) — zostaw jako stałą modułu
    inicjalizowaną z pliku (`DEFAULT_STEPS = _met()["steps"]["default_steps"]`),
    nie kasuj. Sygnatury funkcji bez zmian — `manual_activity_kcal` woła
-   `app/main.py:1203` i cztery pliki testów.
+   `app/routers/day.py:add_manual_activity()` i cztery pliki testów.
 4. **Testy `tests/test_met_table.py`**: plik wczytuje się i ma `meta.sources`;
    każdy typ w `manual` ma trzy intensywności; progi `cycling` są rosnące,
    a ostatni to `null`; monkeypatch `MET_PATH` na plik z innym `default_met`
@@ -220,15 +220,15 @@ na danych użytkownika jak MacroFactor). Kroki dla implementującego LLM:
    - `maybe_recalibrate(db, user_id)` — liczy i zapisuje nowy wpis, jeśli
      ostatni jest starszy niż 7 dni (albo nie istnieje); wołane w tle przy
      wejściu na dashboard (wzorzec: `background.add_task`, jak `maybe_sync`
-     w `app/main.py`).
-3. **Zastosowanie.** W `app/main.py:day_report()`: pobierz
+     w `app/routers/dashboard.py`).
+3. **Zastosowanie.** W `app/routers/day.py:day_report()`: pobierz
    `factor = calibration.current_factor(db, user_id)` i licz
    `e_target = bal.kcal_out * factor − profile.target_deficit_kcal`
    (dziś: bez factora). Do odpowiedzi dodaj pola `calibration_factor`
    i `calibration_updated` (data ostatniego wpisu) — UI ma pokazywać
    "zapotrzebowanie skorygowane o ±X% względem pomiaru".
 4. **UI.** W `app/templates/mobile.html` (jedyny widok dzienny) pokaż korektę
-   przy zapotrzebowaniu; w `/trends` (`app/main.py:trends` +
+   przy zapotrzebowaniu; w `/trends` (`app/routers/trends.py:trends()` +
    `app/templates/trends.html`) dodaj do tygodniówki kartę "kalibracja":
    oczekiwana vs rzeczywista zmiana ciężaru i factor (wymóg 6.4).
 5. **Transfer.** Kalibracji nie eksportuj w `app/services/transfer.py` —
@@ -246,7 +246,7 @@ Apple Watch, Fitbit, Whoop, Oura, Health Connect
 
 ## Strefa czasowa użytkownika jako granica dnia — WYMAGANIA.md 8.3 (4/10)
 
-`user_profile.tz` jest zapisywane (`app/main.py:205`) i eksportowane, ale nigdzie
+`user_profile.tz` jest zapisywane (`app/routers/profile.py:ProfileIn`) i eksportowane, ale nigdzie
 nie używane: wszystkie granice dnia biorą się z `date.today()` procesu, czyli ze
 strefy serwera (VM w GCP). Tester w innej strefie widzi „dzisiaj" serwera, a dzień
 zamyka mu się (`DailySummary.complete`) w środku jego doby.
@@ -263,21 +263,23 @@ migracji istniejących dat — dane sprzed zmiany zostają, jak są.
    (aware), `user_today(profile) -> date`, `user_time(profile) -> time`. Każda
    funkcja przyjmuje `UserProfile | None` — profil może jeszcze nie istnieć
    (rejestracja przed konfiguracją) i wtedy działa fallback.
-2. **`app/main.py` — zamień wszystkie zegary procesu** na wersje z profilu:
-   linia 449 (`_queue_meal`, godzina wpisu), 479 i 507 (domyślny dzień szacowania
-   ze zdjęcia i z tekstu), 547 (`save_meal`, godzina), 717 (data w nazwie pliku
-   eksportu), 760 (`trends`), 996 (`add_manual_activity`), 1050
-   (`api_trends_data`). Każdy z tych route'ów ma już `user`; profil pobierz przez
-   `db.get(UserProfile, user.id)`. `day_report` profil już ma — użyj go zamiast
-   dokładać drugie zapytanie.
+2. **Routery — zamień wszystkie zegary procesu** na wersje z profilu:
+   `app/routers/meals.py` (`_queue_meal` — godzina wpisu; `estimate_meal_photo`
+   i `estimate_meal_text` — domyślny dzień szacowania; `save_meal` — godzina),
+   `app/routers/transfer.py` (`transfer_export` — data w nazwie pliku eksportu),
+   `app/routers/trends.py` (`trends`, `api_trends_data`), `app/routers/day.py`
+   (`add_manual_activity`). Każdy z tych route'ów ma już `user`; profil pobierz
+   przez `db.get(UserProfile, user.id)`. `day_report` profil już ma — użyj go
+   zamiast dokładać drugie zapytanie.
 3. **`app/services/sync.py`** — `sync_range(db, provider, user_id, days=7,
    today: date | None = None)`; `None` zostawia `date.today()` (skrypty CLI),
-   a `main.py` i `maybe_sync` przekazują `user_today(profile)`. To `today`
-   decyduje o `row.complete = day < today` (linia 46) i o oknie synchronizacji.
-   `maybe_sync` otwiera własną sesję — profil dociąga w niej sam.
-4. **Walidacja w `put_profile`** (`app/main.py:188`): `ZoneInfo(data.tz)`
+   a `app/routers/profile.py:sync()` i `maybe_sync` przekazują
+   `user_today(profile)`. To `today` decyduje o `row.complete = day < today`
+   (linia 46) i o oknie synchronizacji. `maybe_sync` otwiera własną sesję —
+   profil dociąga w niej sam.
+4. **Walidacja w `put_profile`** (`app/routers/profile.py`): `ZoneInfo(data.tz)`
    w try/except → 422 przy nieznanej strefie, zamiast cichego zapisu śmiecia.
-5. **UI.** `dashboard()` (`app/main.py:593`) przekazuje do szablonu `today =
+5. **UI.** `dashboard()` (`app/routers/dashboard.py`) przekazuje do szablonu `today =
    user_today(profile)`, a `mobile.html` (linie ~409 i ~413, dziś `new Date()`)
    czyta datę z osadzonej stałej zamiast z zegara przeglądarki — inaczej telefon
    w podróży pokaże inny dzień niż backend liczy. W zakładce Ustawienia
@@ -338,13 +340,15 @@ Odzysk = `transfer.import_payload` z tego pliku.
      od nowa. `purge_after = teraz + 7 dni`.
    - `purge_due(db, now)` — kasuje pliki kopii, których `purge_after` minął,
      i twardo usuwa wiersze `user` dla `kind="account"`; stempluje `done_at`.
-3. **API w `app/main.py`** (obok pozostałych route'ów konta):
+3. **API w `app/routers/auth.py`** (obok pozostałych route'ów konta —
+   login/register/logout):
    - `POST /api/account/wipe-data` — body `{password, confirm}`; `confirm` musi
      być dokładnie `"USUWAM"`, hasło sprawdzane `auth.verify_password` (403 przy
      złym — to jedyna bariera przed kliknięciem z cudzej, niezablokowanej
      przeglądarki); zwraca liczniki skasowanych wierszy.
    - `POST /api/account/delete` — jak wyżej + `auth.logout_user(request)`.
-   - `auth.current_user` (`app/auth.py:83`) i `login_submit` odrzucają konto
+   - `auth.current_user` (`app/auth.py`) i `login_submit`
+     (`app/routers/auth.py`) odrzucają konto
      z `deleted_at` (401 / komunikat „konto zostało skasowane").
 4. **UI.** Karta „Twoje dane" w `app/templates/settings.html` (przed kartą
    „Kontakt") i w zakładce Ustawienia `app/templates/mobile.html` (sekcja

@@ -22,9 +22,28 @@ o wdrożeniu [deploy/README.md](deploy/README.md).
 
 ## Struktura repo
 
-- `app/main.py` — wszystkie route'y (auth, dashboard, API, mobile view).
+- `app/main.py` — tworzenie `FastAPI()`, middleware sesji, mount `/static`,
+  `startup` (migracje, sprzątanie kolejki), globalny exception handler 401→login,
+  `app.include_router(...)` dla każdego routera z `app/routers/`.
+- `app/deps.py` — współdzielone `Depends` i obiekty: `templates`, `STATIC_DIR`,
+  `humanize_ago`, `require_llm_consent`, `require_admin`.
+- `app/routers/` — route'y podzielone tematycznie (był jeden plik `main.py`
+  na ~1300 linii, rozbity 2026-09-03):
+  - `auth.py` — login/register/logout, `/prywatnosc`.
+  - `profile.py` — `GET/PUT /api/profile`, `/profile-form`, `POST /api/sync`.
+  - `day.py` — waga/kroki, `day_report()` (raport dnia), `GET /api/day/{day}`,
+    ręczne aktywności (`/api/activities`).
+  - `meals.py` — zdjęcie/tekst posiłku, zapis/usunięcie, kolejka offline
+    (`/api/queue/*`), zapisane posiłki (`/api/saved-meals/*`).
+  - `dashboard.py` — `/` i `/mobile`.
+  - `settings.py` — strona `/settings` + formularze `settings/*` + JSON API
+    `/api/settings/*`.
+  - `transfer.py` — eksport/import danych.
+  - `trends.py` — `/trends` + `/api/trends`.
+  - `usage.py` — `/usage`, `/admin/consents`, `/api/usage` (tylko admin).
+  - `pwa.py` — manifest, service worker.
 - `app/auth.py` — hash/verify hasła, sesja, `current_user` dependency, throttle
-  nieudanych logowań.
+  nieudanych logowań i nieprawidłowych kodów zaproszenia (`AttemptThrottle`).
 - `app/config.py` — env vars, ścieżki, `garmin_tokens_dir(user_id)`.
 - `app/db.py` — silnik SQLite, `_migrate()` z addytywnymi migracjami.
 - `app/models.py` — SQLAlchemy: `User`, `UserProfile`, `WeightLog`, `Meal`,
