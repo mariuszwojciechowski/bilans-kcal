@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import AppSetting
+from . import crypto
 
 
 class LlmKeys(NamedTuple):
@@ -23,19 +24,26 @@ LLM_KEYS = {
     "anthropic_api_key": "ANTHROPIC_API_KEY",
 }
 
+# Wartości tych kluczy leżą w bazie zaszyfrowane (crypto.encrypt/decrypt) —
+# sekrety użytkownika trzymamy TYLKO przez ten serwis, nigdy wprost w AppSetting.
+SECRET_SETTING_KEYS = {"gemini_api_key", "anthropic_api_key", "garmin_tokens"}
+
 
 def get_setting(db: Session, user_id: int, key: str) -> str | None:
     row = db.get(AppSetting, (user_id, key))
-    return row.value if row else None
+    if row is None:
+        return None
+    return crypto.decrypt(row.value) if key in SECRET_SETTING_KEYS else row.value
 
 
 def set_setting(db: Session, user_id: int, key: str, value: str | None) -> None:
     row = db.get(AppSetting, (user_id, key))
     if value:
+        stored = crypto.encrypt(value) if key in SECRET_SETTING_KEYS else value
         if row is None:
-            db.add(AppSetting(user_id=user_id, key=key, value=value))
+            db.add(AppSetting(user_id=user_id, key=key, value=stored))
         else:
-            row.value = value
+            row.value = stored
     elif row is not None:
         db.delete(row)
     db.commit()
@@ -43,7 +51,10 @@ def set_setting(db: Session, user_id: int, key: str, value: str | None) -> None:
 
 def all_settings(db: Session, user_id: int) -> dict[str, str]:
     rows = db.scalars(select(AppSetting).where(AppSetting.user_id == user_id)).all()
-    return {r.key: r.value for r in rows}
+    return {
+        r.key: (crypto.decrypt(r.value) if r.key in SECRET_SETTING_KEYS else r.value)
+        for r in rows
+    }
 
 
 def apply_llm_env(db: Session, user_id: int) -> None:

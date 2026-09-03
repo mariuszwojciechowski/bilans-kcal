@@ -15,13 +15,14 @@ from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import auth
-from .config import (CONSENT_DEADLINE, DEBUG, INVITE_CODE, MAX_PHOTO_BYTES, PHOTOS_DIR,
-                     PRIVACY_VERSION, SECRET_KEY, ensure_dirs)
+from .config import (CONSENT_DEADLINE, DEBUG, DEV_SECRET_KEY, ENC_KEY, INVITE_CODE,
+                     MAX_PHOTO_BYTES, PHOTOS_DIR, PRIVACY_VERSION, SECRET_KEY, ensure_dirs)
 from .db import db_session, get_session, init_db
 from .models import Activity, DailySummary, Meal, PendingMeal, SavedMeal, User, UserProfile, WeightLog
 from .providers import garmin as garmin_provider
 from .providers.garmin import GarminNotLoggedIn, GarminProvider
 from .services import consent as consent_service
+from .services import crypto
 from .services import meal_queue, meal_vision, quips, transfer
 from .services import settings as settings_service
 from .services.balance import day_balance, deficit_warning, projected_weekly_change_kg
@@ -45,6 +46,13 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.on_event("startup")
 def startup() -> None:
+    # Lepiej, żeby proces nie wstał, niż żeby cicho szyfrował kluczem
+    # deweloperskim albo sesję podpisywał domyślnym sekretem na produkcji.
+    if not DEBUG and (SECRET_KEY == DEV_SECRET_KEY or not ENC_KEY):
+        raise RuntimeError(
+            "Produkcja wymaga FIT_KRASNAL_SECRET_KEY (nie domyślnego) i "
+            "FIT_KRASNAL_ENC_KEY ustawionych w /etc/fit-krasnal/env."
+        )
     ensure_dirs()
     init_db()
     # Klucze LLM aplikują się per-użytkownika w /settings/llm — przy multi-user
@@ -52,6 +60,8 @@ def startup() -> None:
     # globalna (retencja 21 dni), więc jej sprzątanie zostawiamy.
     db = get_session()
     try:
+        crypto.migrate_plaintext_settings(db)
+        garmin_provider.migrate_tokens_dirs_to_db(db)
         meal_queue.purge_expired(db)
     finally:
         db.close()
@@ -258,7 +268,7 @@ def sync(days: int = 7, db: Session = Depends(db_session),
     """Ręczna synchronizacja — bez throttla, synchronicznie, zwraca liczniki."""
     mark_attempt(user.id)
     try:
-        return sync_range(db, GarminProvider(user.id), user.id, days=days)
+        return sync_range(db, GarminProvider(user.id, db), user.id, days=days)
     except GarminNotLoggedIn as exc:
         raise HTTPException(409, str(exc))
 
@@ -425,7 +435,7 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
         "out_breakdown": out_breakdown,
         "steps": steps,
         "steps_default": not (summary and summary.steps is not None),
-        "garmin_connected": garmin_provider.tokens_present(user_id),
+        "garmin_connected": garmin_provider.tokens_present(db, user_id),
         "last_sync_ago": humanize_ago(last_sync),
         "macros": macros,
         "target_weight_kg": profile.target_weight_kg,
@@ -674,7 +684,7 @@ def settings_page(request: Request, db: Session = Depends(db_session),
         request,
         "settings.html",
         {
-            "garmin_connected": garmin_provider.tokens_present(user.id),
+            "garmin_connected": garmin_provider.tokens_present(db, user.id),
             "last_sync_ago": humanize_ago(last_sync),
             "gemini_masked": settings_service.masked(stored.get("gemini_api_key")),
             "claude_masked": settings_service.masked(stored.get("anthropic_api_key")),
@@ -754,10 +764,11 @@ def settings_goal(target_weight_kg: float = Form(...), db: Session = Depends(db_
 
 @app.post("/settings/garmin")
 def settings_garmin(email: str = Form(...), password: str = Form(...),
+                    db: Session = Depends(db_session),
                     user: User = Depends(auth.current_user)):
     """Logowanie do Garmina z ustawień. Hasło idzie tylko do biblioteki Garmina."""
     try:
-        result = garmin_provider.interactive_login_start(email.strip(), password, user.id)
+        result = garmin_provider.interactive_login_start(db, email.strip(), password, user.id)
     except Exception as exc:
         return RedirectResponse(f"/settings?error={exc.__class__.__name__}", status_code=303)
     if result == "mfa":
@@ -766,9 +777,10 @@ def settings_garmin(email: str = Form(...), password: str = Form(...),
 
 
 @app.post("/settings/garmin/mfa")
-def settings_garmin_mfa(code: str = Form(...), user: User = Depends(auth.current_user)):
+def settings_garmin_mfa(code: str = Form(...), db: Session = Depends(db_session),
+                        user: User = Depends(auth.current_user)):
     try:
-        garmin_provider.interactive_login_mfa(code.strip(), user.id)
+        garmin_provider.interactive_login_mfa(db, code.strip(), user.id)
     except Exception as exc:
         return RedirectResponse(f"/settings?error={exc.__class__.__name__}", status_code=303)
     return RedirectResponse("/settings?saved=1", status_code=303)
@@ -939,7 +951,7 @@ def api_get_settings(db: Session = Depends(db_session),
         "anthropic_masked": settings_service.masked(stored.get("anthropic_api_key")),
         "backend": (meal_vision.pick_backend(keys.gemini, keys.anthropic)
                     if meal_vision.llm_configured(keys.gemini, keys.anthropic) else None),
-        "garmin_connected": garmin_provider.tokens_present(user.id),
+        "garmin_connected": garmin_provider.tokens_present(db, user.id),
         "lifestyle_options": lifestyle_options(),
         "consent_llm_photos": consent_row is not None,
         "consent_granted_at": consent_row.granted_at.isoformat() if consent_row else None,

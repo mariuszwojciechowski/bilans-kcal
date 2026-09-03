@@ -44,7 +44,7 @@
 <p class="muted">Wersja noty: <code>{{ privacy_version if privacy_version else "2026-09-03" }}</code></p>
 
 <p>Fit Krasnal jest pilotażową aplikacją do liczenia bilansu kalorycznego,
-prowadzoną przez jedną osobę dla grupy kilkunastu testerów-znajomych. Ta
+prowadzoną przez jedną osobę dla grupy kilkunastu testero-znajomych. Ta
 strona opisuje po ludzku, jakie dane zbieramy, dokąd trafiają i jak je
 usunąć — bez rejestru czynności przetwarzania i bez prawniczego żargonu,
 bo skala pilota tego nie wymaga. Jeśli coś jest niejasne, napisz:
@@ -56,11 +56,10 @@ bo skala pilota tego nie wymaga. Jeśli coś jest niejasne, napisz:
     nie widzi Twojego hasła w postaci jawnej).</li>
   <li><b>Profil:</b> rok urodzenia, płeć, wzrost, styl życia, cel ciężaru —
     wyłącznie do liczenia zapotrzebowania kalorycznego i norm makroskładników.
-    Nie zbieramy pełnej daty urodzenia — rok wystarcza (patrz TODO.md „Rok
-    urodzenia zamiast pełnej daty”).</li>
+    Nie zbieramy pełnej daty urodzenia — rok wystarcza.</li>
   <li><b>Dane z Garmina (opcjonalnie, jeśli połączysz konto):</b> waga, kroki,
-    kalorie spalone, aktywności. Login/hasło do Garmina nie są zapisywane —
-    tylko token sesji.</li>
+    kalorie spalone, aktywności (celem sięgnięcia po kcal). Login/hasło do Garmina nie są zapisywane —
+    tylko token sesji. Token jest zaszyfrowany. Nikt w tym administrator nie ma do tego dostepu.</li>
   <li><b>Posiłki:</b> opisy tekstowe i wyliczone wartości (kcal, makro).
     Zdjęcia posiłków — tymczasowo, patrz „Zdjęcia i LLM” niżej.</li>
 </ul>
@@ -95,14 +94,14 @@ przez konto administratora. Co ważne dla oceny ryzyka:</p>
     dla swojej lokalizacji.</li>
 </ul>
 <p class="muted">Te ustalenia mogą się zmienić — jeśli dostawcy zmienią
-zasady, zaktualizujemy tę notę i podniesiemy jej wersję (co poprosi
+zasady, postaramy się zaktualizować tę notę i podniesiemy jej wersję (co poprosi
 ponownie o zgodę).</p>
 
 <h2>Gdzie leżą dane</h2>
 <p>Baza danych i zdjęcia (tymczasowo) leżą na jednej maszynie wirtualnej
 w Google Cloud (region w USA — poza Europejskim Obszarem Gospodarczym).
 Backend jest wystawiony na świat wyłącznie przez HTTPS. Dostęp do serwera
-ma jedynie administrator (właściciel projektu).</p>
+ma jedynie administrator (= właściciel projektu, kontakt: <a href="mailto:krasnal@krasnal.cc">krasnal@krasnal.cc</a>).</p>
 
 <h2>Ile czasu trzymamy dane</h2>
 <ul>
@@ -111,8 +110,7 @@ ma jedynie administrator (właściciel projektu).</p>
   <li><b>Zdjęcia posiłków</b> po udanym oszacowaniu: kasowane od razu —
     nie zostają zapisane przy posiłku.</li>
   <li><b>Posiłki, wagi, aktywności, profil:</b> trwają, dopóki masz konto.
-    Samoobsługowe usuwanie danych/konta jest w przygotowaniu (patrz
-    TODO.md „Usuń moje dane i konto w Ustawieniach”) — do tego czasu
+    Samoobsługowe usuwanie danych/konta jest w przygotowaniu — do tego czasu
     usunięcie realizujemy na Twoją prośbę mailem.</li>
   <li><b>Logi serwera:</b> do 30 dni.</li>
 </ul>
