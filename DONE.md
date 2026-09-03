@@ -10,6 +10,23 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Statystyki użycia — adopcja i najczęściej klikane opcje~~ ✓ zrobione (commit be997a0), pytest zielony (139 passed)
+
+Liczniki dzienne po pseudonimie (`app/models.py:UsageDaily`, HMAC z `user_id`,
+sól `FIT_KRASNAL_USAGE_SALT`) — bez e-maili, treści posiłków, zdjęć, wag ani
+kalorii. Instrumentacja serwera w ~25 miejscach `app/main.py` (posiłki,
+aktywności, waga/kroki, sync, kolejka, transfer, klucz LLM, Garmin,
+profil/cel/styl życia, login, trendy, wejście w dzień) + `POST /api/usage`
+i `track()` w `mobile.html` dla zdarzeń czysto klienckich (zakładki, wpis
+ręczny, moje posiłki, wybór zdjęcia). Panel `/usage` (`require_admin` po
+`ADMIN_EMAIL`, nie-admin → 404): adopcja, lejek wejścia, top zdarzenia,
+wykres tygodniowy (`charts.bar_chart`), ostatnia aktywność per pseudonim;
+link w Ustawieniach tylko dla admina. Retencja 180 dni — `scripts/purge_usage.py`
+(samodzielny skrypt, bo `purge_deleted.py` z planu kasowania konta jeszcze
+nie istnieje; do scalenia, gdy ten plan powstanie). Nota `/prywatnosc`
+zaktualizowana — nowa sekcja o telemetrii w „Jakie dane zbieramy" i wpis
+retencji 180 dni w „Ile czasu trzymamy dane".
+
 ## ~~Prognoza osiągnięcia celu ciężaru — WYMAGANIA.md 6.4~~ ✓ zrobione (commit ed1cb9d), pytest zielony (131 passed), zweryfikowane w przeglądarce (desktop /trends i mobile SPA — data ETA i tempo widoczne na kafelku)
 
 `app/services/forecast.py:goal_eta` — tempo z regresji najmniejszych kwadratów
