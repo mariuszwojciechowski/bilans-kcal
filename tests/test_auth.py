@@ -16,7 +16,7 @@ def client(tmp_path, monkeypatch):
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine)
 
-    monkeypatch.setattr("app.main.INVITE_CODE", INVITE)
+    monkeypatch.setattr("app.routers.auth.INVITE_CODE", INVITE)
     auth._failed.clear()                      # throttle jest globalny w procesie
     auth._invite_throttle.attempts.clear()    # ten sam powód (klucz: IP klienta)
 

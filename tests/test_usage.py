@@ -21,8 +21,8 @@ def client(tmp_path, monkeypatch):
     engine = create_engine(f"sqlite:///{tmp_path / 'usage.db'}")
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine)
-    monkeypatch.setattr("app.main.INVITE_CODE", INVITE)
-    monkeypatch.setattr("app.main.ADMIN_EMAIL", ADMIN_EMAIL)
+    monkeypatch.setattr("app.routers.auth.INVITE_CODE", INVITE)
+    monkeypatch.setattr("app.deps.ADMIN_EMAIL", ADMIN_EMAIL)
     auth._failed.clear()
     from app.main import app
 
@@ -119,7 +119,7 @@ def test_meal_text_bumps_meal_text_counter(client, monkeypatch):
     r = client.post("/api/settings/consent", json={"granted": True})
     assert r.status_code == 200
 
-    monkeypatch.setattr("app.main.meal_vision.llm_configured", lambda *a, **kw: False)
+    monkeypatch.setattr("app.services.meal_vision.llm_configured", lambda *a, **kw: False)
     r = client.post("/api/meals/text", data={"description": "kanapka"})
     assert r.status_code == 200
 
@@ -141,7 +141,7 @@ def test_bump_failure_does_not_break_endpoint(client, monkeypatch):
     monkeypatch.setattr("app.services.usage.user_ref", _boom)
     r = client.post("/api/settings/consent", json={"granted": True})
     assert r.status_code == 200
-    monkeypatch.setattr("app.main.meal_vision.llm_configured", lambda *a, **kw: False)
+    monkeypatch.setattr("app.services.meal_vision.llm_configured", lambda *a, **kw: False)
 
     r = client.post("/api/meals/text", data={"description": "kanapka"})
     assert r.status_code == 200, r.text  # bump padło po cichu, endpoint nie ucierpiał
