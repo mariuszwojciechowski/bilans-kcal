@@ -85,6 +85,12 @@ backfill'ować istniejące wiersze (patrz `external_id` w `Meal`).
 **Testy:** `.venv/bin/python -m pytest` — wszystko musi być zielone,
 inaczej deploy się nie zbuduje.
 
+**Nota `/prywatnosc` musi być zgodna ze stanem kodu.** Każda zmiana, która
+wpływa na to, co zbieramy/przetwarzamy/wysyłamy albo na okresy retencji,
+aktualizuje `app/templates/privacy.html` w tym samym zadaniu — i odnotowuje
+to w opisie zmiany (commit / wpis DONE.md). To jest publiczne zobowiązanie
+wobec testerów, nie dokumentacja wewnętrzna — nie może się rozjechać z kodem.
+
 **Rok urodzenia, nie data:** profil trzyma `birth_year: int`, wiek liczy
 `energy.age_from_year` (konwencja środka roku: 1 lipca). `birth_date` w
 `UserProfile` zostaje w schemacie jako pochodna (`date(birth_year, 7, 1)`),

@@ -266,7 +266,16 @@ silnym zapleczu JS); natywnie ×2 (Kotlin + Swift) — odrzucone jako podwójny 
   (poza drzewem repo); sekrety w `.env` (w `.gitignore`, w repo tylko `.env.example`).
 - Dane zdrowotne = dane wrażliwe: przy wersji multi-user (mobile) wymagane RODO
   (zgody, prawo do usunięcia, retencja zdjęć) — do zaprojektowania przed publikacją w sklepach.
+  Zrealizowane jako `app/templates/privacy.html` + `Consent`, patrz DONE.md.
 - Strefa czasowa użytkownika jako granica "dnia" (nie UTC).
+- **Zasada trwała (2026-09-03, nie tylko dla tego dokumentu — patrz też
+  TODO.md):** każda zmiana kodu, która wpływa na to, co aplikacja zbiera,
+  przetwarza, wysyła albo jak długo przechowuje, musi zaktualizować
+  `app/templates/privacy.html` w tym samym zadaniu i odnotować to w opisie
+  zmiany (commit / wpis DONE.md). Ten dokument (WYMAGANIA.md) sam pozostaje
+  zapisem pierwotnego kontraktu i nie jest aktualizowany do stanu kodu
+  (patrz CLAUDE.md) — ale nota `/prywatnosc` musi być zgodna ze stanem kodu
+  zawsze, bo to jest publiczne zobowiązanie wobec testerów.
 
 ### 8.4 Model danych (szkic, multi-user)
 

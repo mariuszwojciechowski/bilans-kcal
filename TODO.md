@@ -14,6 +14,14 @@ Przy każdym punkcie **szacowanie złożoności w skali 1-10**:
 Zrealizowane punkty przenosimy do [DONE.md](DONE.md) — tutaj zostają wyłącznie
 rzeczy do zrobienia.
 
+**Zasada dla implementującego LLM (dowolny punkt z tej listy):** jeśli
+realizowana zmiana wpływa na to, co i jak aplikacja zbiera, przetwarza,
+wysyła albo przechowuje (nowe dane, nowe miejsce ich wysyłki, zmiana okresu
+retencji, zmiana zakresu zgody) — zaktualizuj `app/templates/privacy.html`
+w tym samym zadaniu i odnotuj to wprost we wpisie w [DONE.md](DONE.md)
+(„nota `/prywatnosc` zaktualizowana — co się zmieniło"). Nota ma zostać
+zgodna ze stanem kodu, nie z pamięcią z dnia jej napisania.
+
 ---
 
 ## GitHub Pages — czerwony pipeline po skasowaniu docs/ (1/10)
