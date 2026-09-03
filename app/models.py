@@ -164,3 +164,19 @@ class Meal(Base):
     items_json: Mapped[str | None] = mapped_column(Text)
     assumptions_json: Mapped[str | None] = mapped_column(Text)
     source: Mapped[str] = mapped_column(String, default="photo")  # photo | text | manual
+
+
+class UsageDaily(Base):
+    """Licznik dzienny telemetrii (plan „Statystyki użycia" w TODO.md) — jeden
+    wiersz = (pseudonim, dzień, zdarzenie, licznik). Świadomie bez FK do `user`:
+    statystyki mają przeżyć skasowanie konta jako czysty agregat i nie mogą
+    blokować kasacji wiersza `user`."""
+
+    __tablename__ = "usage_daily"
+    __table_args__ = (UniqueConstraint("user_ref", "date", "event"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_ref: Mapped[str] = mapped_column(String, index=True)
+    date: Mapped[date] = mapped_column(Date, index=True)
+    event: Mapped[str] = mapped_column(String)
+    count: Mapped[int] = mapped_column(Integer, default=0)

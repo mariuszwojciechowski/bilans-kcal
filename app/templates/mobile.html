@@ -179,7 +179,7 @@
       <input type="time" id="f-time">
     </div>
     <div id="add-llm-fields" style="display:none">
-      <input type="file" id="f-photo" accept="image/*" capture="environment">
+      <input type="file" id="f-photo" accept="image/*" capture="environment" onchange="track('photo_pick')">
       <input type="text" id="f-note" placeholder="uwaga do zdjęcia (opcjonalnie)">
       <textarea id="f-desc" rows="2" placeholder="albo opisz posiłek: 2 jajka sadzone i kromka żytniego"></textarea>
       <button class="primary" onclick="estimate()">Szacuj</button>
@@ -453,6 +453,15 @@ async function apiForm(path, formData) {
   return api(path, {method: "POST", body: formData});
 }
 
+function track(event) {
+  // fire-and-forget — telemetria nigdy nie może blokować UI
+  fetch("/api/usage", {
+    method: "POST", credentials: "same-origin",
+    headers: {"content-type": "application/json"},
+    body: JSON.stringify({event}), keepalive: true,
+  }).catch(() => {});
+}
+
 /* ── nawigacja ── */
 function goToday() {
   show('today');
@@ -496,6 +505,7 @@ function show(page) {
   if (viewLabel) viewLabel.textContent = VIEW_LABELS[page] || "";
   if (page === "settings") renderSettings();
   if (page === "trends") renderTrends();
+  track("tab_" + page);
 }
 
 /* ── DZIŚ: renderowanie ── */
@@ -691,6 +701,7 @@ function showDraft(e) {
 }
 
 function showManual() {
+  track("manual_open");
   draft = null;
   _manual = true;
   document.getElementById("draft").style.display = "";
@@ -731,7 +742,7 @@ function toggleSavedMeals() {
   const panel = document.getElementById("saved-meals-panel");
   const wasHidden = panel.style.display === "none";
   panel.style.display = wasHidden ? "" : "none";
-  if (wasHidden) loadSavedMeals();
+  if (wasHidden) { loadSavedMeals(); track("saved_meals_open"); }
 }
 
 async function useSavedMeal(id) {

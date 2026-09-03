@@ -15,16 +15,19 @@ from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import auth
-from .config import (CONSENT_DEADLINE, DEBUG, DEV_SECRET_KEY, ENC_KEY, INVITE_CODE,
-                     MAX_PHOTO_BYTES, PHOTOS_DIR, PRIVACY_VERSION, SECRET_KEY, ensure_dirs)
+from .config import (ADMIN_EMAIL, CONSENT_DEADLINE, DEBUG, DEV_SECRET_KEY, ENC_KEY,
+                     INVITE_CODE, MAX_PHOTO_BYTES, PHOTOS_DIR, PRIVACY_VERSION, SECRET_KEY,
+                     ensure_dirs)
 from .db import db_session, get_session, init_db
-from .models import Activity, DailySummary, Meal, PendingMeal, SavedMeal, User, UserProfile, WeightLog
+from .models import (Activity, DailySummary, Meal, PendingMeal, SavedMeal, UsageDaily, User,
+                     UserProfile, WeightLog)
 from .providers import garmin as garmin_provider
 from .providers.garmin import GarminNotLoggedIn, GarminProvider
 from .services import consent as consent_service
 from .services import crypto
 from .services import meal_queue, meal_vision, quips, transfer
 from .services import settings as settings_service
+from .services import usage as usage_service
 from .services.balance import day_balance, deficit_warning, projected_weekly_change_kg
 from .services.charts import Series, bar_chart, line_chart
 from .services.energy import age_from_year, smoothed_weight, tdee_theoretical
@@ -139,6 +142,7 @@ def login_submit(request: Request, email: str = Form(...), password: str = Form(
         return RedirectResponse("/login?error=bad", status_code=303)
     auth.reset_failed_login(email)
     auth.login_user(request, user)
+    usage_service.bump(db, user.id, "login")
     return RedirectResponse("/", status_code=303)
 
 
@@ -258,6 +262,7 @@ def put_profile(data: ProfileIn, db: Session = Depends(db_session),
         profile.lifestyle = data.lifestyle
     profile.tz = data.tz
     db.commit()
+    usage_service.bump(db, user.id, "profile_save")
     return {"ok": True}
 
 
@@ -268,6 +273,7 @@ def sync(days: int = 7, db: Session = Depends(db_session),
          user: User = Depends(auth.current_user)):
     """Ręczna synchronizacja — bez throttla, synchronicznie, zwraca liczniki."""
     mark_attempt(user.id)
+    usage_service.bump(db, user.id, "sync_manual")
     try:
         return sync_range(db, GarminProvider(user.id, db), user.id, days=days)
     except GarminNotLoggedIn as exc:
@@ -297,6 +303,7 @@ def save_weight(data: WeightIn, db: Session = Depends(db_session),
         db.add(WeightLog(user_id=user.id, date=data.date,
                           weight_kg=data.weight_kg, source="manual"))
     db.commit()
+    usage_service.bump(db, user.id, "weight_manual")
     return {"ok": True}
 
 
@@ -317,6 +324,7 @@ def save_steps(day: date, data: StepsIn, db: Session = Depends(db_session),
     else:
         db.add(DailySummary(user_id=user.id, date=day, steps=data.steps))
     db.commit()
+    usage_service.bump(db, user.id, "steps_set")
     return {"ok": True}
 
 
@@ -492,6 +500,7 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
 @app.get("/api/day/{day}")
 def get_day(day: date, db: Session = Depends(db_session),
             user: User = Depends(auth.current_user)):
+    usage_service.bump(db, user.id, "day_view")
     return day_report(db, user.id, day)
 
 
@@ -530,6 +539,7 @@ async def estimate_meal_photo(
     """Krok 1: zdjęcie → szacunek (draft do korekty; nic nie zapisujemy).
     Bez klucza LLM / bez internetu: posiłek trafia do kolejki offline."""
     background.add_task(maybe_sync, user.id)
+    usage_service.bump(db, user.id, "meal_photo")
     keys = settings_service.get_llm_keys(db, user.id)
     data = await photo.read()
     if len(data) > MAX_PHOTO_BYTES:
@@ -566,6 +576,7 @@ def estimate_meal_text(
 ):
     """Krok 1 (wariant tekstowy): opis → szacunek. Fallback: kolejka offline."""
     background.add_task(maybe_sync, user.id)
+    usage_service.bump(db, user.id, "meal_text")
     keys = settings_service.get_llm_keys(db, user.id)
     target_day = day or date.today()
     if not meal_vision.llm_configured(keys.gemini, keys.anthropic):
@@ -624,6 +635,8 @@ def save_meal(data: MealIn, background: BackgroundTasks,
     )
     db.add(meal)
     db.commit()
+    if data.source in ("photo", "text", "manual", "saved"):
+        usage_service.bump(db, user.id, f"meal_save_{data.source}")
     return {"id": meal.id}
 
 
@@ -635,6 +648,7 @@ def delete_meal(meal_id: int, db: Session = Depends(db_session),
         raise HTTPException(404)
     db.delete(meal)
     db.commit()
+    usage_service.bump(db, user.id, "meal_delete")
     return {"ok": True}
 
 
@@ -646,6 +660,7 @@ def delete_pending(pending_id: int, db: Session = Depends(db_session),
     if pending is None or pending.user_id != user.id:
         raise HTTPException(404)
     meal_queue.delete_pending(db, pending)
+    usage_service.bump(db, user.id, "queue_delete")
     return {"ok": True}
 
 
@@ -685,6 +700,7 @@ def settings_page(request: Request, db: Session = Depends(db_session),
         request,
         "settings.html",
         {
+            "is_admin": user.email == ADMIN_EMAIL,
             "garmin_connected": garmin_provider.tokens_present(db, user.id),
             "last_sync_ago": humanize_ago(last_sync),
             "gemini_masked": settings_service.masked(stored.get("gemini_api_key")),
@@ -733,6 +749,7 @@ def settings_llm(
         settings_service.set_setting(db, user.id, "gemini_api_key", gemini_api_key.strip())
     if anthropic_api_key.strip():
         settings_service.set_setting(db, user.id, "anthropic_api_key", anthropic_api_key.strip())
+    usage_service.bump(db, user.id, "llm_key_save")
     background.add_task(meal_queue.process_queue, user.id)
     return RedirectResponse("/settings?saved=1", status_code=303)
 
@@ -748,6 +765,7 @@ def settings_lifestyle(lifestyle: str = Form(...), db: Session = Depends(db_sess
         raise HTTPException(422, "Nieznany styl życia")
     profile.lifestyle = lifestyle
     db.commit()
+    usage_service.bump(db, user.id, "lifestyle_save")
     return RedirectResponse("/settings?saved=1", status_code=303)
 
 
@@ -760,6 +778,7 @@ def settings_goal(target_weight_kg: float = Form(...), db: Session = Depends(db_
         raise HTTPException(409, "Najpierw skonfiguruj profil na dashboardzie")
     profile.target_weight_kg = target_weight_kg
     db.commit()
+    usage_service.bump(db, user.id, "goal_save")
     return RedirectResponse("/settings?saved=1", status_code=303)
 
 
@@ -773,7 +792,9 @@ def settings_garmin(email: str = Form(...), password: str = Form(...),
     except Exception as exc:
         return RedirectResponse(f"/settings?error={exc.__class__.__name__}", status_code=303)
     if result == "mfa":
+        usage_service.bump(db, user.id, "garmin_mfa")
         return RedirectResponse("/settings?mfa=1", status_code=303)
+    usage_service.bump(db, user.id, "garmin_connect_ok")
     return RedirectResponse("/settings?saved=1", status_code=303)
 
 
@@ -784,6 +805,7 @@ def settings_garmin_mfa(code: str = Form(...), db: Session = Depends(db_session)
         garmin_provider.interactive_login_mfa(db, code.strip(), user.id)
     except Exception as exc:
         return RedirectResponse(f"/settings?error={exc.__class__.__name__}", status_code=303)
+    usage_service.bump(db, user.id, "garmin_connect_ok")
     return RedirectResponse("/settings?saved=1", status_code=303)
 
 
@@ -794,6 +816,7 @@ def transfer_export(db: Session = Depends(db_session),
                     user: User = Depends(auth.current_user)):
     """'Przygotuj dane do przeniesienia na inne urządzenie' — plik JSON do pobrania."""
     payload = transfer.export_payload(db, user.id)
+    usage_service.bump(db, user.id, "transfer_export")
     return Response(
         json.dumps(payload, ensure_ascii=False),
         media_type="application/json",
@@ -815,13 +838,15 @@ async def transfer_import(
         counts = transfer.import_payload(db, user.id, payload)
     except (ValueError, KeyError, json.JSONDecodeError) as exc:
         raise HTTPException(422, f"Nieprawidłowy plik transferu: {exc}")
+    usage_service.bump(db, user.id, "transfer_import")
     background.add_task(meal_queue.process_queue, user.id)
     return counts
 
 
 @app.post("/api/queue/process")
-def queue_process(background: BackgroundTasks,
+def queue_process(background: BackgroundTasks, db: Session = Depends(db_session),
                   user: User = Depends(auth.current_user)):
+    usage_service.bump(db, user.id, "queue_process")
     background.add_task(meal_queue.process_queue, user.id)
     return {"ok": True}
 
@@ -829,6 +854,13 @@ def queue_process(background: BackgroundTasks,
 # ── Trendy ────────────────────────────────────────────────────────────────
 
 TREND_RANGES = [(7, "Tydzień"), (30, "Miesiąc"), (90, "Kwartał"), (180, "Pół roku")]
+
+
+def _bump_trends_range(db: Session, user_id: int, days: int) -> None:
+    """trends_7|30|90|180 — najbliższy zdefiniowany zakres (przycisk może
+    nadal wysłać dowolną liczbę dni)."""
+    nearest = min((d for d, _ in TREND_RANGES), key=lambda d: abs(d - days))
+    usage_service.bump(db, user_id, f"trends_{nearest}")
 
 
 @app.get("/trends", response_class=HTMLResponse)
@@ -841,6 +873,8 @@ def trends(
 ):
     background.add_task(maybe_sync, user.id)
     days = max(2, min(days, 366))
+    usage_service.bump(db, user.id, "trends_view")
+    _bump_trends_range(db, user.id, days)
     today = date.today()
     start = today - timedelta(days=days - 1)
     profile = db.get(UserProfile, user.id)
@@ -923,6 +957,42 @@ def trends(
             "has_logo": (STATIC_DIR / "logo.png").exists(),
         },
     )
+
+
+# ── Statystyki użycia (tylko admin) ───────────────────────────────────────
+
+def require_admin(user: User = Depends(auth.current_user)) -> User:
+    """Nie-admin dostaje 404, nie 403 — nie ma po co ogłaszać, że taki widok
+    w ogóle istnieje."""
+    if user.email != ADMIN_EMAIL:
+        raise HTTPException(404)
+    return user
+
+
+@app.get("/usage", response_class=HTMLResponse)
+def usage_page(request: Request, db: Session = Depends(db_session),
+              user: User = Depends(require_admin)):
+    stats = usage_service.dashboard_stats(db)
+    return templates.TemplateResponse(
+        request,
+        "usage.html",
+        {**stats, "has_logo": (STATIC_DIR / "logo.png").exists()},
+    )
+
+
+class UsageEventIn(BaseModel):
+    event: str
+
+
+@app.post("/api/usage", status_code=204)
+def api_usage(data: UsageEventIn, db: Session = Depends(db_session),
+             user: User = Depends(auth.current_user)):
+    """Zdarzenia czysto klienckie — te, które nie mają odpowiednika po
+    stronie serwera (przełączanie zakładek, otwarcie wpisu ręcznego...)."""
+    if data.event not in usage_service.EVENTS:
+        raise HTTPException(422, "Nieznane zdarzenie")
+    usage_service.bump(db, user.id, data.event)
+    return Response(status_code=204)
 
 
 # ── PWA — pliki publiczne (bez auth) ─────────────────────────────────────
@@ -1017,6 +1087,7 @@ def api_save_llm(data: LlmKeysIn, background: BackgroundTasks,
         settings_service.set_setting(db, user.id, "gemini_api_key", data.gemini_api_key.strip())
     if data.anthropic_api_key.strip():
         settings_service.set_setting(db, user.id, "anthropic_api_key", data.anthropic_api_key.strip())
+    usage_service.bump(db, user.id, "llm_key_save")
     background.add_task(meal_queue.process_queue, user.id)
     return {"ok": True}
 
@@ -1063,6 +1134,7 @@ def create_saved_meal(data: SavedMealIn, db: Session = Depends(db_session),
     sm.assumptions_json = json.dumps(data.assumptions, ensure_ascii=False) if data.assumptions else None
     sm.last_used_at = datetime.utcnow()
     db.commit()
+    usage_service.bump(db, user.id, "saved_meal_create")
     return {"id": sm.id}
 
 
@@ -1085,6 +1157,7 @@ def use_saved_meal(meal_id: int, db: Session = Depends(db_session),
         raise HTTPException(404)
     sm.last_used_at = datetime.utcnow()
     db.commit()
+    usage_service.bump(db, user.id, "saved_meal_use")
     return {
         "description": sm.name,
         "kcal": sm.kcal, "kcal_min": sm.kcal_min, "kcal_max": sm.kcal_max,
@@ -1130,6 +1203,7 @@ def add_manual_activity(data: ActivityIn, db: Session = Depends(db_session),
     )
     db.add(activity)
     db.commit()
+    usage_service.bump(db, user.id, "activity_add")
     return {
         "id": activity.id,
         "kcal": round(kcal),
@@ -1148,6 +1222,7 @@ def delete_manual_activity(activity_id: int, db: Session = Depends(db_session),
         raise HTTPException(404, "Można usuwać tylko ręcznie dodane aktywności")
     db.delete(activity)
     db.commit()
+    usage_service.bump(db, user.id, "activity_delete")
     return {"ok": True}
 
 
@@ -1157,6 +1232,8 @@ def delete_manual_activity(activity_id: int, db: Session = Depends(db_session),
 def api_trends_data(days: int = 30, db: Session = Depends(db_session),
                     user: User = Depends(auth.current_user)):
     days = max(2, min(days, 366))
+    usage_service.bump(db, user.id, "trends_view")
+    _bump_trends_range(db, user.id, days)
     today = date.today()
     start = today - timedelta(days=days - 1)
     profile = db.get(UserProfile, user.id)

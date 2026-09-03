@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fit Krasnal — statystyki użycia</title>
+{% if has_logo %}<link rel="icon" href="/static/favicon-32.png">
+{% endif %}<style>
+  :root {
+    --green: #1A4D3A; --green-med: #3A7A5C; --lime: #8DC63F;
+    --bg: #F9FAF8; --card: #FFFFFF; --ink: #212529; --stone: #6C757D;
+    --danger: #DC3545; --success: #28A745;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #131715; --card: #1B211D; --ink: #E8ECE9; --stone: #9AA39D; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Inter, sans-serif;
+         background: var(--bg); color: var(--ink); }
+  header { background: var(--green); color: #F9FAF8; padding: 0 24px 0 0;
+           display: flex; align-items: stretch; gap: 12px; }
+  header > :not(.brand) { align-self: center; }
+  header a.brand { background: #fff; display: flex; align-items: center; gap: 12px;
+                   padding: 8px 22px 8px 18px; text-decoration: none; }
+  header img.logo { width: 52px; height: 52px; }
+  header h1 { font-size: 18px; font-weight: 600; margin: 0; color: var(--green); }
+  header a.nav { color: #C9D3CC; font-size: 14px; text-decoration: none;
+                 padding: 6px 10px; border-radius: 6px; }
+  header a.nav:hover { background: rgba(255,255,255,.12); }
+  main { max-width: 900px; margin: 24px auto; padding: 0 16px; display: grid; gap: 16px; }
+  .card { background: var(--card); border-radius: 10px; padding: 18px 20px;
+          box-shadow: 0 1px 3px rgba(33,37,41,.12); }
+  h2 { font-size: 15px; margin: 0 0 10px; text-transform: uppercase;
+       letter-spacing: .05em; color: var(--stone); }
+  .muted { color: var(--stone); font-size: 13px; }
+  .kpis { display: flex; flex-wrap: wrap; gap: 24px; }
+  .kpi b { display: block; font-size: 26px; color: var(--green-med); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(108,117,125,.2); }
+  th { color: var(--stone); font-weight: 500; font-size: 12px; text-transform: uppercase; }
+  .funnel div { display: flex; justify-content: space-between; padding: 4px 0; }
+  code { font-size: 12px; }
+</style>
+</head>
+<body>
+<header><a class="brand" href="/" title="Dziś">{% if has_logo %}<img class="logo" src="/static/logo-bw.png" alt="">{% endif %}<h1>Statystyki użycia</h1></a>
+  <span style="margin-left:auto"></span>
+  <a class="nav" href="/settings">← Ustawienia</a>
+</header>
+<main>
+
+<p class="muted">Widok operuje wyłącznie na pseudonimach (skrót z konta) i agregatach —
+bez e-maili, treści posiłków, zdjęć, wag ani kalorii. Więcej w
+<a href="/prywatnosc">nocie o prywatności</a>.</p>
+
+<section class="card">
+  <h2>Adopcja</h2>
+  <div class="kpis">
+    <div class="kpi"><b>{{ total_accounts }}</b><span class="muted">kont</span></div>
+    <div class="kpi"><b>{{ active_7 }}</b><span class="muted">aktywni w 7 dniach</span></div>
+    <div class="kpi"><b>{{ active_30 }}</b><span class="muted">aktywni w 30 dniach</span></div>
+    <div class="kpi"><b>{{ median_days_active }}</b><span class="muted">mediana dni z aktywnością / user</span></div>
+    <div class="kpi"><b>{{ adopted_7d }}</b><span class="muted">≥7 dni z posiłkiem</span></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Lejek wejścia</h2>
+  <div class="funnel">
+    <div><span>Konto założone</span><b>{{ funnel.accounts }}</b></div>
+    <div><span>Uzupełnił profil</span><b>{{ funnel.profile }}</b></div>
+    <div><span>Zapisał klucz LLM</span><b>{{ funnel.llm_key }}</b></div>
+    <div><span>Podłączył Garmina</span><b>{{ funnel.garmin }}</b></div>
+    <div><span>Zapisał pierwszy posiłek</span><b>{{ funnel.first_meal }}</b></div>
+    <div><span>Wrócił w kolejnym tygodniu</span><b>{{ funnel.returned_week2 }}</b></div>
+  </div>
+  <p class="muted" style="margin-top:8px">Liczby bezwzględne — przy garstce testerów procenty
+  byłyby mylące.</p>
+</section>
+
+<section class="card">
+  <h2>Najczęściej klikane</h2>
+  <table>
+    <thead><tr><th>Zdarzenie</th><th>Suma</th><th>Różnych użytkowników</th></tr></thead>
+    <tbody>
+      {% for e in top_events %}
+      <tr><td><code>{{ e.event }}</code></td><td>{{ e.sum }}</td><td>{{ e.users }}</td></tr>
+      {% else %}
+      <tr><td colspan="3" class="muted">Brak danych.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Tygodniowo — aktywni użytkownicy</h2>
+  {{ chart_weekly_active | safe }}
+</section>
+
+<section class="card">
+  <h2>Tygodniowo — suma zdarzeń</h2>
+  {{ chart_weekly_events | safe }}
+</section>
+
+<section class="card">
+  <h2>Ostatnia aktywność per pseudonim</h2>
+  <table>
+    <thead><tr><th>Pseudonim</th><th>Ostatnie zdarzenie</th><th>Dni z aktywnością</th></tr></thead>
+    <tbody>
+      {% for u in last_activity %}
+      <tr><td><code>{{ u.ref }}</code></td><td>{{ u.last_date }}</td><td>{{ u.days }}</td></tr>
+      {% else %}
+      <tr><td colspan="3" class="muted">Brak danych.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+</main>
+</body>
+</html>
