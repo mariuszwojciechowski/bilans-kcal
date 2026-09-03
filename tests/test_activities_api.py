@@ -25,7 +25,7 @@ def clients(tmp_path, monkeypatch):
     engine = create_engine(f"sqlite:///{tmp_path / 'activities.db'}")
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine)
-    monkeypatch.setattr("app.main.INVITE_CODE", INVITE)
+    monkeypatch.setattr("app.routers.auth.INVITE_CODE", INVITE)
     auth._failed.clear()          # throttle jest globalny w procesie
     from app.main import app
 
