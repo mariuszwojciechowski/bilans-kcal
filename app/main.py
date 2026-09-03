@@ -28,6 +28,7 @@ from .services import settings as settings_service
 from .services.balance import day_balance, deficit_warning, projected_weekly_change_kg
 from .services.charts import Series, bar_chart, line_chart
 from .services.energy import age_from_year, smoothed_weight, tdee_theoretical
+from .services.forecast import goal_eta
 from .services.macros import coverage, lifestyle_options, who_targets
 from .services.sync import mark_attempt, maybe_sync, sync_range
 
@@ -917,6 +918,7 @@ def trends(
             "balance_days": len(balance),
             "to_goal_kg": (round(smoothed[-1][1] - target_weight, 1)
                            if target_weight and smoothed else None),
+            "goal_eta": goal_eta(smoothed, target_weight, today, avg_balance),
             "today": today.isoformat(),
             "has_logo": (STATIC_DIR / "logo.png").exists(),
         },
@@ -1222,6 +1224,7 @@ def api_trends_data(days: int = 30, db: Session = Depends(db_session),
         "balance_days": len(balance),
         "to_goal_kg": (round(smoothed[-1][1] - target_weight, 1)
                        if target_weight and smoothed else None),
+        "goal_eta": goal_eta(smoothed, target_weight, today, avg_balance),
     }
 
 

@@ -78,6 +78,25 @@
         {{ avg_balance if avg_balance is not none else "—" }}</b>
       <span>średni bilans [kcal/d] ({{ balance_days }} dni z danymi)</span>
     </div>
+    {% if goal_eta %}
+    <div class="stat">
+      {% if goal_eta.status == "eta" %}
+      <b>{{ goal_eta.eta_date[8:10] }}.{{ goal_eta.eta_date[5:7] }}.{{ goal_eta.eta_date[0:4] }}</b>
+      <span>prognoza celu · tempo {{ '%+.2f'|format(goal_eta.rate_kg_per_week) }} kg/tydz.
+        {%- if goal_eta.basis == "balance" %} (wg bilansu, za mało pomiarów ciężaru){% endif %}</span>
+      {% elif goal_eta.status == "reached" %}
+      <b class="pos">✓</b>
+      <span>cel osiągnięty</span>
+      {% elif goal_eta.status == "flat" %}
+      <b>—</b>
+      <span>ciężar nie spada — prognozy brak</span>
+      {% elif goal_eta.status == "far" %}
+      <b>&gt;2 lata</b>
+      <span>przy tym tempie ponad 2 lata
+        {%- if goal_eta.basis == "balance" %} (wg bilansu, za mało pomiarów ciężaru){% endif %}</span>
+      {% endif %}
+    </div>
+    {% endif %}
   </div>
 </section>
 

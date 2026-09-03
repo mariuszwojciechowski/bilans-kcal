@@ -235,6 +235,9 @@
       <div class="stat" id="tr-goal-stat" style="display:none">
         <b id="tr-goal">—</b><span>do celu ciężaru</span>
       </div>
+      <div class="stat" id="tr-eta-stat" style="display:none">
+        <b id="tr-eta">—</b><span id="tr-eta-label">prognoza celu</span>
+      </div>
     </div>
     <div id="trends-charts"><p class="muted">Wybierz okres powyżej.</p></div>
   </section>
@@ -834,7 +837,10 @@ async function renderTrends(days) {
     if (d.to_goal_kg !== null) {
       document.getElementById("tr-goal").textContent = d.to_goal_kg + " kg";
       document.getElementById("tr-goal-stat").style.display = "";
+    } else {
+      document.getElementById("tr-goal-stat").style.display = "none";
     }
+    renderGoalEta(d.goal_eta);
     document.getElementById("trends-charts").innerHTML =
       `<h3>Ciężar [kg]</h3>${d.chart_weight}` +
       `<h3>Kalorie</h3>${d.chart_energy}` +
@@ -843,6 +849,29 @@ async function renderTrends(days) {
     document.getElementById("trends-charts").innerHTML =
       `<p class="muted">Błąd ładowania: ${esc(e.message)}</p>`;
   }
+}
+
+function renderGoalEta(g) {
+  const stat = document.getElementById("tr-eta-stat");
+  const b = document.getElementById("tr-eta");
+  const label = document.getElementById("tr-eta-label");
+  if (!g) { stat.style.display = "none"; return; }
+  const balanceNote = g.basis === "balance" ? " (wg bilansu, za mało pomiarów ciężaru)" : "";
+  if (g.status === "eta") {
+    const [y, m, d] = g.eta_date.split("-");
+    b.textContent = `${d}.${m}.${y}`;
+    label.textContent = `prognoza celu · tempo ${g.rate_kg_per_week > 0 ? "+" : ""}${g.rate_kg_per_week} kg/tydz.${balanceNote}`;
+  } else if (g.status === "reached") {
+    b.textContent = "✓";
+    label.textContent = "cel osiągnięty";
+  } else if (g.status === "flat") {
+    b.textContent = "—";
+    label.textContent = "ciężar nie spada — prognozy brak";
+  } else if (g.status === "far") {
+    b.textContent = ">2 lata";
+    label.textContent = `przy tym tempie ponad 2 lata${balanceNote}`;
+  }
+  stat.style.display = "";
 }
 
 function initTrendBtns(ranges) {
