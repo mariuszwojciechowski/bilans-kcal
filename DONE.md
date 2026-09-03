@@ -10,6 +10,30 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Szyfrowanie sekretów użytkownika: klucze LLM i tokeny Garmina~~ ✓ zrobione (commity c1e1c9b, 7b4a88d), pytest zielony (124 passed), FIT_KRASNAL_ENC_KEY już ustawiony na produkcji przed wdrożeniem
+
+Zakres pełny: A (klucze LLM) + B (tokeny Garmina). Szyfrowanie Fernet
+(`app/services/crypto.py`), klucz `FIT_KRASNAL_ENC_KEY` — w dev/testach
+wyprowadzany deterministycznie z `SECRET_KEY` (HKDF), na produkcji wymagany
+(hard-fail w `startup()`, razem z odrzuceniem domyślnego `SECRET_KEY`).
+`settings_service.SECRET_SETTING_KEYS` (`gemini_api_key`, `anthropic_api_key`,
+`garmin_tokens`) — jedyna droga do sekretów, nigdy wprost przez `AppSetting`.
+
+Tokeny Garmina nie leżą już jako pliki na dysku — `GarminProvider` materializuje
+je do katalogu tymczasowego tylko na czas logowania/synchronizacji i kasuje
+natychmiast po. Migracja istniejących katalogów tokenów i plaintextowych
+kluczy LLM leci automatycznie przy starcie (`crypto.migrate_plaintext_settings`,
+`garmin_provider.migrate_tokens_dirs_to_db`) — idempotentna, bez ręcznej
+interwencji przy deployu. `scripts/rotate_enc_key.py` do rotacji klucza.
+
+**Kolejność z użytkownikiem (2026-09-03):** przed napisaniem kodu przeszliśmy
+razem przez wygenerowanie i ręczne dopisanie `FIT_KRASNAL_ENC_KEY` do
+`/etc/fit-krasnal/env` na VM `krasnal-first1` — wartość nie trafiła do
+pamięci/repo (sekret). Restart usługi (`systemctl restart fit-krasnal`)
+zostaje na koniec, przy realnym deployu tego kodu.
+
+---
+
 ## ~~RODO: informacja, zgoda na wysyłkę zdjęć do LLM, retencja~~ ✓ zrobione (commit 96fb708), pytest zielony (116 passed), zweryfikowane w przeglądarce (baner, karta Prywatność, chowanie/pokazywanie pól LLM po grant/withdraw)
 
 Nota `/prywatnosc` (bez auth), zgoda `Consent(kind="llm_photos")` wersjonowana
