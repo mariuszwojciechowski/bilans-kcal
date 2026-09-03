@@ -108,8 +108,12 @@ staging'u. Regresja w main = regresja u testerów. Testy muszą chronić.
 - **`docs/` została świadomie usunięta** (commit `091844d`). Był to
   równoległy klient PWA na GitHub Pages, duplikował logikę backendu (13
   commitów podwójnego utrzymania). Zamiast tego jest `app/templates/mobile.html`
-  serwowany z tego samego backendu pod `GET /mobile`. GitHub Pages nadal
-  serwuje ostatnią wersję, ale build jest czerwony — patrz [TODO.md](TODO.md).
+  serwowany z tego samego backendu pod `GET /mobile`. W `docs/` leżą dziś
+  **wyłącznie dwa pliki-nagrobki** (`index.html` + kill switch `sw.js`), które
+  nadpisują tamtą wersję u testerów, sprzątają po niej `localStorage`
+  (w tym klucz API!), IndexedDB i cache, i przekierowują na `/mobile` —
+  patrz wpis „Stara wersja na GitHub Pages" w [DONE.md](DONE.md). **Nie
+  dopisuj tam logiki aplikacji.**
 - **WYMAGANIA.md jest sprzed multi-user** (sierpień 2026-08-13). Fakty
   produktowe są aktualne, ale odniesienia do "single-user" i "docs/index.html
   jako kolejka offline" są nieaktualne w kodzie. Nie aktualizuj bez potrzeby
