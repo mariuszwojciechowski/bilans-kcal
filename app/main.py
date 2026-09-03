@@ -675,7 +675,8 @@ def dashboard(request: Request, background: BackgroundTasks,
     return templates.TemplateResponse(
         request,
         "mobile.html",
-        {"has_logo": (STATIC_DIR / "logo.png").exists()},
+        {"has_logo": (STATIC_DIR / "logo.png").exists(),
+         "is_admin": user.email == ADMIN_EMAIL},
     )
 
 
