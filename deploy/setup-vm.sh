@@ -55,6 +55,14 @@ fi
 chown root:"$APP_USER" "$ENV_FILE"
 chmod 640 "$ENV_FILE"
 
+echo "== retencja logów journald (30 dni, RODO) =="
+mkdir -p /etc/systemd/journald.conf.d
+cat > /etc/systemd/journald.conf.d/fit-krasnal.conf <<EOF
+[Journal]
+MaxRetentionSec=30day
+EOF
+systemctl restart systemd-journald
+
 echo "== usługa systemd =="
 cp "$APP_DIR/deploy/fit-krasnal.service" /etc/systemd/system/fit-krasnal.service
 systemctl daemon-reload

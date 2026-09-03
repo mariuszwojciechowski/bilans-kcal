@@ -109,11 +109,14 @@ def process_queue(user_id: int) -> dict:
     """Przetwarza zaległe posiłki (najstarsze najpierw). Otwiera własną sesję DB —
     nadaje się do BackgroundTasks. Przerywa, gdy LLM nieskonfigurowany."""
     from ..db import get_session
-    from . import settings as settings_service
+    from . import consent, settings as settings_service
 
     db = get_session()
     processed = failed = 0
     try:
+        if not consent.has_consent(db, user_id, consent.LLM_PHOTOS):
+            logger.info("Kolejka: brak zgody RODO na LLM — przerywam.")
+            return {"processed": 0, "failed": 0}
         keys = settings_service.get_llm_keys(db, user_id)
         purge_expired(db)
         pending = db.scalars(

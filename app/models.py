@@ -36,6 +36,22 @@ class UserProfile(Base):
     tz: Mapped[str] = mapped_column(String, default="Europe/Warsaw")
 
 
+class Consent(Base):
+    """Zgoda RODO (dziś jedyny rodzaj: 'llm_photos' — wysyłanie zdjęć/opisów
+    posiłków do zewnętrznego LLM). Wersjonowana przez `version` (PRIVACY_VERSION);
+    wycofanie to nowy stempel `withdrawn_at`, nie usunięcie wiersza — historia zgód
+    ma zostać."""
+
+    __tablename__ = "consent"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), index=True)
+    kind: Mapped[str] = mapped_column(String)
+    version: Mapped[str] = mapped_column(String)
+    granted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
 class WeightLog(Base):
     __tablename__ = "weight_log"
     __table_args__ = (UniqueConstraint("user_id", "date"),)

@@ -1,4 +1,5 @@
 import os
+from datetime import date
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -48,6 +49,13 @@ VISION_MODEL = os.getenv("FIT_KRASNAL_VISION_MODEL", "claude-opus-5")
 GEMINI_MODEL = os.getenv("FIT_KRASNAL_GEMINI_MODEL", "gemini-3.5-flash")
 
 MAX_PHOTO_BYTES = 15 * 1024 * 1024
+
+# RODO: wersja noty informacyjnej (/prywatnosc) i zgody na LLM. Zmiana wersji
+# unieważnia istniejące zgody (consent.has_consent porównuje wersje) — bumpować
+# tylko przy realnej zmianie treści noty, nie przy każdej literówce.
+PRIVACY_VERSION = os.getenv("FIT_KRASNAL_PRIVACY_VERSION", "2026-09-03")
+# Termin dla istniejących testerów (baner, potem bramka) — data wdrożenia + 14 dni.
+CONSENT_DEADLINE = date(2026, 9, 17)
 
 
 def garmin_tokens_dir(user_id: int) -> Path:
