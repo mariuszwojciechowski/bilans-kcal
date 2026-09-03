@@ -93,6 +93,11 @@ bez e-maili, treści posiłków, zdjęć, wag ani kalorii. Więcej w
 </section>
 
 <section class="card">
+  <h2>Posiłki dziennie (30 dni)</h2>
+  {{ chart_meals_per_day | safe }}
+</section>
+
+<section class="card">
   <h2>Tygodniowo — aktywni użytkownicy</h2>
   {{ chart_weekly_active | safe }}
 </section>

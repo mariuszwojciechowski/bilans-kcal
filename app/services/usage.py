@@ -15,8 +15,9 @@ from datetime import date, timedelta
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from ..config import DEBUG, SECRET_KEY, USAGE_SALT
-from ..models import User, UsageDaily
+from ..config import ADMIN_EMAIL, DEBUG, SECRET_KEY, USAGE_SALT
+from ..models import AppSetting, Meal, User, UsageDaily, UserProfile
+from ..providers.garmin import GARMIN_TOKENS_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -108,9 +109,15 @@ def dashboard_stats(db: Session, weeks: int = 12) -> dict:
     since_7 = today - timedelta(days=6)
     since_30 = today - timedelta(days=29)
 
-    rows = db.execute(
-        select(UsageDaily.user_ref, UsageDaily.date, UsageDaily.event, UsageDaily.count)
-    ).all()
+    admin = db.scalar(select(User).where(User.email == ADMIN_EMAIL))
+    admin_ref = user_ref(admin.id) if admin else None
+
+    rows = [
+        r for r in db.execute(
+            select(UsageDaily.user_ref, UsageDaily.date, UsageDaily.event, UsageDaily.count)
+        ).all()
+        if r[0] != admin_ref
+    ]
 
     by_ref: dict[str, list[tuple[date, str, int]]] = {}
     for ref, d, event, count in rows:
@@ -128,24 +135,39 @@ def dashboard_stats(db: Session, weeks: int = 12) -> dict:
     ]
     adopted_7d = sum(1 for n in meal_days_per_user if n >= 7)
 
-    total_accounts = db.scalar(select(func.count(User.id))) or 0
+    total_accounts = (db.scalar(select(func.count(User.id))) or 0) - (1 if admin else 0)
 
-    funnel = {"accounts": total_accounts, "profile": 0, "llm_key": 0,
-              "garmin": 0, "first_meal": 0, "returned_week2": 0}
-    for u in db.scalars(select(User)).all():
-        items = by_ref.get(user_ref(u.id), [])
-        events = {event for _, event, _ in items}
-        dates = sorted({d for d, _, _ in items})
-        if "profile_save" in events:
-            funnel["profile"] += 1
-        if "llm_key_save" in events:
-            funnel["llm_key"] += 1
-        if "garmin_connect_ok" in events:
-            funnel["garmin"] += 1
-        if events & MEAL_SAVE_EVENTS:
-            funnel["first_meal"] += 1
-        if dates and (dates[-1] - dates[0]).days >= 7:
-            funnel["returned_week2"] += 1
+    # Lejek liczony z realnych danych (profil/klucz LLM/Garmin/posiłki), nie z
+    # telemetrii — telemetria działa tylko od dnia wdrożenia i zaniżałaby
+    # konta założone wcześniej.
+    other_users = select(User.id).where(User.email != ADMIN_EMAIL).subquery()
+    with_profile = db.scalar(
+        select(func.count()).select_from(UserProfile)
+        .where(UserProfile.user_id.in_(select(other_users.c.id)))
+    ) or 0
+    with_llm_key = db.scalar(
+        select(func.count(func.distinct(AppSetting.user_id)))
+        .where(AppSetting.key.in_(("gemini_api_key", "anthropic_api_key")),
+               AppSetting.user_id.in_(select(other_users.c.id)))
+    ) or 0
+    with_garmin = db.scalar(
+        select(func.count(func.distinct(AppSetting.user_id)))
+        .where(AppSetting.key == GARMIN_TOKENS_KEY,
+               AppSetting.user_id.in_(select(other_users.c.id)))
+    ) or 0
+    with_meal = db.scalar(
+        select(func.count(func.distinct(Meal.user_id)))
+        .where(Meal.user_id.in_(select(other_users.c.id)))
+    ) or 0
+    meal_span = db.execute(
+        select(Meal.user_id, func.min(Meal.date), func.max(Meal.date))
+        .where(Meal.user_id.in_(select(other_users.c.id)))
+        .group_by(Meal.user_id)
+    ).all()
+    returned_week2 = sum(1 for _, d0, d1 in meal_span if (d1 - d0).days >= 7)
+
+    funnel = {"accounts": total_accounts, "profile": with_profile, "llm_key": with_llm_key,
+              "garmin": with_garmin, "first_meal": with_meal, "returned_week2": returned_week2}
 
     totals: dict[str, dict] = {}
     for ref, _, event, count in rows:
@@ -172,6 +194,22 @@ def dashboard_stats(db: Session, weeks: int = 12) -> dict:
     chart_weekly_events = bar_chart(events_points, chart_start, today,
                                     color_pos="#8DC63F", color_neg="#8DC63F")
 
+    # Posiłki dziennie — z tabeli Meal (dane realne, nie telemetria).
+    meals_since = today - timedelta(days=29)
+    meal_counts = db.execute(
+        select(Meal.date, func.count(Meal.id))
+        .where(Meal.date >= meals_since,
+               Meal.user_id.in_(select(other_users.c.id)))
+        .group_by(Meal.date)
+    ).all()
+    meal_by_day = dict(meal_counts)
+    meals_points = [
+        (meals_since + timedelta(days=i), float(meal_by_day.get(meals_since + timedelta(days=i), 0)))
+        for i in range(30)
+    ]
+    chart_meals_per_day = bar_chart(meals_points, meals_since, today,
+                                    color_pos="#1A4D3A", color_neg="#1A4D3A")
+
     last_activity = sorted(
         (
             {"ref": ref, "last_date": max(d for d, _, _ in items),
@@ -191,5 +229,6 @@ def dashboard_stats(db: Session, weeks: int = 12) -> dict:
         "top_events": top_events,
         "chart_weekly_active": chart_weekly_active,
         "chart_weekly_events": chart_weekly_events,
+        "chart_meals_per_day": chart_meals_per_day,
         "last_activity": last_activity,
     }
