@@ -381,6 +381,13 @@
     <p class="muted" style="margin-top:4px"><a href="/prywatnosc" target="_blank">Nota o prywatności</a></p>
   </section>
 
+  {% if is_admin %}
+  <section class="card">
+    <h2>Administracja</h2>
+    <p class="muted" style="margin:0"><a href="/usage">Statystyki użycia →</a></p>
+  </section>
+  {% endif %}
+
   <section class="card">
     <h2>Konto</h2>
     <p class="muted">Kontakt: <a href="mailto:krasnal@krasnal.cc">krasnal@krasnal.cc</a></p>
