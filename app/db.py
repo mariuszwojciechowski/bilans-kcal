@@ -43,6 +43,14 @@ def _migrate(engine) -> None:
                 "ALTER TABLE user_profile ADD COLUMN lifestyle VARCHAR DEFAULT 'active' NOT NULL"
             ))
             conn.commit()
+        if cols and "birth_year" not in cols:
+            conn.execute(text("ALTER TABLE user_profile ADD COLUMN birth_year INTEGER"))
+            conn.commit()
+            conn.execute(text(
+                "UPDATE user_profile SET birth_year = CAST(strftime('%Y', birth_date) AS INTEGER) "
+                "WHERE birth_year IS NULL"
+            ))
+            conn.commit()
 
         user_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(user)"))]
         if user_cols and "password_hash" not in user_cols:

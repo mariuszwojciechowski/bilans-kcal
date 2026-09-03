@@ -23,7 +23,7 @@ def db(tmp_path, monkeypatch):
 
 
 def _seed(db):
-    db.add(UserProfile(user_id=1, birth_date=date(1980, 6, 15), sex="M", height_cm=180))
+    db.add(UserProfile(user_id=1, birth_date=date(1980, 7, 1), birth_year=1980, sex="M", height_cm=180))
     db.add(WeightLog(user_id=1, date=date(2026, 8, 10), weight_kg=80.5))
     db.add(Meal(user_id=1, date=date(2026, 8, 12), time=time(12, 30),
                 description="jajecznica", kcal=420, protein_g=25, fat_g=30, carbs_g=12))

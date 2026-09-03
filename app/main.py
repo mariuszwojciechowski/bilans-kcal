@@ -25,7 +25,7 @@ from .services import meal_queue, meal_vision, quips, transfer
 from .services import settings as settings_service
 from .services.balance import day_balance, deficit_warning, projected_weekly_change_kg
 from .services.charts import Series, bar_chart, line_chart
-from .services.energy import age_years, smoothed_weight, tdee_theoretical
+from .services.energy import age_from_year, smoothed_weight, tdee_theoretical
 from .services.macros import coverage, lifestyle_options, who_targets
 from .services.sync import mark_attempt, maybe_sync, sync_range
 
@@ -167,7 +167,8 @@ def logout_submit(request: Request):
 # ── Profil ────────────────────────────────────────────────────────────────
 
 class ProfileIn(BaseModel):
-    birth_date: date
+    birth_year: int | None = None
+    birth_date: date | None = None  # wejście zgodnościowe: stary klient/plik transferu
     sex: str  # 'M' | 'F'
     height_cm: float
     target_deficit_kcal: int = 500
@@ -176,7 +177,33 @@ class ProfileIn(BaseModel):
     tz: str = "Europe/Warsaw"
 
 
-@app.get("/api/profile")
+MIN_BIRTH_YEAR_AGE = 13
+MAX_BIRTH_YEAR_AGE = 120
+
+
+def _resolve_birth_year(data: "ProfileIn") -> int:
+    birth_year = data.birth_year
+    if birth_year is None and data.birth_date is not None:
+        birth_year = data.birth_date.year
+    if birth_year is None:
+        raise HTTPException(422, "Podaj rok urodzenia")
+    this_year = date.today().year
+    if not (this_year - MAX_BIRTH_YEAR_AGE <= birth_year <= this_year - MIN_BIRTH_YEAR_AGE):
+        raise HTTPException(422, "Rok urodzenia poza sensownym zakresem")
+    return birth_year
+
+
+class ProfileOut(BaseModel):
+    birth_year: int | None
+    sex: str
+    height_cm: float
+    target_deficit_kcal: int
+    target_weight_kg: float | None
+    lifestyle: str
+    tz: str
+
+
+@app.get("/api/profile", response_model=ProfileOut)
 def get_profile(db: Session = Depends(db_session), user: User = Depends(auth.current_user)):
     profile = db.get(UserProfile, user.id)
     if profile is None:
@@ -189,12 +216,15 @@ def put_profile(data: ProfileIn, db: Session = Depends(db_session),
                 user: User = Depends(auth.current_user)):
     if data.sex.upper() not in ("M", "F"):
         raise HTTPException(422, "sex musi być 'M' lub 'F'")
+    birth_year = _resolve_birth_year(data)
+    birth_date = date(birth_year, 7, 1)
     profile = db.get(UserProfile, user.id)
     if profile is None:
-        profile = UserProfile(user_id=user.id, birth_date=data.birth_date,
+        profile = UserProfile(user_id=user.id, birth_date=birth_date, birth_year=birth_year,
                               sex=data.sex.upper(), height_cm=data.height_cm)
         db.add(profile)
-    profile.birth_date = data.birth_date
+    profile.birth_date = birth_date
+    profile.birth_year = birth_year
     profile.sex = data.sex.upper()
     profile.height_cm = data.height_cm
     profile.target_deficit_kcal = data.target_deficit_kcal
@@ -326,7 +356,7 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
     tdee = tdee_theoretical(
         weight_kg=weight,
         height_cm=profile.height_cm,
-        age=age_years(profile.birth_date, day),
+        age=age_from_year(profile.birth_year, day),
         sex=profile.sex,
         steps=steps,
         activities=activities_for_tdee,
@@ -350,7 +380,7 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
     }
     e_target = bal.kcal_out - profile.target_deficit_kcal
     targets = who_targets(e_target, weight, sex=profile.sex,
-                          age=age_years(profile.birth_date, day),
+                          age=age_from_year(profile.birth_year, day),
                           lifestyle=profile.lifestyle or "active")
     macros = coverage(
         targets,
@@ -1119,7 +1149,7 @@ def api_trends_data(days: int = 30, db: Session = Depends(db_session),
 
 @app.post("/profile-form")
 def profile_form(
-    birth_date: date = Form(...),
+    birth_year: int = Form(...),
     sex: str = Form(...),
     height_cm: float = Form(...),
     target_deficit_kcal: int = Form(500),
@@ -1127,7 +1157,7 @@ def profile_form(
     user: User = Depends(auth.current_user),
 ):
     put_profile(
-        ProfileIn(birth_date=birth_date, sex=sex, height_cm=height_cm,
+        ProfileIn(birth_year=birth_year, sex=sex, height_cm=height_cm,
                   target_deficit_kcal=target_deficit_kcal),
         db,
         user,

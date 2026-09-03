@@ -315,8 +315,9 @@
 
   <section class="card">
     <h2>Profil</h2>
-    <label>Data urodzenia</label>
-    <input type="date" id="s-birth">
+    <label>Rok urodzenia</label>
+    <input type="number" id="s-birth-year" min="1900" step="1" inputmode="numeric" placeholder="np. 1985">
+    <p class="muted" style="margin:2px 0 0">Wiek wpływa tylko na przemianę spoczynkową (5 kcal na rok) i na próg 65+ w normach — dokładna data nie jest nam potrzebna.</p>
     <div class="row2">
       <span style="flex:1">
         <label>Płeć</label>
@@ -862,7 +863,7 @@ async function renderSettings() {
       sel.appendChild(opt);
     });
     if (profile) {
-      document.getElementById("s-birth").value = profile.birth_date || "";
+      document.getElementById("s-birth-year").value = profile.birth_year || "";
       document.getElementById("s-sex").value = profile.sex || "M";
       document.getElementById("s-height").value = profile.height_cm || "";
       document.getElementById("s-deficit").value = profile.target_deficit_kcal ?? 500;
@@ -887,7 +888,7 @@ async function saveProfile() {
   try {
     const goalStr = document.getElementById("s-goalweight").value;
     await apiJson("/api/profile", {
-      birth_date: document.getElementById("s-birth").value,
+      birth_year: +document.getElementById("s-birth-year").value,
       sex: document.getElementById("s-sex").value,
       height_cm: +document.getElementById("s-height").value,
       target_deficit_kcal: +document.getElementById("s-deficit").value,

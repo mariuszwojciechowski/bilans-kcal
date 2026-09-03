@@ -73,6 +73,15 @@ backfill'ować istniejące wiersze (patrz `external_id` w `Meal`).
 **Testy:** `.venv/bin/python -m pytest` — wszystko musi być zielone,
 inaczej deploy się nie zbuduje.
 
+**Rok urodzenia, nie data:** profil trzyma `birth_year: int`, wiek liczy
+`energy.age_from_year` (konwencja środka roku: 1 lipca). `birth_date` w
+`UserProfile` zostaje w schemacie jako pochodna (`date(birth_year, 7, 1)`),
+ale nic w kodzie jej nie czyta — pełna data urodzenia to niepotrzebny
+identyfikator (minimalizacja danych, WYMAGANIA.md 3.1 jest w tym miejscu
+nieaktualne, patrz TODO.md „Rok urodzenia zamiast pełnej daty"). `ProfileIn`
+przyjmuje `birth_date` wyłącznie jako wejście zgodnościowe (stary klient,
+stary plik transferu) — nowe UI i eksport używają tylko `birth_year`.
+
 **Deployment jest bezpośredni:** commit → push → produkcja. Nie ma
 staging'u. Regresja w main = regresja u testerów. Testy muszą chronić.
 

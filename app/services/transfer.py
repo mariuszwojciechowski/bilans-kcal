@@ -50,7 +50,7 @@ def export_payload(db: Session, user_id: int) -> dict:
         "source": "desktop",
         "exported_at": datetime.utcnow().isoformat(),
         "profile": {
-            "birth_date": profile.birth_date.isoformat(),
+            "birth_year": profile.birth_year,
             "sex": profile.sex,
             "height_cm": profile.height_cm,
             "target_deficit_kcal": profile.target_deficit_kcal,
@@ -113,7 +113,11 @@ def import_payload(db: Session, user_id: int, payload: dict) -> dict:
 
     if payload.get("profile") and db.get(UserProfile, user_id) is None:
         p = payload["profile"]
-        db.add(UserProfile(user_id=user_id, birth_date=date.fromisoformat(p["birth_date"]),
+        birth_year = p.get("birth_year")
+        if birth_year is None and p.get("birth_date"):  # plik z dawniejszej wersji
+            birth_year = date.fromisoformat(p["birth_date"]).year
+        db.add(UserProfile(user_id=user_id, birth_date=date(birth_year, 7, 1),
+                           birth_year=birth_year,
                            sex=p["sex"], height_cm=p["height_cm"],
                            target_deficit_kcal=p.get("target_deficit_kcal", 500),
                            target_weight_kg=p.get("target_weight_kg"),
