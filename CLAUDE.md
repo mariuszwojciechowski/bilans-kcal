@@ -3,7 +3,8 @@
 Ten plik ma pomóc nowej sesji Claude Code szybko wejść w projekt bez
 kilkuset requestów rekonesansu. Nie jest publiczną dokumentacją —
 o produkcie mówi [README.md](README.md), o wymaganiach [WYMAGANIA.md](WYMAGANIA.md),
-o rzeczach do zrobienia [TODO.md](TODO.md), o wdrożeniu [deploy/README.md](deploy/README.md).
+o rzeczach do zrobienia [TODO.md](TODO.md), o już zrobionych [DONE.md](DONE.md),
+o wdrożeniu [deploy/README.md](deploy/README.md).
 
 ## Stan bieżący (stan na sierpień 2026)
 
@@ -98,7 +99,9 @@ staging'u. Regresja w main = regresja u testerów. Testy muszą chronić.
 - **Commit i push bez pytania** — po skończonej pracy wykonuj od razu.
 - **Oznaczaj zrealizowane punkty w TODO.md** — format:
   `## ~~Tytuł~~ ✓ zrobione (commit <sha>)`. Rób to w tym samym commicie co
-  implementacja lub osobno, ale zawsze.
+  implementacja lub osobno, ale zawsze. Gotową sekcję przenieś w całości
+  na początek listy w [DONE.md](DONE.md) (pod akapitem wstępnym) — w TODO.md
+  zostają wyłącznie rzeczy do zrobienia.
 
 ## Historia decyzji
 
