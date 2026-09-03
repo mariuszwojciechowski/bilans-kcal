@@ -34,6 +34,10 @@
   .muted { color: var(--stone); font-size: 13px; }
   a { color: var(--green-med); }
   code { background: rgba(108,117,125,.15); padding: 1px 5px; border-radius: 4px; font-size: 90%; }
+  nav.toc { background: rgba(108,117,125,.10); border-radius: 8px; padding: 12px 16px; margin: 4px 0 24px; }
+  nav.toc p { margin: 0 0 6px; font-size: 13px; }
+  nav.toc ol { margin: 0; padding-left: 20px; }
+  nav.toc li { margin: 3px 0; }
 </style>
 </head>
 <body>
@@ -50,7 +54,19 @@ usunąć — bez rejestru czynności przetwarzania i bez prawniczego żargonu,
 bo skala pilota tego nie wymaga. Jeśli coś jest niejasne, napisz:
 <a href="mailto:krasnal@krasnal.cc">krasnal@krasnal.cc</a>.</p>
 
-<h2>Jakie dane zbieramy</h2>
+<nav class="toc">
+  <p>Czytanie tej strony zajmuje ~87 sekund — naprawdę warto przeczytać całość :)</p>
+  <ol>
+    <li><a href="#dane">Jakie dane zbieramy</a></li>
+    <li><a href="#llm">Zdjęcia i opisy posiłków — wysyłka do zewnętrznego modelu (LLM)</a></li>
+    <li><a href="#gdzie">Gdzie leżą dane</a></li>
+    <li><a href="#retencja">Ile czasu trzymamy dane</a></li>
+    <li><a href="#prawa">Twoje prawa</a></li>
+    <li><a href="#kontakt">Kontakt</a></li>
+  </ol>
+</nav>
+
+<h2 id="dane">Jakie dane zbieramy</h2>
 <ul>
   <li><b>Konto:</b> e-mail i hasło (zahaszowane — nikt, w tym administrator,
     nie widzi Twojego hasła w postaci jawnej).</li>
@@ -64,7 +80,7 @@ bo skala pilota tego nie wymaga. Jeśli coś jest niejasne, napisz:
     Zdjęcia posiłków — tymczasowo, patrz „Zdjęcia i LLM” niżej.</li>
 </ul>
 
-<h2>Zdjęcia i opisy posiłków — wysyłka do zewnętrznego modelu (LLM)</h2>
+<h2 id="llm">Zdjęcia i opisy posiłków — wysyłka do zewnętrznego modelu (LLM)</h2>
 <p>Żeby oszacować kalorie ze zdjęcia albo opisu, aplikacja wysyła je do
 zewnętrznego modelu językowego — <b>Google Gemini</b> albo <b>Anthropic
 Claude</b>, w zależności od tego, jaki klucz API wkleisz w Ustawieniach.
@@ -97,13 +113,13 @@ przez konto administratora. Co ważne dla oceny ryzyka:</p>
 zasady, postaramy się zaktualizować tę notę i podniesiemy jej wersję (co poprosi
 ponownie o zgodę).</p>
 
-<h2>Gdzie leżą dane</h2>
+<h2 id="gdzie">Gdzie leżą dane</h2>
 <p>Baza danych i zdjęcia (tymczasowo) leżą na jednej maszynie wirtualnej
 w Google Cloud (region w USA — poza Europejskim Obszarem Gospodarczym).
 Backend jest wystawiony na świat wyłącznie przez HTTPS. Dostęp do serwera
 ma jedynie administrator (= właściciel projektu, kontakt: <a href="mailto:krasnal@krasnal.cc">krasnal@krasnal.cc</a>).</p>
 
-<h2>Ile czasu trzymamy dane</h2>
+<h2 id="retencja">Ile czasu trzymamy dane</h2>
 <ul>
   <li><b>Kolejka nieprzetworzonych posiłków</b> (gdy brak klucza LLM albo
     internetu): 21 dni, potem wpis i zdjęcie są kasowane automatycznie.</li>
@@ -115,7 +131,7 @@ ma jedynie administrator (= właściciel projektu, kontakt: <a href="mailto:kras
   <li><b>Logi serwera:</b> do 30 dni.</li>
 </ul>
 
-<h2>Twoje prawa</h2>
+<h2 id="prawa">Twoje prawa</h2>
 <p>Masz prawo do wglądu, poprawienia, eksportu i usunięcia swoich danych.</p>
 <ul>
   <li><b>Eksport:</b> przycisk w Ustawieniach („Przygotuj dane do
@@ -130,7 +146,7 @@ ma jedynie administrator (= właściciel projektu, kontakt: <a href="mailto:kras
     wolno już wysłać.</li>
 </ul>
 
-<h2>Kontakt</h2>
+<h2 id="kontakt">Kontakt</h2>
 <p><a href="mailto:krasnal@krasnal.cc">krasnal@krasnal.cc</a></p>
 
 </main>

@@ -62,9 +62,21 @@ estimate_from_photo / estimate_from_text`. NIE mutuj `os.environ`
 (`apply_llm_env` jest legacy, dla starych testów). Ten sam wzorzec w
 `meal_queue.process_queue`.
 
-**Garmin per user:** `GarminProvider(user_id)`, `tokens_present(user_id)`,
-`interactive_login_start(email, password, user_id)`,
-`interactive_login_mfa(code, user_id)`. Tokeny w podkatalogu `<user_id>/`.
+**Garmin per user:** `GarminProvider(user_id, db)`, `tokens_present(db, user_id)`,
+`interactive_login_start(db, email, password, user_id)`,
+`interactive_login_mfa(db, code, user_id)`. Tokeny leżą zaszyfrowane w
+`AppSetting` (klucz `garmin_tokens`), nie jako pliki — materializują się do
+katalogu tymczasowego tylko na czas logowania (`GarminProvider._client()`),
+kasowanego natychmiast po. `GARMIN_TOKENS_DIR`/pliki na dysku istnieją już
+tylko w `scripts/garmin_login.py` (CLI, jednoosobowy lokalny użytek, poza
+multi-user).
+
+**Sekrety użytkownika (klucze LLM, tokeny Garmina) trzymamy TYLKO przez
+`settings_service.get_setting/set_setting/all_settings`** — nigdy wprost w
+`AppSetting.value`. `SECRET_SETTING_KEYS` w `app/services/settings.py`
+decyduje, co jest szyfrowane (`app/services/crypto.py`, Fernet,
+`FIT_KRASNAL_ENC_KEY`). Dodając nowy sekret — dopisz jego klucz do tego
+zbioru, nie wymyślaj osobnej ścieżki szyfrowania.
 
 **Migracje:** addytywne, w `app/db.py:_migrate()`. Wzorzec: `PRAGMA table_info`
 + `ALTER TABLE ADD COLUMN`. Bez Alembic. Migracja nowej kolumny musi umieć

@@ -1,3 +1,4 @@
+import os
 import uuid
 
 from sqlalchemy import create_engine, text
@@ -29,6 +30,11 @@ def init_db() -> None:
     engine = get_engine()
     Base.metadata.create_all(engine)
     _migrate(engine)
+    # Higiena plików (plan „Szyfrowanie sekretów") — plik bazy tylko dla
+    # właściciela procesu. Dopiero tu plik na pewno istnieje (SQLite tworzy go
+    # leniwie, przy pierwszym połączeniu — create_all wyżej je wymusza).
+    if os.name == "posix" and DB_PATH.exists():
+        DB_PATH.chmod(0o600)
 
 
 def _migrate(engine) -> None:
