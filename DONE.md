@@ -10,6 +10,53 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Duplikat trendów i `day_report` w routerze — wyniesienie do serwisów~~ ✓ zrobione (commit SHA-PO-COMMICIE), pytest zielony (150 passed)
+
+Największy dług architektoniczny wskazany w audycie 2026-09-03, spłacony zaraz
+po podziale `main.py` na routery — tamten podział **przeniósł** duplikat do
+`app/routers/trends.py`, ale go nie usunął.
+
+**Co było:** `trends()` i `api_trends_data()` to były dwie niemal identyczne
+kopie ~70 linii (te same zapytania o wagi/summary/posiłki, to samo wygładzanie
+7-dniowe, te same serie wykresów). Poprawka w jednej nie trafiała do drugiej.
+`day_report()` (165 linii) siedział w routerze — a to jedyne miejsce, w które
+ma wejść współczynnik kalibracji (6.2).
+
+**Co jest:**
+
+1. `app/services/trends.py` — `payload(db, user_id, days, today=None)` jako
+   jedno źródło dla obu widoków; router (`app/routers/trends.py`, 202 → 66
+   linii) robi już tylko telemetrię i kształt odpowiedzi: HTML dokłada
+   `ranges`/`today`/`has_logo`, JSON zdejmuje `today`. Kolory serii dostały
+   nazwy (`COLOR_MEASURED` itd.) zamiast hexów wklejonych dwa razy.
+2. `app/services/day.py` — `day_report()` plus `_est_steps` i stała
+   `STEPS_PER_KM`; router (311 → 148 linii) woła serwis i mapuje błąd.
+3. `app/services/timeago.py` — `humanize_ago` **musiała** wyjść z `app/deps.py`,
+   bo `services/day.py` jej potrzebuje, a `deps.py` importuje FastAPI.
+4. **Serwisy zostają wolne od FastAPI:** brak profilu/wagi to
+   `day.DayReportUnavailable`, które router zamienia na 409 z tym samym
+   komunikatem co wcześniej. Nie `HTTPException` w serwisie.
+
+**Parametr `today` w `payload()`** jest z rozmysłem: punkt „Strefa czasowa
+użytkownika jako granica dnia" dostaje gotowe wejście — wystarczy podać
+`user_today(profile)` zamiast domyślnego `date.today()`.
+
+**Dowód, że nic się nie zmieniło dla klienta:** złoty zrzut `/api/day`,
+`/api/trends` (6 zakresów: 2, 7, 30, 90, 366, 1000 — łapie też przycinanie)
+i strony `/trends` na syntetycznych danych, wykonany **przed** i **po** zmianie
+— wyjście identyczne bajt w bajt, razem z SHA-256 treści HTML. Poza
+porównaniem tylko `quip` (losowany) i `last_sync_ago` (zależy od minuty).
+
+**Strażnicy na przyszłość** (`tests/test_day_trends_services.py`, 6 testów):
+kształt odpowiedzi `/api/trends` jako jawny kontrakt (`API_TRENDS_KEYS` — łapie
+np. wyciek `today` do API), zgodność HTML z JSON (te same SVG w treści strony),
+przycinanie zakresu dni, równość `/api/day` z wyjściem serwisu, 409 zamiast 500
+przy braku profilu i wagi, oraz test architektoniczny: żaden plik w
+`app/services/` nie może zawierać słowa `fastapi`.
+
+Nota `/prywatnosc`: bez zmian — przeniesienie kodu, żadnych nowych danych
+ani odbiorców.
+
 ## ~~Stara wersja na GitHub Pages — wyłączenie i sprzątanie po niej~~ ✓ zrobione (commit d8833e3)
 
 Zastępuje punkt „GitHub Pages — czerwony pipeline po skasowaniu `docs/`".

@@ -39,7 +39,7 @@ istnieje, nie dopisuj drugiego planu na to samo**, bo się rozjadą.
 
 | Wymóg | Stan | Gdzie plan |
 |---|---|---|
-| 6.2 Kalibracja adaptacyjna | brak tabeli `Calibration`; `day_report` liczy `e_target = kcal_out − deficyt` bez współczynnika (`app/routers/day.py:day_report()`) | „Kalibracja adaptacyjna" (6/10) |
+| 6.2 Kalibracja adaptacyjna | brak tabeli `Calibration`; `day_report` liczy `e_target = kcal_out − deficyt` bez współczynnika (`app/services/day.py:day_report()`) | „Kalibracja adaptacyjna" (6/10) |
 | 6.4 Karta kalibracji w tygodniówce | pochodna 6.2 — średni bilans i ETA celu w `/trends` są | krok 4 planu kalibracji |
 | 8.3 Strefa czasowa jako granica dnia | `user_profile.tz` zapisywane i eksportowane, nieczytane — wszędzie `date.today()` procesu | „Strefa czasowa użytkownika…" (4/10) |
 | 8.3 Prawo do usunięcia (samoobsługowe) | realizowane mailem; nota `/prywatnosc` mówi o tym wprost, więc nie jest to kłamstwo — tylko brak | „«Usuń moje dane i konto»…" (6/10) |
@@ -221,16 +221,23 @@ na danych użytkownika jak MacroFactor). Kroki dla implementującego LLM:
      ostatni jest starszy niż 7 dni (albo nie istnieje); wołane w tle przy
      wejściu na dashboard (wzorzec: `background.add_task`, jak `maybe_sync`
      w `app/routers/dashboard.py`).
-3. **Zastosowanie.** W `app/routers/day.py:day_report()`: pobierz
+3. **Zastosowanie.** W `app/services/day.py:day_report()` (raport dnia jest
+   w serwisie od 2026-09-03, router tylko go woła): pobierz
    `factor = calibration.current_factor(db, user_id)` i licz
    `e_target = bal.kcal_out * factor − profile.target_deficit_kcal`
    (dziś: bez factora). Do odpowiedzi dodaj pola `calibration_factor`
    i `calibration_updated` (data ostatniego wpisu) — UI ma pokazywać
-   "zapotrzebowanie skorygowane o ±X% względem pomiaru".
+   "zapotrzebowanie skorygowane o ±X% względem pomiaru". Uwaga: kształt tej
+   odpowiedzi pilnuje `tests/test_day_trends_services.py` — dopisanie pól jest
+   OK, ale test porównuje wyjście serwisu z wyjściem `/api/day`, więc oba
+   muszą dostać je razem.
 4. **UI.** W `app/templates/mobile.html` (jedyny widok dzienny) pokaż korektę
-   przy zapotrzebowaniu; w `/trends` (`app/routers/trends.py:trends()` +
-   `app/templates/trends.html`) dodaj do tygodniówki kartę "kalibracja":
-   oczekiwana vs rzeczywista zmiana ciężaru i factor (wymóg 6.4).
+   przy zapotrzebowaniu; dla tygodniówki dolicz dane w
+   `app/services/trends.py:payload()` (jedno źródło dla `/trends` i
+   `/api/trends`) i dorysuj kartę "kalibracja" w `app/templates/trends.html`:
+   oczekiwana vs rzeczywista zmiana ciężaru i factor (wymóg 6.4). Nowy klucz
+   dopisz też do `API_TRENDS_KEYS` w `tests/test_day_trends_services.py` —
+   ta lista jest świadomym kontraktem API, nie przypadkowym asertem.
 5. **Transfer.** Kalibracji nie eksportuj w `app/services/transfer.py` —
    po imporcie danych przelicza się z historii (dopisz `maybe_recalibrate`
    po udanym imporcie).
@@ -263,14 +270,18 @@ migracji istniejących dat — dane sprzed zmiany zostają, jak są.
    (aware), `user_today(profile) -> date`, `user_time(profile) -> time`. Każda
    funkcja przyjmuje `UserProfile | None` — profil może jeszcze nie istnieć
    (rejestracja przed konfiguracją) i wtedy działa fallback.
-2. **Routery — zamień wszystkie zegary procesu** na wersje z profilu:
+2. **Routery i serwisy — zamień wszystkie zegary procesu** na wersje z profilu:
    `app/routers/meals.py` (`_queue_meal` — godzina wpisu; `estimate_meal_photo`
    i `estimate_meal_text` — domyślny dzień szacowania; `save_meal` — godzina),
    `app/routers/transfer.py` (`transfer_export` — data w nazwie pliku eksportu),
-   `app/routers/trends.py` (`trends`, `api_trends_data`), `app/routers/day.py`
-   (`add_manual_activity`). Każdy z tych route'ów ma już `user`; profil pobierz
-   przez `db.get(UserProfile, user.id)`. `day_report` profil już ma — użyj go
-   zamiast dokładać drugie zapytanie.
+   `app/routers/day.py` (`add_manual_activity`). Każdy z tych route'ów ma już
+   `user`; profil pobierz przez `db.get(UserProfile, user.id)`.
+   `app/services/day.py:day_report` profil już ma — użyj go zamiast dokładać
+   drugie zapytanie. **Trendy są już gotowe na tę zmianę:**
+   `app/services/trends.py:payload(db, user_id, days, today=None)` przyjmuje
+   dzień parametrem — wystarczy, że oba route'y w `app/routers/trends.py`
+   podadzą `today=user_today(profile)` zamiast zdawać się na domyślne
+   `date.today()`.
 3. **`app/services/sync.py`** — `sync_range(db, provider, user_id, days=7,
    today: date | None = None)`; `None` zostawia `date.today()` (skrypty CLI),
    a `app/routers/profile.py:sync()` i `maybe_sync` przekazują

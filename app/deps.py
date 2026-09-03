@@ -1,6 +1,5 @@
 """Współdzielone zależności FastAPI (Depends) i pomocnicze obiekty (templates, STATIC_DIR)
 używane przez routery w app/routers/."""
-from datetime import datetime
 from pathlib import Path
 
 from fastapi import Depends, HTTPException
@@ -18,22 +17,8 @@ STATIC_DIR.mkdir(exist_ok=True)
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
-
-def humanize_ago(dt: datetime | None) -> str | None:
-    """'1d 21h 12m temu' — z dokładnością do minut."""
-    if dt is None:
-        return None
-    seconds = max(int((datetime.utcnow() - dt).total_seconds()), 0)
-    days, rest = divmod(seconds, 86400)
-    hours, rest = divmod(rest, 3600)
-    minutes = rest // 60
-    parts = []
-    if days:
-        parts.append(f"{days}d")
-    if hours or days:
-        parts.append(f"{hours}h")
-    parts.append(f"{minutes}m")
-    return " ".join(parts) + " temu"
+# `humanize_ago` mieszka w `services/timeago.py`: potrzebuje jej też
+# `services/day.py`, a warstwa serwisów nie importuje FastAPI (ten plik importuje).
 
 
 def require_llm_consent(db: Session = Depends(db_session),
