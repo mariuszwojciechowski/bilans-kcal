@@ -10,6 +10,34 @@ listy, po tym akapicie.
 
 ---
 
+## ~~RODO: informacja, zgoda na wysyłkę zdjęć do LLM, retencja~~ ✓ zrobione (commit 96fb708), pytest zielony (116 passed), zweryfikowane w przeglądarce (baner, karta Prywatność, chowanie/pokazywanie pól LLM po grant/withdraw)
+
+Nota `/prywatnosc` (bez auth), zgoda `Consent(kind="llm_photos")` wersjonowana
+przez `PRIVACY_VERSION`, bramka `require_llm_consent` na `POST /api/meals/photo`
+i `/api/meals/text` (409 bez zgody) oraz w `meal_queue.process_queue` (przerywa
+bez zgody, jak przy braku klucza). Checkbox w rejestracji (opcjonalny), karta
+„Prywatność" w Ustawieniach (desktop `settings.html` i mobile SPA) z
+przełącznikiem grant/withdraw — wycofanie kasuje oczekującą kolejkę wraz ze
+zdjęciami. Baner dla istniejących testerów bez zgody, z terminem
+`CONSENT_DEADLINE` (17.09.2026) — sama bramka 409 działa od razu, baner to
+tylko komunikat "dlaczego". Treść noty sprawdzona pod względem faktów o
+polityce Gemini/Anthropic API (WebSearch + WebFetch na ai.google.dev i
+anthropic.com/legal, 2026-09-03) — ważne rozróżnienie: darmowy klucz Gemini
+(ten, do którego onboarding kieruje testerów) trenuje/jest recenzowany przez
+ludzi WYŁĄCZNIE poza UE/EOG/Szwajcarią/UK; dla Polski obowiązują warunki
+płatnego poziomu nawet na darmowym kluczu.
+
+**Świadome odstępstwo od litery planu w TODO.md:** plan zakładał "eksport i
+kasowanie — przyciskami w Ustawieniach, bez pisania maili", ale przycisk
+samoobsługowego usuwania danych/konta nie istnieje (to osobny, jeszcze
+niezrealizowany punkt „Usuń moje dane i konto w Ustawieniach"). Nota mówi o
+tym uczciwie: eksport działa przyciskiem, usunięcie na razie wymaga maila do
+administratora — do poprawienia, kiedy tamten punkt zostanie zrealizowany.
+`MaxRetentionSec=30day` dla journald dodany do `deploy/setup-vm.sh` (wymaga
+ponownego uruchomienia skryptu na VM, żeby zadziałać na produkcji).
+
+---
+
 ## ~~Rok urodzenia zamiast pełnej daty — minimalizacja danych~~ ✓ zrobione (commit aba6c7f), pytest zielony (107 passed)
 
 Profil `UserProfile` trzyma teraz `birth_year: int` — pełna data urodzenia
