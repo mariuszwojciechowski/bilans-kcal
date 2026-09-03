@@ -10,7 +10,7 @@ listy, po tym akapicie.
 
 ---
 
-## ~~Stara wersja na GitHub Pages — wyłączenie i sprzątanie po niej~~ ✓ zrobione (commit 3ccae2d)
+## ~~Stara wersja na GitHub Pages — wyłączenie i sprzątanie po niej~~ ✓ zrobione (commit d8833e3)
 
 Zastępuje punkt „GitHub Pages — czerwony pipeline po skasowaniu `docs/`".
 Audyt publicznego repo (2026-09-03) pokazał, że problem był większy niż
