@@ -56,6 +56,16 @@ GEMINI_MODEL = os.getenv("FIT_KRASNAL_GEMINI_MODEL", "gemini-3.5-flash")
 
 MAX_PHOTO_BYTES = 15 * 1024 * 1024
 
+# Pseudonimizacja statystyk użycia (plan „Statystyki użycia") — sól HMAC do
+# hashowania user_id na pseudonim w tabeli UsageDaily. Stała: zmiana zrywa
+# ciągłość statystyk (ten sam user dostanie inny pseudonim). W dev pochodna
+# SECRET_KEY (wzorzec jak w app/services/crypto.py), na produkcji WYMAGANA.
+USAGE_SALT = os.getenv("FIT_KRASNAL_USAGE_SALT")
+
+# E-mail administratora — jedyne konto z dostępem do /usage. Nie-admin dostaje
+# 404 (nie 403 — nie ma po co ogłaszać, że taki widok istnieje).
+ADMIN_EMAIL = os.getenv("FIT_KRASNAL_ADMIN_EMAIL", "krasnal@krasnal.cc")
+
 # RODO: wersja noty informacyjnej (/prywatnosc) i zgody na LLM. Zmiana wersji
 # unieważnia istniejące zgody (consent.has_consent porównuje wersje) — bumpować
 # tylko przy realnej zmianie treści noty, nie przy każdej literówce.

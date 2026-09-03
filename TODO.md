@@ -22,6 +22,12 @@ w tym samym zadaniu i odnotuj to wprost we wpisie w [DONE.md](DONE.md)
 („nota `/prywatnosc` zaktualizowana — co się zmieniło"). Nota ma zostać
 zgodna ze stanem kodu, nie z pamięcią z dnia jej napisania.
 
+**Zasada dla implementującego LLM (uruchamianie testów):** pełną suitę
+testów (`pytest` bez filtra na konkretny plik) puszczaj dopiero po zgodzie
+właściciela — nie automatycznie po skończeniu implementacji. Testy nowego/
+zmienianego pliku (np. `pytest tests/test_usage.py`) można odpalać na
+bieżąco w trakcie pracy.
+
 ---
 
 ## GitHub Pages — czerwony pipeline po skasowaniu docs/ (1/10)
