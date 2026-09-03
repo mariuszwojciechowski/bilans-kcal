@@ -1,5 +1,8 @@
+from datetime import date
+
 import pytest
 
+from app.services.energy import age_from_year
 from app.services.macros import bar_pct, coverage, resolve_norms, who_targets
 
 
@@ -39,6 +42,12 @@ def test_norms_group_by_age():
     assert resolve_norms("M", 45)["group_id"] == "adult"
     assert resolve_norms("F", 64)["group_id"] == "adult"
     assert resolve_norms("M", 65)["group_id"] == "senior"
+
+
+def test_norms_group_by_birth_year():
+    on = date(2026, 9, 3)
+    assert resolve_norms("M", age_from_year(1961, on))["group_id"] == "senior"  # 65 lat
+    assert resolve_norms("M", age_from_year(1962, on))["group_id"] == "adult"   # 64 lata
 
 
 def test_senior_group_detected():

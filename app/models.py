@@ -23,7 +23,10 @@ class UserProfile(Base):
     __tablename__ = "user_profile"
 
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), primary_key=True)
+    # legacy: pochodna birth_year (zawsze 1 lipca), nieczytana przez kod —
+    # wiek liczy się z birth_year (minimalizacja danych, patrz CLAUDE.md)
     birth_date: Mapped[date] = mapped_column(Date)
+    birth_year: Mapped[int | None] = mapped_column(Integer)
     sex: Mapped[str] = mapped_column(String(1))  # 'M' | 'F'
     height_cm: Mapped[float] = mapped_column(Float)
     target_deficit_kcal: Mapped[int] = mapped_column(Integer, default=500)

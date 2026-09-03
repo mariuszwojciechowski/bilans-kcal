@@ -2,6 +2,7 @@ from datetime import date
 
 from app.services.energy import (
     activity_kcal_model,
+    age_from_year,
     age_years,
     bmr_mifflin,
     neat_from_steps,
@@ -24,6 +25,27 @@ def test_age_years_before_and_after_birthday():
     birth = date(1980, 6, 15)
     assert age_years(birth, date(2026, 6, 14)) == 45
     assert age_years(birth, date(2026, 6, 15)) == 46
+
+
+def test_age_from_year_midyear_convention():
+    # 1985: przed 1 lipca jeszcze "40", od 1 lipca już "41" (rok bieżący 2026)
+    assert age_from_year(1985, date(2026, 6, 30)) == 40
+    assert age_from_year(1985, date(2026, 7, 1)) == 41
+
+
+def test_age_from_year_close_to_birth_date_age():
+    # różnica wieku z roku vs. z pełnej daty urodzenia ≤ 1 rok dla tej samej osoby
+    birth = date(1985, 3, 20)
+    on = date(2026, 8, 1)
+    assert abs(age_from_year(1985, on) - age_years(birth, on)) <= 1
+
+
+def test_bmr_diff_year_vs_full_date_is_small():
+    birth = date(1985, 3, 20)
+    on = date(2026, 8, 1)
+    bmr_full = bmr_mifflin(80, 175, age_years(birth, on), "M")
+    bmr_year = bmr_mifflin(80, 175, age_from_year(1985, on), "M")
+    assert abs(bmr_full - bmr_year) <= 5
 
 
 def test_smoothed_weight_window():

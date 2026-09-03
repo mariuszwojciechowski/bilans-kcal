@@ -7,10 +7,17 @@ from datetime import date
 
 
 def age_years(birth_date: date, on_date: date) -> int:
+    """Funkcja pomocnicza (dokładna data). Profil operuje na roku — patrz age_from_year."""
     years = on_date.year - birth_date.year
     if (on_date.month, on_date.day) < (birth_date.month, birth_date.day):
         years -= 1
     return years
+
+
+def age_from_year(birth_year: int, on_date: date) -> int:
+    """Wiek z konwencji „środek roku" (jakby każdy rodził się 1 lipca) — błąd
+    ≤ 1 rok, bez systematycznego przesunięcia w żadną stronę."""
+    return on_date.year - birth_year - (0 if (on_date.month, on_date.day) >= (7, 1) else 1)
 
 
 def bmr_mifflin(weight_kg: float, height_cm: float, age: int, sex: str) -> float:
