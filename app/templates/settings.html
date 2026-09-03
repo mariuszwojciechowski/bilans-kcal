@@ -171,6 +171,22 @@
 </section>
 
 <section class="card">
+  <h2>Prywatność</h2>
+  <p>Zgoda na wysyłanie zdjęć i opisów posiłków do zewnętrznego modelu (Gemini/Claude):
+    {% if consent_granted %}<b class="ok">udzielona</b>
+      <span class="muted">· {{ consent_granted_at.strftime("%d.%m.%Y") if consent_granted_at else "" }}
+      · wersja noty {{ privacy_version }}</span>
+    {% else %}<b class="bad">brak</b>{% endif %}</p>
+  <form method="post" action="/settings/consent" style="display:inline">
+    <input type="hidden" name="granted" value="{{ 'false' if consent_granted else 'true' }}">
+    <button class="{{ 'danger' if consent_granted else 'primary' }}">
+      {{ "Wycofaj zgodę" if consent_granted else "Włącz zgodę" }}
+    </button>
+  </form>
+  <p class="muted" style="margin-top:8px"><a href="/prywatnosc" target="_blank">Nota o prywatności</a></p>
+</section>
+
+<section class="card">
   <h2>Kontakt</h2>
   <p class="muted" style="margin:0">Problem, pomysł, bug?
     <a href="mailto:krasnal@krasnal.cc">krasnal@krasnal.cc</a></p>

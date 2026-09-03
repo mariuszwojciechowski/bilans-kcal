@@ -131,6 +131,7 @@
     </form>
   </div>
 </header>
+<div id="consent-banner" class="muted" style="display:none;background:rgba(220,53,69,.12);padding:8px 14px;font-size:13px"></div>
 <main>
 
 <!-- ── DZIŚ ─────────────────────────────────────────────────────────── -->
@@ -177,10 +178,18 @@
       <input type="date" id="f-date">
       <input type="time" id="f-time">
     </div>
-    <input type="file" id="f-photo" accept="image/*" capture="environment">
-    <input type="text" id="f-note" placeholder="uwaga do zdjęcia (opcjonalnie)">
-    <textarea id="f-desc" rows="2" placeholder="albo opisz posiłek: 2 jajka sadzone i kromka żytniego"></textarea>
-    <button class="primary" onclick="estimate()">Szacuj</button>
+    <div id="add-llm-fields" style="display:none">
+      <input type="file" id="f-photo" accept="image/*" capture="environment">
+      <input type="text" id="f-note" placeholder="uwaga do zdjęcia (opcjonalnie)">
+      <textarea id="f-desc" rows="2" placeholder="albo opisz posiłek: 2 jajka sadzone i kromka żytniego"></textarea>
+      <button class="primary" onclick="estimate()">Szacuj</button>
+    </div>
+    <p class="muted" id="add-llm-hint" style="display:none">
+      Szacowanie ze zdjęcia/opisu jest wyłączone — nie potwierdziłeś zgody na
+      wysyłanie zdjęć i opisów do zewnętrznego modelu. Możesz to zmienić w
+      <a href="#" onclick="show('settings');return false">Ustawieniach → Prywatność</a>,
+      albo wpisać wartości ręcznie poniżej.
+    </p>
     <button class="ghost" onclick="showManual()" style="margin-top:4px">Wpisz wartości ręcznie</button>
     <button class="ghost" onclick="toggleSavedMeals()" style="margin-top:4px">Moje posiłki ▼</button>
     <p class="muted" id="msg"></p>
@@ -360,6 +369,13 @@
     <a href="/settings#garmin" style="display:block;margin-top:4px">
       Zarządzaj połączeniem z Garminem →
     </a>
+  </section>
+
+  <section class="card">
+    <h2>Prywatność</h2>
+    <p class="muted">Zgoda na wysyłanie zdjęć/opisów posiłków do LLM: <span id="s-consent-status">—</span></p>
+    <button id="s-consent-btn" onclick="toggleConsent()">…</button>
+    <p class="muted" style="margin-top:4px"><a href="/prywatnosc" target="_blank">Nota o prywatności</a></p>
   </section>
 
   <section class="card">
@@ -875,10 +891,55 @@ async function renderSettings() {
       settings.backend ? `backend: ${settings.backend}` : "brak klucza";
     document.getElementById("s-garmin-status").textContent =
       settings.garmin_connected ? "Połączony ✓" : "Niepołączony";
+    applyConsentUi(settings);
     status.textContent = "";
     _settingsLoaded = true;
   } catch(e) {
     status.textContent = "Błąd ładowania: " + e.message;
+  }
+}
+
+/* ── zgoda RODO na LLM ── */
+function applyConsentUi(settings) {
+  const granted = !!settings.consent_llm_photos;
+  const fields = document.getElementById("add-llm-fields");
+  const hint = document.getElementById("add-llm-hint");
+  if (fields) fields.style.display = granted ? "" : "none";
+  if (hint) hint.style.display = granted ? "none" : "";
+
+  const banner = document.getElementById("consent-banner");
+  if (banner) {
+    if (granted) {
+      banner.style.display = "none";
+    } else {
+      const [y, m, d] = (settings.consent_deadline || "").split("-");
+      banner.textContent = settings.consent_deadline_passed
+        ? "Szacowanie ze zdjęcia/opisu jest wyłączone — nie potwierdziłeś zgody na wysyłanie danych do zewnętrznego modelu. Zdecyduj w Ustawieniach → Prywatność."
+        : `Doprecyzowaliśmy, co dzieje się z Twoimi danymi. Zapoznaj się i zdecyduj do ${d}.${m}.${y} — Ustawienia → Prywatność.`;
+      banner.style.display = "";
+    }
+  }
+
+  const statusEl = document.getElementById("s-consent-status");
+  if (statusEl) {
+    statusEl.textContent = granted
+      ? `udzielona${settings.consent_granted_at ? " · " + settings.consent_granted_at.slice(0, 10).split("-").reverse().join(".") : ""}`
+      : "brak";
+  }
+  const btn = document.getElementById("s-consent-btn");
+  if (btn) btn.textContent = granted ? "Wycofaj zgodę" : "Włącz zgodę";
+}
+
+async function toggleConsent() {
+  const btn = document.getElementById("s-consent-btn");
+  const granted = btn.textContent === "Wycofaj zgodę";
+  btn.disabled = true;
+  try {
+    await apiJson("/api/settings/consent", {granted: !granted});
+    _settingsLoaded = false;
+    await renderSettings();
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -1086,6 +1147,7 @@ document.getElementById("f-date").value = todayIso();
 document.getElementById("f-time").value = localTime();
 show("today");
 renderToday();
+api("/api/settings").then(applyConsentUi).catch(() => {});
 initTrendBtns([
   {days: 7, label: "Tydzień"}, {days: 30, label: "Miesiąc"},
   {days: 90, label: "Kwartał"}, {days: 180, label: "Pół roku"},

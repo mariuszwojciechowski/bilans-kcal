@@ -15,12 +15,13 @@ from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import auth
-from .config import (DEBUG, INVITE_CODE, MAX_PHOTO_BYTES, PHOTOS_DIR, SECRET_KEY,
-                     ensure_dirs)
+from .config import (CONSENT_DEADLINE, DEBUG, INVITE_CODE, MAX_PHOTO_BYTES, PHOTOS_DIR,
+                     PRIVACY_VERSION, SECRET_KEY, ensure_dirs)
 from .db import db_session, get_session, init_db
 from .models import Activity, DailySummary, Meal, PendingMeal, SavedMeal, User, UserProfile, WeightLog
 from .providers import garmin as garmin_provider
 from .providers.garmin import GarminNotLoggedIn, GarminProvider
+from .services import consent as consent_service
 from .services import meal_queue, meal_vision, quips, transfer
 from .services import settings as settings_service
 from .services.balance import day_balance, deficit_warning, projected_weekly_change_kg
@@ -140,6 +141,7 @@ def register_page(request: Request, error: str | None = None):
 @app.post("/register")
 def register_submit(request: Request, email: str = Form(...), password: str = Form(...),
                     password2: str = Form(...), invite_code: str = Form(...),
+                    consent_llm_photos: bool = Form(False),
                     db: Session = Depends(db_session)):
     if not INVITE_CODE:
         raise HTTPException(503, "Rejestracja jest wyłączona.")
@@ -154,8 +156,19 @@ def register_submit(request: Request, email: str = Form(...), password: str = Fo
     user = User(email=email, password_hash=auth.hash_password(password))
     db.add(user)
     db.commit()
+    if consent_llm_photos:
+        consent_service.grant(db, user.id)
     auth.login_user(request, user)
     return RedirectResponse("/", status_code=303)
+
+
+@app.get("/prywatnosc", response_class=HTMLResponse)
+def privacy_page(request: Request):
+    return templates.TemplateResponse(
+        request,
+        "privacy.html",
+        {"has_logo": (STATIC_DIR / "logo.png").exists(), "privacy_version": PRIVACY_VERSION},
+    )
 
 
 @app.post("/logout")
@@ -473,6 +486,15 @@ def get_day(day: date, db: Session = Depends(db_session),
 
 # ── Posiłki ───────────────────────────────────────────────────────────────
 
+def require_llm_consent(db: Session = Depends(db_session),
+                        user: User = Depends(auth.current_user)) -> None:
+    """Bramka RODO: bez zgody na LLM (settings/consent) zdjęcia i opisy nie mogą
+    trafić do Gemini/Anthropic — ani wprost, ani przez kolejkę."""
+    if not consent_service.has_consent(db, user.id, consent_service.LLM_PHOTOS):
+        raise HTTPException(
+            409, "Brak zgody na wysyłanie zdjęć do zewnętrznego modelu — włącz ją w Ustawieniach")
+
+
 def _queue_meal(db: Session, user_id: int, day: date, reason: str,
                 description: str | None = None, note: str | None = None,
                 photo_bytes: bytes | None = None) -> dict:
@@ -485,7 +507,7 @@ def _queue_meal(db: Session, user_id: int, day: date, reason: str,
     }
 
 
-@app.post("/api/meals/photo")
+@app.post("/api/meals/photo", dependencies=[Depends(require_llm_consent)])
 async def estimate_meal_photo(
     background: BackgroundTasks,
     photo: UploadFile = File(...),
@@ -523,7 +545,7 @@ async def estimate_meal_photo(
     return {"photo_path": None, "kcal": round(estimate.kcal), **estimate.model_dump()}
 
 
-@app.post("/api/meals/text")
+@app.post("/api/meals/text", dependencies=[Depends(require_llm_consent)])
 def estimate_meal_text(
     background: BackgroundTasks,
     description: str = Form(...),
@@ -647,6 +669,7 @@ def settings_page(request: Request, db: Session = Depends(db_session),
     pending_count = db.scalar(
         select(func.count(PendingMeal.id)).where(PendingMeal.user_id == user.id)
     )
+    consent_row = consent_service.current(db, user.id)
     return templates.TemplateResponse(
         request,
         "settings.html",
@@ -662,10 +685,28 @@ def settings_page(request: Request, db: Session = Depends(db_session),
             "target_weight_kg": profile.target_weight_kg if profile else None,
             "lifestyle": (profile.lifestyle if profile else None) or "active",
             "lifestyle_options": lifestyle_options(),
+            "consent_granted": consent_row is not None,
+            "consent_granted_at": consent_row.granted_at if consent_row else None,
+            "privacy_version": PRIVACY_VERSION,
             "saved": saved, "mfa": mfa, "error": error,
             "has_logo": (STATIC_DIR / "logo.png").exists(),
         },
     )
+
+
+@app.post("/settings/consent")
+def settings_consent(granted: bool = Form(...), db: Session = Depends(db_session),
+                     user: User = Depends(auth.current_user)):
+    """Włączenie/wycofanie zgody na wysyłanie zdjęć i opisów posiłków do LLM."""
+    if granted:
+        consent_service.grant(db, user.id)
+    else:
+        consent_service.withdraw(db, user.id)
+        for pending in db.scalars(
+            select(PendingMeal).where(PendingMeal.user_id == user.id)
+        ).all():
+            meal_queue.delete_pending(db, pending)
+    return RedirectResponse("/settings?saved=1", status_code=303)
 
 
 @app.post("/settings/llm")
@@ -891,6 +932,8 @@ def api_get_settings(db: Session = Depends(db_session),
                      user: User = Depends(auth.current_user)):
     stored = settings_service.all_settings(db, user.id)
     keys = settings_service.get_llm_keys(db, user.id)
+    consent_row = consent_service.current(db, user.id)
+    today = date.today()
     return {
         "gemini_masked": settings_service.masked(stored.get("gemini_api_key")),
         "anthropic_masked": settings_service.masked(stored.get("anthropic_api_key")),
@@ -898,7 +941,30 @@ def api_get_settings(db: Session = Depends(db_session),
                     if meal_vision.llm_configured(keys.gemini, keys.anthropic) else None),
         "garmin_connected": garmin_provider.tokens_present(user.id),
         "lifestyle_options": lifestyle_options(),
+        "consent_llm_photos": consent_row is not None,
+        "consent_granted_at": consent_row.granted_at.isoformat() if consent_row else None,
+        "privacy_version": PRIVACY_VERSION,
+        "consent_deadline": CONSENT_DEADLINE.isoformat(),
+        "consent_deadline_passed": today > CONSENT_DEADLINE,
     }
+
+
+class ConsentIn(BaseModel):
+    granted: bool
+
+
+@app.post("/api/settings/consent")
+def api_settings_consent(data: ConsentIn, db: Session = Depends(db_session),
+                         user: User = Depends(auth.current_user)):
+    if data.granted:
+        consent_service.grant(db, user.id)
+    else:
+        consent_service.withdraw(db, user.id)
+        for pending in db.scalars(
+            select(PendingMeal).where(PendingMeal.user_id == user.id)
+        ).all():
+            meal_queue.delete_pending(db, pending)
+    return {"ok": True}
 
 
 class LlmKeysIn(BaseModel):

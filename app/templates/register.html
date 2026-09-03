@@ -60,6 +60,15 @@
       <label for="password2">Powtórz hasło</label>
       <input type="password" id="password2" name="password2" required
              minlength="8" autocomplete="new-password">
+      <label style="display:flex;align-items:flex-start;gap:8px;margin-top:14px;font-size:13px">
+        <input type="checkbox" name="consent_llm_photos" value="true"
+               style="width:auto;margin:2px 0 0">
+        <span>Zgadzam się, żeby zdjęcia i opisy moich posiłków były wysyłane do
+          zewnętrznego modelu (Google Gemini albo Anthropic) w celu oszacowania
+          kalorii. Opcjonalne — bez tej zgody konto działa, ale bez automatycznego
+          szacowania ze zdjęcia/opisu (zostaje ręczny wpis i „moje posiłki”).
+          Szczegóły: <a href="/prywatnosc" target="_blank">nota o prywatności</a>.</span>
+      </label>
       <button class="primary" type="submit">Załóż konto</button>
     </form>
     <p class="muted" style="margin-bottom:0">
@@ -72,7 +81,7 @@
     i połącz swoje konto Garmin.
   </p>
   <p class="muted" style="text-align:center;font-size:12px;margin-top:12px">
-    Kontakt: <a href="mailto:krasnal@krasnal.cc">krasnal@krasnal.cc</a>
+    <a href="/prywatnosc">Prywatność</a> · Kontakt: <a href="mailto:krasnal@krasnal.cc">krasnal@krasnal.cc</a>
   </p>
 </main>
 </body>

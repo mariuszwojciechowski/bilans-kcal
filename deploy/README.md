@@ -101,6 +101,9 @@ się nie przeładuje.
 - Logi Caddy: `sudo journalctl -u caddy -f`
 - Restart ręczny: `sudo systemctl restart fit-krasnal`
 - Backup danych: `sudo tar czf ~/fk-backup.tar.gz /var/lib/fit-krasnal`
+- Retencja logów journald: 30 dni (`/etc/systemd/journald.conf.d/fit-krasnal.conf`,
+  zgodne z `/prywatnosc`) — zakłada `setup-vm.sh`; jeśli VM postawiona przed tym
+  punktem, dopisz plik ręcznie i `sudo systemctl restart systemd-journald`.
 
 ## Onboarding testera
 

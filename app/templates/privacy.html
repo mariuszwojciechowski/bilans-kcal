@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fit Krasnal — prywatność</title>
+{% if has_logo %}<link rel="icon" href="/static/favicon-32.png">
+{% endif %}<style>
+  :root {
+    --green: #1A4D3A; --green-med: #3A7A5C; --lime: #8DC63F;
+    --bg: #F9FAF8; --card: #FFFFFF; --ink: #212529; --stone: #6C757D;
+    --danger: #DC3545; --success: #28A745;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #131715; --card: #1B211D; --ink: #E8ECE9; --stone: #9AA39D; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Inter, sans-serif;
+         background: var(--bg); color: var(--ink); }
+  header { background: var(--green); color: #F9FAF8; padding: 0 24px 0 0;
+           display: flex; align-items: stretch; gap: 12px; }
+  header > :not(.brand) { align-self: center; }
+  header a.brand { background: #fff; display: flex; align-items: center; gap: 12px;
+                   padding: 8px 22px 8px 18px; text-decoration: none; }
+  header img.logo { width: 40px; height: 40px; }
+  header h1 { font-size: 18px; font-weight: 600; margin: 0; color: var(--green); }
+  header a.nav { color: #C9D3CC; font-size: 14px; text-decoration: none;
+                 padding: 6px 10px; border-radius: 6px; margin-left: auto; }
+  header a.nav:hover { background: rgba(255,255,255,.12); }
+  main { max-width: 680px; margin: 24px auto 60px; padding: 0 16px; }
+  h2 { font-size: 17px; margin: 28px 0 8px; color: var(--green); }
+  @media (prefers-color-scheme: dark) { h2 { color: var(--lime); } }
+  p, li { line-height: 1.55; }
+  .muted { color: var(--stone); font-size: 13px; }
+  a { color: var(--green-med); }
+  code { background: rgba(108,117,125,.15); padding: 1px 5px; border-radius: 4px; font-size: 90%; }
+</style>
+</head>
+<body>
+<header><a class="brand" href="/" title="Dziś">{% if has_logo %}<img class="logo" src="/static/logo-bw.png" alt="">{% endif %}<h1>Fit Krasnal — prywatność</h1></a>
+  <a class="nav" href="/">← Wróć do aplikacji</a></header>
+<main>
+
+<p class="muted">Wersja noty: <code>{{ privacy_version if privacy_version else "2026-09-03" }}</code></p>
+
+<p>Fit Krasnal jest pilotażową aplikacją do liczenia bilansu kalorycznego,
+prowadzoną przez jedną osobę dla grupy kilkunastu testerów-znajomych. Ta
+strona opisuje po ludzku, jakie dane zbieramy, dokąd trafiają i jak je
+usunąć — bez rejestru czynności przetwarzania i bez prawniczego żargonu,
+bo skala pilota tego nie wymaga. Jeśli coś jest niejasne, napisz:
+<a href="mailto:krasnal@krasnal.cc">krasnal@krasnal.cc</a>.</p>
+
+<h2>Jakie dane zbieramy</h2>
+<ul>
+  <li><b>Konto:</b> e-mail i hasło (zahaszowane — nikt, w tym administrator,
+    nie widzi Twojego hasła w postaci jawnej).</li>
+  <li><b>Profil:</b> rok urodzenia, płeć, wzrost, styl życia, cel ciężaru —
+    wyłącznie do liczenia zapotrzebowania kalorycznego i norm makroskładników.
+    Nie zbieramy pełnej daty urodzenia — rok wystarcza (patrz TODO.md „Rok
+    urodzenia zamiast pełnej daty”).</li>
+  <li><b>Dane z Garmina (opcjonalnie, jeśli połączysz konto):</b> waga, kroki,
+    kalorie spalone, aktywności. Login/hasło do Garmina nie są zapisywane —
+    tylko token sesji.</li>
+  <li><b>Posiłki:</b> opisy tekstowe i wyliczone wartości (kcal, makro).
+    Zdjęcia posiłków — tymczasowo, patrz „Zdjęcia i LLM” niżej.</li>
+</ul>
+
+<h2>Zdjęcia i opisy posiłków — wysyłka do zewnętrznego modelu (LLM)</h2>
+<p>Żeby oszacować kalorie ze zdjęcia albo opisu, aplikacja wysyła je do
+zewnętrznego modelu językowego — <b>Google Gemini</b> albo <b>Anthropic
+Claude</b>, w zależności od tego, jaki klucz API wkleisz w Ustawieniach.
+To jedyne miejsce, gdzie Twoje dane wychodzą poza tę aplikację. Bez Twojej
+wyraźnej zgody (przełącznik w Ustawieniach) ta ścieżka jest wyłączona —
+możesz zamiast tego wpisywać wartości ręcznie albo korzystać z „moich
+posiłków”, bez wysyłania czegokolwiek.</p>
+<p>Klucz API wklejasz własny — Twoje zdjęcia idą z Twoim kluczem, nie
+przez konto administratora. Co ważne dla oceny ryzyka:</p>
+<ul>
+  <li><b>Anthropic (Claude):</b> zgodnie z warunkami handlowymi API,
+    Anthropic nie trenuje modeli na danych klientów przesłanych przez API
+    (sprawdzone {{ privacy_version if privacy_version else "2026-09-03" }}
+    na podstawie <a href="https://www.anthropic.com/legal/commercial-terms" target="_blank">warunków komercyjnych Anthropic</a>).</li>
+  <li><b>Google Gemini API — płatny poziom:</b> Google nie używa promptów
+    ani odpowiedzi do ulepszania swoich produktów (czyli też do trenowania).</li>
+  <li><b>Google Gemini API — darmowy poziom (Google AI Studio):</b> w
+    ogólnych warunkach Google zastrzega sobie prawo do wykorzystania treści
+    do ulepszania produktów, a ludzcy recenzenci mogą je przeglądać —
+    <b>ale</b> dla użytkowników w Europejskim Obszarze Gospodarczym,
+    Szwajcarii i Wielkiej Brytanii (czyli m.in. w Polsce) obowiązują te
+    same zasady jak na poziomie płatnym, również na darmowym kluczu —
+    dane nie są używane do trenowania (sprawdzone
+    {{ privacy_version if privacy_version else "2026-09-03" }} na podstawie
+    <a href="https://ai.google.dev/gemini-api/terms" target="_blank">warunków API Gemini</a>).
+    Jeżeli korzystasz z aplikacji spoza tego regionu, sprawdź te warunki
+    dla swojej lokalizacji.</li>
+</ul>
+<p class="muted">Te ustalenia mogą się zmienić — jeśli dostawcy zmienią
+zasady, zaktualizujemy tę notę i podniesiemy jej wersję (co poprosi
+ponownie o zgodę).</p>
+
+<h2>Gdzie leżą dane</h2>
+<p>Baza danych i zdjęcia (tymczasowo) leżą na jednej maszynie wirtualnej
+w Google Cloud (region w USA — poza Europejskim Obszarem Gospodarczym).
+Backend jest wystawiony na świat wyłącznie przez HTTPS. Dostęp do serwera
+ma jedynie administrator (właściciel projektu).</p>
+
+<h2>Ile czasu trzymamy dane</h2>
+<ul>
+  <li><b>Kolejka nieprzetworzonych posiłków</b> (gdy brak klucza LLM albo
+    internetu): 21 dni, potem wpis i zdjęcie są kasowane automatycznie.</li>
+  <li><b>Zdjęcia posiłków</b> po udanym oszacowaniu: kasowane od razu —
+    nie zostają zapisane przy posiłku.</li>
+  <li><b>Posiłki, wagi, aktywności, profil:</b> trwają, dopóki masz konto.
+    Samoobsługowe usuwanie danych/konta jest w przygotowaniu (patrz
+    TODO.md „Usuń moje dane i konto w Ustawieniach”) — do tego czasu
+    usunięcie realizujemy na Twoją prośbę mailem.</li>
+  <li><b>Logi serwera:</b> do 30 dni.</li>
+</ul>
+
+<h2>Twoje prawa</h2>
+<p>Masz prawo do wglądu, poprawienia, eksportu i usunięcia swoich danych.</p>
+<ul>
+  <li><b>Eksport:</b> przycisk w Ustawieniach („Przygotuj dane do
+    przeniesienia na inne urządzenie”) — plik z Twoim profilem, posiłkami,
+    wagami i aktywnościami.</li>
+  <li><b>Poprawienie:</b> edytujesz sam w Ustawieniach i na Dashboardzie.</li>
+  <li><b>Usunięcie danych/konta:</b> napisz na
+    <a href="mailto:krasnal@krasnal.cc">krasnal@krasnal.cc</a> — samoobsługowy
+    przycisk jest w przygotowaniu.</li>
+  <li><b>Wycofanie zgody na LLM:</b> w Ustawieniach, w każdej chwili —
+    wycofanie kasuje też oczekujące w kolejce zdjęcia i opisy, których nie
+    wolno już wysłać.</li>
+</ul>
+
+<h2>Kontakt</h2>
+<p><a href="mailto:krasnal@krasnal.cc">krasnal@krasnal.cc</a></p>
+
+</main>
+</body>
+</html>
