@@ -22,9 +22,31 @@ o wdrożeniu [deploy/README.md](deploy/README.md).
 
 ## Struktura repo
 
-- `app/main.py` — wszystkie route'y (auth, dashboard, API, mobile view).
+- `app/main.py` — tworzenie `FastAPI()`, middleware sesji, mount `/static`,
+  `startup` (migracje, sprzątanie kolejki), globalny exception handler 401→login,
+  `app.include_router(...)` dla każdego routera z `app/routers/`.
+- `app/deps.py` — współdzielone `Depends` i obiekty: `templates`, `STATIC_DIR`,
+  `require_llm_consent`, `require_admin`. **Importuje FastAPI**, więc serwisy
+  nie mogą z niego brać nic (dlatego `humanize_ago` mieszka w
+  `services/timeago.py`).
+- `app/routers/` — route'y podzielone tematycznie (był jeden plik `main.py`
+  na ~1300 linii, rozbity 2026-09-03):
+  - `auth.py` — login/register/logout, `/prywatnosc`.
+  - `profile.py` — `GET/PUT /api/profile`, `/profile-form`, `POST /api/sync`.
+  - `day.py` — waga/kroki, `GET /api/day/{day}` (liczy
+    `services/day.py:day_report`, mapuje `DayReportUnavailable` na 409),
+    ręczne aktywności (`/api/activities`).
+  - `meals.py` — zdjęcie/tekst posiłku, zapis/usunięcie, kolejka offline
+    (`/api/queue/*`), zapisane posiłki (`/api/saved-meals/*`).
+  - `dashboard.py` — `/` i `/mobile`.
+  - `settings.py` — strona `/settings` + formularze `settings/*` + JSON API
+    `/api/settings/*`.
+  - `transfer.py` — eksport/import danych.
+  - `trends.py` — `/trends` + `/api/trends`.
+  - `usage.py` — `/usage`, `/admin/consents`, `/api/usage` (tylko admin).
+  - `pwa.py` — manifest, service worker.
 - `app/auth.py` — hash/verify hasła, sesja, `current_user` dependency, throttle
-  nieudanych logowań.
+  nieudanych logowań i nieprawidłowych kodów zaproszenia (`AttemptThrottle`).
 - `app/config.py` — env vars, ścieżki, `garmin_tokens_dir(user_id)`.
 - `app/db.py` — silnik SQLite, `_migrate()` z addytywnymi migracjami.
 - `app/models.py` — SQLAlchemy: `User`, `UserProfile`, `WeightLog`, `Meal`,
@@ -35,7 +57,13 @@ o wdrożeniu [deploy/README.md](deploy/README.md).
 - `app/services/` — `energy` (BMR, TDEE, kroki), `macros` (WHO + `bar_pct`),
   `meal_vision` (Gemini/Claude vision), `meal_queue` (kolejka offline),
   `balance`, `charts`, `quips`, `settings` (`get_llm_keys` per user),
-  `sync` (throttled Garmin sync), `transfer` (export/import JSON).
+  `sync` (throttled Garmin sync), `transfer` (export/import JSON),
+  `day` (`day_report` — raport dnia), `trends` (`payload` — jedno źródło dla
+  `/trends` i `/api/trends`), `timeago` (`humanize_ago`), `forecast`, `consent`,
+  `crypto`, `usage`.
+  **Warstwa serwisów jest wolna od FastAPI** — brak danych zgłasza wyjątkiem
+  domenowym (wzorzec: `day.DayReportUnavailable` → router robi z tego 409),
+  nigdy `HTTPException`. Pilnuje tego test w `tests/test_day_trends_services.py`.
 - `app/templates/` — Jinja2. Server-rendered: `dashboard.html`, `settings.html`,
   `trends.html`, `login.html`, `register.html`. SPA-lite dla telefonu:
   `mobile.html` (fetch do `/api/*`, ta sama sesja).
@@ -108,8 +136,12 @@ staging'u. Regresja w main = regresja u testerów. Testy muszą chronić.
 - **`docs/` została świadomie usunięta** (commit `091844d`). Był to
   równoległy klient PWA na GitHub Pages, duplikował logikę backendu (13
   commitów podwójnego utrzymania). Zamiast tego jest `app/templates/mobile.html`
-  serwowany z tego samego backendu pod `GET /mobile`. GitHub Pages nadal
-  serwuje ostatnią wersję, ale build jest czerwony — patrz [TODO.md](TODO.md).
+  serwowany z tego samego backendu pod `GET /mobile`. W `docs/` leżą dziś
+  **wyłącznie dwa pliki-nagrobki** (`index.html` + kill switch `sw.js`), które
+  nadpisują tamtą wersję u testerów, sprzątają po niej `localStorage`
+  (w tym klucz API!), IndexedDB i cache, i przekierowują na `/mobile` —
+  patrz wpis „Stara wersja na GitHub Pages" w [DONE.md](DONE.md). **Nie
+  dopisuj tam logiki aplikacji.**
 - **WYMAGANIA.md jest sprzed multi-user** (sierpień 2026-08-13). Fakty
   produktowe są aktualne, ale odniesienia do "single-user" i "docs/index.html
   jako kolejka offline" są nieaktualne w kodzie. Nie aktualizuj bez potrzeby

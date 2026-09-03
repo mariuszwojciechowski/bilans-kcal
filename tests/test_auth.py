@@ -16,8 +16,9 @@ def client(tmp_path, monkeypatch):
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine)
 
-    monkeypatch.setattr("app.main.INVITE_CODE", INVITE)
-    auth._failed.clear()          # throttle jest globalny w procesie
+    monkeypatch.setattr("app.routers.auth.INVITE_CODE", INVITE)
+    auth._failed.clear()                      # throttle jest globalny w procesie
+    auth._invite_throttle.attempts.clear()    # ten sam powód (klucz: IP klienta)
 
     from app.main import app
 
@@ -118,6 +119,39 @@ def test_successful_login_resets_failed_attempts(client):
 def test_login_page_renders_without_session(client):
     assert client.get("/login").status_code == 200
     assert client.get("/register").status_code == 200
+
+
+def test_register_is_rate_limited_after_bad_invite_codes(client):
+    """Kod zaproszenia to jeden wspólny statyczny sekret, a mechanizm jest
+    opisany w publicznym repo — bez limitu prób da się go zgadywać online."""
+    for i in range(auth.MAX_INVITE_ATTEMPTS):
+        resp = _register(client, email=f"attacker{i}@example.com", invite="zly-kod")
+        assert resp.headers["location"] == "/register?error=invite"
+
+    # po wyczerpaniu prób odbijamy nawet POPRAWNY kod — inaczej limit nic nie daje
+    blocked = _register(client, email="attacker-final@example.com")
+    assert blocked.headers["location"] == "/register?error=locked"
+
+
+def test_register_bad_invite_counter_resets_after_success(client):
+    for i in range(auth.MAX_INVITE_ATTEMPTS - 1):
+        _register(client, email=f"literowka{i}@example.com", invite="zly-kod")
+
+    assert _register(client).headers["location"] == "/"      # poprawny kod przechodzi
+    assert not auth.invite_is_locked("testclient")
+
+
+def test_client_ip_takes_last_forwarded_entry():
+    """Caddy dopisuje prawdziwy adres peera na KOŃCU X-Forwarded-For, więc
+    wcześniejsze wpisy mogą być podstawione przez klienta — liczenie limitu po
+    nich pozwalałoby obejść blokadę jednym nagłówkiem."""
+    class _Req:
+        def __init__(self, headers, host="10.0.0.1"):
+            self.headers = headers
+            self.client = type("C", (), {"host": host})()
+
+    assert auth.client_ip(_Req({"x-forwarded-for": "1.2.3.4, 203.0.113.7"})) == "203.0.113.7"
+    assert auth.client_ip(_Req({})) == "10.0.0.1"
 
 
 def test_api_returns_401_when_not_logged_in(client):

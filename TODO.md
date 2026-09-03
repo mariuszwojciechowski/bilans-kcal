@@ -30,17 +30,33 @@ bieżąco w trakcie pracy.
 
 ---
 
-## GitHub Pages — czerwony pipeline po skasowaniu docs/ (1/10)
+## Mapa braków względem WYMAGANIA.md (audyt 2026-09-03)
 
-Po usunięciu katalogu `docs/` (commit `091844d`) workflow *pages build and
-deployment* w GitHub Actions faluje: repo miało w Settings → Pages → Source
-ustawione na `docs/` folder, którego już nie ma. Stary content nadal
-serwuje się z ostatniego udanego deploya, ale każdy push wywala nowego
-builda. Do wyboru: (a) wyłączyć Pages w Settings → *None* (przerywa też
-serwowanie starej wersji), (b) zostawić w Source folder `/` i wrzucić
-minimalny `index.html` który redirectuje na `fit.krasnal.cc` (zabija starą
-wersję po naszej stronie), (c) ignorować pipeline — nic to nie psuje,
-tylko brzydko wygląda w Actions.
+Przegląd całego kontraktu z [WYMAGANIA.md](WYMAGANIA.md) przeciw stanowi kodu.
+Moduły M1-M11 są zrobione (patrz [DONE.md](DONE.md)); poniżej wyłącznie to,
+czego nie ma. Kolumna „gdzie plan" wskazuje punkt tej listy — **jeśli punkt
+istnieje, nie dopisuj drugiego planu na to samo**, bo się rozjadą.
+
+| Wymóg | Stan | Gdzie plan |
+|---|---|---|
+| 6.2 Kalibracja adaptacyjna | brak tabeli `Calibration`; `day_report` liczy `e_target = kcal_out − deficyt` bez współczynnika (`app/services/day.py:day_report()`) | „Kalibracja adaptacyjna" (6/10) |
+| 6.4 Karta kalibracji w tygodniówce | pochodna 6.2 — średni bilans i ETA celu w `/trends` są | krok 4 planu kalibracji |
+| 8.3 Strefa czasowa jako granica dnia | `user_profile.tz` zapisywane i eksportowane, nieczytane — wszędzie `date.today()` procesu | „Strefa czasowa użytkownika…" (4/10) |
+| 8.3 Prawo do usunięcia (samoobsługowe) | realizowane mailem; nota `/prywatnosc` mówi o tym wprost, więc nie jest to kłamstwo — tylko brak | „«Usuń moje dane i konto»…" (6/10) |
+| §4 Tabela MET konfigurowalna | MET to stałe w `app/services/energy.py` (43-45, 131-137), w przeciwieństwie do norm WHO wyniesionych do JSON | „Tabela MET jako dane…" (3/10) |
+| §10.2 Cel redukcyjny białka | `protein_cut_g_per_kg` leży w `who_norms.json`, ale nic go nie czyta | „Cel redukcyjny białka…" (2/10) |
+| §10.3 Nazwa pakietu / domena mobilna | nie zarezerwowane | „Nazwa pakietu i domena…" (1/10) |
+| Etap 2 — aplikacja mobilna | poza MVP, nie rozpoczęta | „Aplikacja mobilna (Etap 2)…" (10/10) |
+
+§10.1 (retencja zdjęć posiłków) jest **rozstrzygnięte**: zdjęcie po udanym
+oszacowaniu kasowane od razu, w kolejce leży maks. 21 dni
+(`app/services/meal_queue.py`) — zapisane w nocie `/prywatnosc`.
+
+Odstępstwa świadome, nie braki: rok urodzenia zamiast pełnej daty (3.1 jest
+w tym miejscu nieaktualne — patrz [CLAUDE.md](CLAUDE.md)), ręczny wpis wagi
+i kroków w widoku mobilnym (odstępstwo od D3), wycofana paczka PWA (M10).
+
+---
 
 ## Skrypt na serwerze do resetu hasła (1/10)
 
@@ -89,6 +105,94 @@ tabeli tokenów resetu w bazie, szablonu maila, konfiguracji wysyłki
 w większości spoza samego kodu appki.
 
 
+## Tabela MET jako dane, nie kod — WYMAGANIA.md §4 (3/10)
+
+§4 wymaga: „Tabela MET konfigurowalna (Compendium of Physical Activities)".
+Dziś każdy współczynnik jest stałą w `app/services/energy.py` i jego zmiana
+wymaga commita: `KCAL_PER_STEP_PER_KG` (40), `MET_STRENGTH` (43),
+`MET_CYCLING_BY_SPEED_KMH` (44), `MET_DEFAULT` (45), 1400 kroków/km (118),
+`DEFAULT_STEPS` (128), `MANUAL_MET` (131-137), `INTENSITY_MAP` (139),
+mnożnik marszu 0.53 (162). Normy WHO są już wyniesione do
+`app/resources/who_norms.json` — ten punkt robi z MET to samo.
+
+**Decyzje (wiążące):** wartości liczbowe zostają **identyczne** — to
+refaktoryzacja bez zmiany wyników, więc `tests/test_energy.py` musi przejść
+**bez modyfikacji** (jeśli któryś test padnie, znaczy że wartość się zmieniła
+przy przenoszeniu — cofnij, nie poprawiaj testu). Plik jest jedynym źródłem
+prawdy: nie zostawiamy „awaryjnych" wartości w kodzie, brak pliku = błąd, tak
+samo jak przy `who_norms.json`.
+
+**Kroki dla implementującego LLM:**
+
+1. **Nowy `app/resources/met_table.json`** wg wzorca `who_norms.json`: blok
+   `meta` (`fetched`, `sources` — Compendium of Physical Activities /
+   Ainsworth i in. — oraz jawna nota, które wartości są uproszczeniem
+   właściciela, a nie cytatem z Compendium) i sekcje:
+   - `steps`: `kcal_per_step_per_kg: 0.00057`, `steps_per_km: 1400`,
+     `default_steps: 5000`,
+   - `distance`: `running_kcal_per_kg_per_km: 1.0`,
+     `walking_kcal_per_kg_per_km: 0.53`,
+   - `cycling`: `met_by_speed_kmh: [[16.0, 6.0], [20.0, 8.0], [null, 10.0]]`
+     (`null` = brak górnej granicy, loader zamienia na `inf`),
+   - `garmin_types`: mapa fragmentu `typeKey` → MET dla `activity_kcal_model`
+     (`strength`/`training` → 4.0) plus `default_met: 5.0`,
+   - `manual`: per typ (`running`, `cycling`, `walking`, `swimming`,
+     `strength_training`) trójka `[lekka, umiarkowana, intensywna]` plus
+     `intensity_order: ["lekka", "umiarkowana", "intensywna"]`.
+2. **Loader w `app/services/energy.py`**: `MET_PATH` + `@lru_cache(maxsize=1)
+   def _met() -> dict` — dokładnie wzorzec `macros._norms()`
+   (`app/services/macros.py:18-23`). `neat_from_steps`, `running_kcal`,
+   `cycling_met`, `activity_kcal_model`, `manual_activity_kcal`,
+   `tdee_theoretical` czytają `_met()` zamiast stałych.
+3. **Zachowaj publiczne nazwy.** `DEFAULT_STEPS` jest importowany w trzech
+   miejscach (`app/routers/day.py`, `tests/test_activities_api.py:17`,
+   `tests/test_queue_settings.py:147`) — zostaw jako stałą modułu
+   inicjalizowaną z pliku (`DEFAULT_STEPS = _met()["steps"]["default_steps"]`),
+   nie kasuj. Sygnatury funkcji bez zmian — `manual_activity_kcal` woła
+   `app/routers/day.py:add_manual_activity()` i cztery pliki testów.
+4. **Testy `tests/test_met_table.py`**: plik wczytuje się i ma `meta.sources`;
+   każdy typ w `manual` ma trzy intensywności; progi `cycling` są rosnące,
+   a ostatni to `null`; monkeypatch `MET_PATH` na plik z innym `default_met`
+   + `_met.cache_clear()` zmienia wynik `activity_kcal_model` dla nieznanego
+   typu (dowód, że wartości naprawdę idą z pliku, a nie z kodu).
+
+Weryfikacja: pełny pytest zielony → commit + push. Nota `/prywatnosc` bez
+zmian — liczymy to samo, z tych samych danych.
+
+## Cel redukcyjny białka — domyślnie czy opt-in? — WYMAGANIA.md §10.2 (2/10)
+
+Pytanie otwarte §10.2: czy „cel redukcyjny" białka 1.2-1.6 g/kg pokazywać
+domyślnie obok normy WHO, czy jako opcję. Stan faktyczny: `who_norms.json` ma
+per grupę pole `protein_cut_g_per_kg: [1.2, 1.6]`, ale **nic go nie czyta** —
+`app/services/macros.py` bierze zakres białka wyłącznie ze stylu życia
+(`protein_range_g_per_kg`), a `protein_who_min_g` pokazuje obok jako punkt
+odniesienia. Dla stylu „rekreacyjnie trenujący" zakres 1.2-1.6 i tak wychodzi,
+tylko z innego powodu — a pole w JSON jest martwe.
+
+**Do decyzji właściciela (bez tego nie implementuj) — jeden z dwóch:**
+
+- **(a) zamknąć przez styl życia**: usunąć martwe `protein_cut_g_per_kg`
+  z `app/resources/who_norms.json` (dwie grupy) i z fixture
+  `tests/test_macros.py:62`. Pół godziny, mniej martwego kodu.
+- **(b) trzeci znacznik na pasku białka**: `who_targets` zwraca dodatkowo
+  `protein_cut_g` z tego pola, `coverage()["protein"]` dostaje klucz
+  `cut_range_g`, a `app/templates/mobile.html` (pasek białka, ~595) rysuje go
+  inną kreską niż zakres normy. Sens ma tylko, jeśli uznasz, że zakres ze
+  stylu życia jest przy deficycie mylący.
+
+Nota `/prywatnosc` niezmieniona w obu wariantach.
+
+## Nazwa pakietu i domena pod wydanie mobilne — WYMAGANIA.md §10.3 (1/10)
+
+Pytanie otwarte §10.3, do rezerwacji **zanim** cokolwiek pójdzie do sklepów:
+identyfikator aplikacji (np. `pl.fitkrasnal.app` albo `cc.krasnal.fit` —
+zgodny z posiadaną domeną) plus decyzja, czy backend zostaje na
+`fit.krasnal.cc`. Identyfikatora pakietu w Google Play **nie da się później
+zmienić**: zmiana = nowa aplikacja i utrata wszystkich instalacji. Zadanie
+administracyjne, bez kodu — sprawdzić dostępność w Play Console (i App Store
+Connect, jeśli iOS w planie), zarezerwować, zapisać wybór tutaj oraz
+w [deploy/README.md](deploy/README.md).
+
 ## Kalibracja adaptacyjna — WYMAGANIA.md 6.2 (6/10)
 
 Jedyny duży brak z pierwotnego kontraktu ("przewaga produktu": model uczy się
@@ -116,17 +220,24 @@ na danych użytkownika jak MacroFactor). Kroki dla implementującego LLM:
    - `maybe_recalibrate(db, user_id)` — liczy i zapisuje nowy wpis, jeśli
      ostatni jest starszy niż 7 dni (albo nie istnieje); wołane w tle przy
      wejściu na dashboard (wzorzec: `background.add_task`, jak `maybe_sync`
-     w `app/main.py`).
-3. **Zastosowanie.** W `app/main.py:day_report()`: pobierz
+     w `app/routers/dashboard.py`).
+3. **Zastosowanie.** W `app/services/day.py:day_report()` (raport dnia jest
+   w serwisie od 2026-09-03, router tylko go woła): pobierz
    `factor = calibration.current_factor(db, user_id)` i licz
    `e_target = bal.kcal_out * factor − profile.target_deficit_kcal`
    (dziś: bez factora). Do odpowiedzi dodaj pola `calibration_factor`
    i `calibration_updated` (data ostatniego wpisu) — UI ma pokazywać
-   "zapotrzebowanie skorygowane o ±X% względem pomiaru".
+   "zapotrzebowanie skorygowane o ±X% względem pomiaru". Uwaga: kształt tej
+   odpowiedzi pilnuje `tests/test_day_trends_services.py` — dopisanie pól jest
+   OK, ale test porównuje wyjście serwisu z wyjściem `/api/day`, więc oba
+   muszą dostać je razem.
 4. **UI.** W `app/templates/mobile.html` (jedyny widok dzienny) pokaż korektę
-   przy zapotrzebowaniu; w `/trends` (`app/main.py:trends` +
-   `app/templates/trends.html`) dodaj do tygodniówki kartę "kalibracja":
-   oczekiwana vs rzeczywista zmiana ciężaru i factor (wymóg 6.4).
+   przy zapotrzebowaniu; dla tygodniówki dolicz dane w
+   `app/services/trends.py:payload()` (jedno źródło dla `/trends` i
+   `/api/trends`) i dorysuj kartę "kalibracja" w `app/templates/trends.html`:
+   oczekiwana vs rzeczywista zmiana ciężaru i factor (wymóg 6.4). Nowy klucz
+   dopisz też do `API_TRENDS_KEYS` w `tests/test_day_trends_services.py` —
+   ta lista jest świadomym kontraktem API, nie przypadkowym asertem.
 5. **Transfer.** Kalibracji nie eksportuj w `app/services/transfer.py` —
    po imporcie danych przelicza się z historii (dopisz `maybe_recalibrate`
    po udanym imporcie).
@@ -142,7 +253,7 @@ Apple Watch, Fitbit, Whoop, Oura, Health Connect
 
 ## Strefa czasowa użytkownika jako granica dnia — WYMAGANIA.md 8.3 (4/10)
 
-`user_profile.tz` jest zapisywane (`app/main.py:205`) i eksportowane, ale nigdzie
+`user_profile.tz` jest zapisywane (`app/routers/profile.py:ProfileIn`) i eksportowane, ale nigdzie
 nie używane: wszystkie granice dnia biorą się z `date.today()` procesu, czyli ze
 strefy serwera (VM w GCP). Tester w innej strefie widzi „dzisiaj" serwera, a dzień
 zamyka mu się (`DailySummary.complete`) w środku jego doby.
@@ -159,21 +270,27 @@ migracji istniejących dat — dane sprzed zmiany zostają, jak są.
    (aware), `user_today(profile) -> date`, `user_time(profile) -> time`. Każda
    funkcja przyjmuje `UserProfile | None` — profil może jeszcze nie istnieć
    (rejestracja przed konfiguracją) i wtedy działa fallback.
-2. **`app/main.py` — zamień wszystkie zegary procesu** na wersje z profilu:
-   linia 449 (`_queue_meal`, godzina wpisu), 479 i 507 (domyślny dzień szacowania
-   ze zdjęcia i z tekstu), 547 (`save_meal`, godzina), 717 (data w nazwie pliku
-   eksportu), 760 (`trends`), 996 (`add_manual_activity`), 1050
-   (`api_trends_data`). Każdy z tych route'ów ma już `user`; profil pobierz przez
-   `db.get(UserProfile, user.id)`. `day_report` profil już ma — użyj go zamiast
-   dokładać drugie zapytanie.
+2. **Routery i serwisy — zamień wszystkie zegary procesu** na wersje z profilu:
+   `app/routers/meals.py` (`_queue_meal` — godzina wpisu; `estimate_meal_photo`
+   i `estimate_meal_text` — domyślny dzień szacowania; `save_meal` — godzina),
+   `app/routers/transfer.py` (`transfer_export` — data w nazwie pliku eksportu),
+   `app/routers/day.py` (`add_manual_activity`). Każdy z tych route'ów ma już
+   `user`; profil pobierz przez `db.get(UserProfile, user.id)`.
+   `app/services/day.py:day_report` profil już ma — użyj go zamiast dokładać
+   drugie zapytanie. **Trendy są już gotowe na tę zmianę:**
+   `app/services/trends.py:payload(db, user_id, days, today=None)` przyjmuje
+   dzień parametrem — wystarczy, że oba route'y w `app/routers/trends.py`
+   podadzą `today=user_today(profile)` zamiast zdawać się na domyślne
+   `date.today()`.
 3. **`app/services/sync.py`** — `sync_range(db, provider, user_id, days=7,
    today: date | None = None)`; `None` zostawia `date.today()` (skrypty CLI),
-   a `main.py` i `maybe_sync` przekazują `user_today(profile)`. To `today`
-   decyduje o `row.complete = day < today` (linia 46) i o oknie synchronizacji.
-   `maybe_sync` otwiera własną sesję — profil dociąga w niej sam.
-4. **Walidacja w `put_profile`** (`app/main.py:188`): `ZoneInfo(data.tz)`
+   a `app/routers/profile.py:sync()` i `maybe_sync` przekazują
+   `user_today(profile)`. To `today` decyduje o `row.complete = day < today`
+   (linia 46) i o oknie synchronizacji. `maybe_sync` otwiera własną sesję —
+   profil dociąga w niej sam.
+4. **Walidacja w `put_profile`** (`app/routers/profile.py`): `ZoneInfo(data.tz)`
    w try/except → 422 przy nieznanej strefie, zamiast cichego zapisu śmiecia.
-5. **UI.** `dashboard()` (`app/main.py:593`) przekazuje do szablonu `today =
+5. **UI.** `dashboard()` (`app/routers/dashboard.py`) przekazuje do szablonu `today =
    user_today(profile)`, a `mobile.html` (linie ~409 i ~413, dziś `new Date()`)
    czyta datę z osadzonej stałej zamiast z zegara przeglądarki — inaczej telefon
    w podróży pokaże inny dzień niż backend liczy. W zakładce Ustawienia
@@ -234,13 +351,15 @@ Odzysk = `transfer.import_payload` z tego pliku.
      od nowa. `purge_after = teraz + 7 dni`.
    - `purge_due(db, now)` — kasuje pliki kopii, których `purge_after` minął,
      i twardo usuwa wiersze `user` dla `kind="account"`; stempluje `done_at`.
-3. **API w `app/main.py`** (obok pozostałych route'ów konta):
+3. **API w `app/routers/auth.py`** (obok pozostałych route'ów konta —
+   login/register/logout):
    - `POST /api/account/wipe-data` — body `{password, confirm}`; `confirm` musi
      być dokładnie `"USUWAM"`, hasło sprawdzane `auth.verify_password` (403 przy
      złym — to jedyna bariera przed kliknięciem z cudzej, niezablokowanej
      przeglądarki); zwraca liczniki skasowanych wierszy.
    - `POST /api/account/delete` — jak wyżej + `auth.logout_user(request)`.
-   - `auth.current_user` (`app/auth.py:83`) i `login_submit` odrzucają konto
+   - `auth.current_user` (`app/auth.py`) i `login_submit`
+     (`app/routers/auth.py`) odrzucają konto
      z `deleted_at` (401 / komunikat „konto zostało skasowane").
 4. **UI.** Karta „Twoje dane" w `app/templates/settings.html` (przed kartą
    „Kontakt") i w zakładce Ustawienia `app/templates/mobile.html` (sekcja
@@ -268,3 +387,38 @@ Odzysk = `transfer.import_payload` z tego pliku.
 
 Weryfikacja: pełny pytest zielony → commit + push. Po deployu właściciel
 sprawdza, że timer jest aktywny (`systemctl list-timers | grep purge`).
+
+## Aplikacja mobilna (Etap 2) — Flutter — WYMAGANIA.md 8.2 / D7 (10/10)
+
+Etap 2 z wymagań: jeden kod na Android + iOS, backend zostaje źródłem prawdy
+(sync, kalibracja, LLM), a apka dostarcza dane zdrowotne z urządzenia zamiast
+nieoficjalnego API Garmina. Ten punkt świadomie **nie jest** planem
+implementacji — przed startem trzeba osobnego planu, bo połowa pracy leży poza
+kodem apki. Istnieje, żeby nie zgubić warunków wejścia.
+
+**Warunki wstępne po stronie backendu (dziś niespełnione):**
+
+1. **Uwierzytelnianie inne niż ciasteczko.** `app/auth.py` trzyma sesję
+   w podpisanym ciasteczku (`SessionMiddleware`) — klient mobilny potrzebuje
+   tokenu urządzenia (tabela tokenów + nagłówek `Authorization`, unieważnianie
+   per urządzenie). To przebudowa `current_user`, nie dopisek.
+2. **Strefa czasowa użytkownika** — telefon jeździ po strefach, a dziś dzień
+   liczy się ze strefy serwera. Bez tego apka pokaże inny dzień, niż backend
+   policzy. Patrz punkt „Strefa czasowa użytkownika…".
+3. **Kasowanie konta i danych z poziomu aplikacji** — wymóg regulaminowy
+   Google Play (ścieżka usunięcia konta w apce **i** przez stronę). Patrz
+   punkt „«Usuń moje dane i konto»…".
+4. **Health Connect / HealthKit zamiast `garminconnect`.** Interfejs
+   `app/providers/DataProvider` jest już na to przygotowany
+   (`get_daily_summary`, `get_weight`, `get_activities`) — D4 był świadomym
+   długiem MVP, formalnie poza ToS Garmina. Pakiet `health` po stronie Fluttera.
+5. **Nazwa pakietu** — nieodwracalna, patrz punkt „Nazwa pakietu i domena…".
+6. **Formularze sklepowe.** `/prywatnosc` już jest publiczną notą, ale sklepy
+   wymagają osobno *Data safety* (Play) / *App Privacy* (App Store) spójnych
+   z jej treścią. Dane zdrowotne to kategoria wrażliwa — dodatkowe
+   oświadczenia i zwykle dłuższa weryfikacja.
+
+**Kolejność wg wartości:** punkty 2 i 3 są potrzebne również w webie i mają
+już plany — rób je niezależnie od decyzji o mobile. 1 i 4 to dopiero start
+Etapu 2. Dopóki pilot działa na widoku `/mobile` (ten sam backend, PWA
+instalowalna na ekranie głównym), apka mobilna nie jest na ścieżce krytycznej.

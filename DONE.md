@@ -10,6 +10,101 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Duplikat trendów i `day_report` w routerze — wyniesienie do serwisów~~ ✓ zrobione (commit a4aa213), pytest zielony (150 passed)
+
+Największy dług architektoniczny wskazany w audycie 2026-09-03, spłacony zaraz
+po podziale `main.py` na routery — tamten podział **przeniósł** duplikat do
+`app/routers/trends.py`, ale go nie usunął.
+
+**Co było:** `trends()` i `api_trends_data()` to były dwie niemal identyczne
+kopie ~70 linii (te same zapytania o wagi/summary/posiłki, to samo wygładzanie
+7-dniowe, te same serie wykresów). Poprawka w jednej nie trafiała do drugiej.
+`day_report()` (165 linii) siedział w routerze — a to jedyne miejsce, w które
+ma wejść współczynnik kalibracji (6.2).
+
+**Co jest:**
+
+1. `app/services/trends.py` — `payload(db, user_id, days, today=None)` jako
+   jedno źródło dla obu widoków; router (`app/routers/trends.py`, 202 → 66
+   linii) robi już tylko telemetrię i kształt odpowiedzi: HTML dokłada
+   `ranges`/`today`/`has_logo`, JSON zdejmuje `today`. Kolory serii dostały
+   nazwy (`COLOR_MEASURED` itd.) zamiast hexów wklejonych dwa razy.
+2. `app/services/day.py` — `day_report()` plus `_est_steps` i stała
+   `STEPS_PER_KM`; router (311 → 148 linii) woła serwis i mapuje błąd.
+3. `app/services/timeago.py` — `humanize_ago` **musiała** wyjść z `app/deps.py`,
+   bo `services/day.py` jej potrzebuje, a `deps.py` importuje FastAPI.
+4. **Serwisy zostają wolne od FastAPI:** brak profilu/wagi to
+   `day.DayReportUnavailable`, które router zamienia na 409 z tym samym
+   komunikatem co wcześniej. Nie `HTTPException` w serwisie.
+
+**Parametr `today` w `payload()`** jest z rozmysłem: punkt „Strefa czasowa
+użytkownika jako granica dnia" dostaje gotowe wejście — wystarczy podać
+`user_today(profile)` zamiast domyślnego `date.today()`.
+
+**Dowód, że nic się nie zmieniło dla klienta:** złoty zrzut `/api/day`,
+`/api/trends` (6 zakresów: 2, 7, 30, 90, 366, 1000 — łapie też przycinanie)
+i strony `/trends` na syntetycznych danych, wykonany **przed** i **po** zmianie
+— wyjście identyczne bajt w bajt, razem z SHA-256 treści HTML. Poza
+porównaniem tylko `quip` (losowany) i `last_sync_ago` (zależy od minuty).
+
+**Strażnicy na przyszłość** (`tests/test_day_trends_services.py`, 6 testów):
+kształt odpowiedzi `/api/trends` jako jawny kontrakt (`API_TRENDS_KEYS` — łapie
+np. wyciek `today` do API), zgodność HTML z JSON (te same SVG w treści strony),
+przycinanie zakresu dni, równość `/api/day` z wyjściem serwisu, 409 zamiast 500
+przy braku profilu i wagi, oraz test architektoniczny: żaden plik w
+`app/services/` nie może zawierać słowa `fastapi`.
+
+Nota `/prywatnosc`: bez zmian — przeniesienie kodu, żadnych nowych danych
+ani odbiorców.
+
+## ~~Stara wersja na GitHub Pages — wyłączenie i sprzątanie po niej~~ ✓ zrobione (commit d8833e3)
+
+Zastępuje punkt „GitHub Pages — czerwony pipeline po skasowaniu `docs/`".
+Audyt publicznego repo (2026-09-03) pokazał, że problem był większy niż
+czerwony pipeline:
+
+- Pages nadal serwowały ostatni udany deploy starego klienta PWA, a link do
+  niego siedział **w Ustawieniach aplikacji** (`settings.html`) i **na
+  landingu** — czyli aktywnie wysyłaliśmy testerów do wersji, której nikt
+  nie utrzymuje od 2026-08-31.
+- Ten klient trzymał **klucz API Gemini użytkownika w `localStorage`** na
+  originie `mariuszwojciechowski.github.io`. To origin **wspólny dla
+  wszystkich** GitHub Pages tego konta — dowolna inna strona opublikowana
+  z tego konta mogła ten klucz odczytać.
+- Wysyłał też dzienne liczniki użycia do zewnętrznego serwisu
+  (`abacus.jasoncameron.dev`) z identyfikatorem przestrzeni opublikowanym
+  w repo — każdy mógł je czytać i podbijać. Przeczyło to zdaniu z noty
+  `/prywatnosc`: „To jedyne miejsce, gdzie Twoje dane wychodzą poza tę
+  aplikację" (chodziło o LLM).
+
+**Decyzja:** nie da się „odpublikować" tego, co już jest w cache przeglądarek
+testerów, więc zamiast tylko wyłączać Pages **nadpisujemy** tamtą wersję
+nagrobkiem, który po sobie sprząta.
+
+**Co zrobione:**
+
+1. `docs/index.html` — strona-nagrobek: kasuje z przeglądarki `gemini_key`
+   i `profile` z `localStorage`, bazę IndexedDB `fitkrasnal`, wszystkie cache
+   i rejestracje service workera, potem przekierowuje na
+   `fit.krasnal.cc/mobile`. Całość z limitem 2 s, żeby przekierowanie
+   wykonało się nawet przy odmowie któregoś API przeglądarki.
+2. `docs/sw.js` — kill switch: `skipWaiting`, kasuje cache, **wyrejestrowuje
+   się** i przenawiguje otwarte okna. Stary `sw.js` robił dla nawigacji
+   network-first, więc podmiana dociera do każdego, kto ma starą wersję
+   zainstalowaną na ekranie głównym.
+3. Usunięty link ze `app/templates/settings.html` (karta „Przenoszenie danych")
+   — zastąpiony wskazaniem na `/mobile` z tego samego backendu; usunięta cała
+   kafla „stara wersja" z `deploy/landing/index.html` wraz z martwym CSS
+   `.app.legacy`.
+4. Efekt ubocznie pożądany: build Pages przestaje być czerwony, bo katalog
+   `docs/` (ustawiony jako Source) znowu istnieje.
+
+**Zostaje właścicielowi (poza repo):** po potwierdzeniu, że Pages wystawiły
+nagrobek, można dodatkowo ustawić *Settings → Pages → Source: None*. Nie jest
+to konieczne — nagrobek jest bezpieczny sam z siebie — ale zamyka temat na
+dobre. Nie odtwarzaj w `docs/` niczego poza tymi dwoma plikami (patrz
+[CLAUDE.md](CLAUDE.md), „Rzeczy do NIE odtworzenia").
+
 ## ~~Statystyki użycia — dopracowanie po zgłoszeniach~~ ✓ zrobione (commity ae065c8, eb1f1a7, f300e98), pytest zielony (141 passed)
 
 Nie z TODO.md — poprawki wprost z bieżących zgłoszeń właściciela po wdrożeniu
@@ -489,7 +584,7 @@ tylko pierwszego odsłoni kolejne. Kroki dla implementującego LLM:
 
 Implementacja zakładki Aktywności/Kroki (commity `985b41a`…`216b8ce`) położyła
 produkcję i zostawiła śmieci. Diagnoza wykonana 2026-08-31 na prod
-(fit.krasnal.cc, VM 34.56.100.135) — przyczyny są PEWNE, nie szukaj innych.
+(fit.krasnal.cc, VM produkcyjna) — przyczyny są PEWNE, nie szukaj innych.
 Kroki dla implementującego LLM, w tej kolejności:
 
 1. **Usuń `kcal_manual` z modelu `Activity`** (`app/models.py:74`) — pole

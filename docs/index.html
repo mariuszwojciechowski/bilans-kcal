@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Fit Krasnal — ta wersja została wyłączona</title>
+<!--
+  NAGROBEK, NIE KLIENT.
+
+  Katalog docs/ był kiedyś równoległym klientem PWA na GitHub Pages (usunięty
+  w commicie 091844d, patrz CLAUDE.md „Rzeczy do NIE odtworzenia"). Pages nadal
+  serwowały ostatni udany deploy, a stary klient trzymał klucz API Gemini
+  użytkownika w localStorage na originie *.github.io — wspólnym dla wszystkich
+  GitHub Pages tego konta — i wysyłał liczniki użycia do zewnętrznego serwisu.
+
+  Ten plik istnieje wyłącznie po to, żeby:
+    1. nadpisać tamtą wersję u każdego, kto ma ją zainstalowaną na telefonie
+       (stary sw.js robi dla nawigacji network-first, więc to dotrze),
+    2. wyczyścić po niej dane — w tym klucz API — z przeglądarki testera,
+    3. odesłać na jedyną żywą wersję: https://fit.krasnal.cc/mobile.
+
+  NIE dopisuj tu logiki aplikacji. Jeden widok, jeden backend.
+-->
+<style>
+  :root { --green:#1A4D3A; --lime:#8DC63F; --bg:#F9FAF8; --card:#fff;
+          --ink:#212529; --stone:#6C757D; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#131715; --card:#1B211D; --ink:#E8ECE9; --stone:#9AA39D; }
+  }
+  body { margin:0; min-height:100vh; display:flex; align-items:center;
+         justify-content:center; padding:24px; box-sizing:border-box;
+         font-family:-apple-system,"Segoe UI",Inter,sans-serif;
+         background:var(--bg); color:var(--ink); }
+  main { max-width:420px; background:var(--card); border-radius:10px;
+         padding:22px 24px; box-shadow:0 1px 3px rgba(33,37,41,.12);
+         border-left:4px solid var(--lime); }
+  h1 { font-size:19px; margin:0 0 10px; color:var(--green); }
+  @media (prefers-color-scheme: dark) { h1 { color:var(--lime); } }
+  p { line-height:1.55; font-size:15px; margin:0 0 12px; }
+  .muted { color:var(--stone); font-size:13px; margin:0; }
+  a { color:var(--green); font-weight:600; }
+  @media (prefers-color-scheme: dark) { a { color:var(--lime); } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Ta wersja Fit Krasnala została wyłączona</h1>
+  <p>Aplikacja żyje pod adresem
+    <a href="https://fit.krasnal.cc/mobile">fit.krasnal.cc/mobile</a> —
+    przenoszę Cię tam za chwilę.</p>
+  <p class="muted">Dane i klucz API, które ta stara wersja trzymała w pamięci
+    przeglądarki, właśnie zostały z niej usunięte. Jeśli masz tu niezapisane
+    posiłki, których nie przeniosłeś plikiem — napisz na
+    <a href="mailto:krasnal@krasnal.cc">krasnal@krasnal.cc</a>.</p>
+</main>
+<noscript>
+  <p style="text-align:center">Przejdź na
+    <a href="https://fit.krasnal.cc/mobile">fit.krasnal.cc/mobile</a>.</p>
+</noscript>
+<script>
+/* Sprzątanie po starym kliencie: klucz API i profil z localStorage, baza
+   posiłków z IndexedDB, cache i rejestracja service workera. Każdy krok
+   w try/catch i całość z limitem czasu — przekierowanie musi się wykonać
+   nawet wtedy, gdy któreś API przeglądarki odmówi współpracy. */
+(function () {
+  var TARGET = "https://fit.krasnal.cc/mobile";
+
+  function cleanup() {
+    var jobs = [];
+    try { localStorage.removeItem("gemini_key"); } catch (e) {}
+    try { localStorage.removeItem("profile"); } catch (e) {}
+    try { sessionStorage.clear(); } catch (e) {}
+    try {
+      jobs.push(new Promise(function (done) {
+        var req = indexedDB.deleteDatabase("fitkrasnal");
+        req.onsuccess = req.onerror = req.onblocked = function () { done(); };
+      }));
+    } catch (e) {}
+    try {
+      if (window.caches) {
+        jobs.push(caches.keys().then(function (keys) {
+          return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+        }));
+      }
+    } catch (e) {}
+    try {
+      if (navigator.serviceWorker) {
+        jobs.push(navigator.serviceWorker.getRegistrations().then(function (regs) {
+          return Promise.all(regs.map(function (r) { return r.unregister(); }));
+        }));
+      }
+    } catch (e) {}
+    return Promise.all(jobs);
+  }
+
+  function go() { location.replace(TARGET); }
+
+  var guard = new Promise(function (resolve) { setTimeout(resolve, 2000); });
+  Promise.race([cleanup().catch(function () {}), guard]).then(go, go);
+})();
+</script>
+</body>
+</html>

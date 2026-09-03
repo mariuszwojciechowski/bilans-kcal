@@ -41,23 +41,33 @@ echo "== plik z sekretami =="
 if [ ! -f "$ENV_FILE" ]; then
   SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
   ENC_KEY="$("$APP_DIR/.venv/bin/python" -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())' 2>/dev/null || python3 -c 'import secrets,base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())')"
+  USAGE_SALT="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
   cat > "$ENV_FILE" <<EOF
 # Sekrety Fit Krasnal — poza repo. Po zmianie: systemctl restart fit-krasnal
 FIT_KRASNAL_SECRET_KEY=$SECRET
 # Klucz szyfrujący sekretów użytkownika (klucze LLM, tokeny Garmina) — Fernet.
 # Rotacja: scripts/rotate_enc_key.py (odszyfruj starym, zaszyfruj nowym).
 FIT_KRASNAL_ENC_KEY=$ENC_KEY
+# Sól HMAC do pseudonimizacji statystyk użycia (/usage). STAŁA — zmiana zrywa
+# ciągłość statystyk (ten sam użytkownik dostanie nowy pseudonim). Bez niej
+# telemetria po cichu nie zapisuje nic.
+FIT_KRASNAL_USAGE_SALT=$USAGE_SALT
 # USTAW WŁASNY kod zaproszenia, inaczej rejestracja jest wyłączona:
 FIT_KRASNAL_INVITE_CODE=
 FIT_KRASNAL_DATA=$DATA_DIR
 GARMINTOKENS=$DATA_DIR/garth
 EOF
-  echo "   utworzono $ENV_FILE (wygenerowano SECRET_KEY i ENC_KEY)"
+  echo "   utworzono $ENV_FILE (wygenerowano SECRET_KEY, ENC_KEY i USAGE_SALT)"
 else
   echo "   $ENV_FILE już istnieje — nie ruszam"
   if ! grep -q '^FIT_KRASNAL_ENC_KEY=' "$ENV_FILE"; then
     echo "   UWAGA: $ENV_FILE nie ma FIT_KRASNAL_ENC_KEY — proces nie wstanie."
     echo "   Dopisz ręcznie (python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\")."
+  fi
+  if ! grep -q '^FIT_KRASNAL_USAGE_SALT=' "$ENV_FILE"; then
+    echo "   UWAGA: $ENV_FILE nie ma FIT_KRASNAL_USAGE_SALT — proces wstanie,"
+    echo "   ale /usage będzie puste (telemetria cicho nie zapisuje). Dopisz:"
+    echo "   FIT_KRASNAL_USAGE_SALT=\$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
   fi
 fi
 chown root:"$APP_USER" "$ENV_FILE"

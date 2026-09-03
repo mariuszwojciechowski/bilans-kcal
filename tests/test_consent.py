@@ -25,8 +25,8 @@ def client(tmp_path, monkeypatch):
     engine = create_engine(f"sqlite:///{tmp_path / 'consent.db'}")
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine)
-    monkeypatch.setattr("app.main.INVITE_CODE", INVITE)
-    monkeypatch.setattr("app.main.ADMIN_EMAIL", ADMIN_EMAIL)
+    monkeypatch.setattr("app.routers.auth.INVITE_CODE", INVITE)
+    monkeypatch.setattr("app.deps.ADMIN_EMAIL", ADMIN_EMAIL)
     auth._failed.clear()
     from app.main import app
 
@@ -90,8 +90,8 @@ def test_meal_text_after_grant_is_not_409(client, monkeypatch):
             assumptions=[], kcal_min=80, kcal_max=100,
         )
 
-    monkeypatch.setattr("app.main.meal_vision.llm_configured", lambda *a, **kw: True)
-    monkeypatch.setattr("app.main.meal_vision.estimate_from_text", _fake_estimate)
+    monkeypatch.setattr("app.services.meal_vision.llm_configured", lambda *a, **kw: True)
+    monkeypatch.setattr("app.services.meal_vision.estimate_from_text", _fake_estimate)
 
     r = client.post("/api/settings/consent", json={"granted": True})
     assert r.status_code == 200
@@ -105,7 +105,7 @@ def test_withdraw_consent_deletes_pending_queue(client, monkeypatch):
     _register(client, consent_checked=True)
 
     # bez klucza LLM -> ląduje w kolejce
-    monkeypatch.setattr("app.main.meal_vision.llm_configured", lambda *a, **kw: False)
+    monkeypatch.setattr("app.services.meal_vision.llm_configured", lambda *a, **kw: False)
     r = client.post("/api/meals/text", data={"description": "kanapka"})
     assert r.status_code == 200 and r.json()["queued"] is True
 
@@ -124,7 +124,7 @@ def test_withdraw_consent_deletes_pending_queue(client, monkeypatch):
 def test_consent_in_older_privacy_version_counts_as_no_consent(client, monkeypatch):
     _register(client, consent_checked=True)
     monkeypatch.setattr("app.services.consent.PRIVACY_VERSION", "2099-01-01")
-    monkeypatch.setattr("app.main.PRIVACY_VERSION", "2099-01-01")
+    monkeypatch.setattr("app.routers.settings.PRIVACY_VERSION", "2099-01-01")
     r = client.get("/api/settings")
     assert r.json()["consent_llm_photos"] is False
 
