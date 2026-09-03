@@ -26,12 +26,15 @@ o wdrożeniu [deploy/README.md](deploy/README.md).
   `startup` (migracje, sprzątanie kolejki), globalny exception handler 401→login,
   `app.include_router(...)` dla każdego routera z `app/routers/`.
 - `app/deps.py` — współdzielone `Depends` i obiekty: `templates`, `STATIC_DIR`,
-  `humanize_ago`, `require_llm_consent`, `require_admin`.
+  `require_llm_consent`, `require_admin`. **Importuje FastAPI**, więc serwisy
+  nie mogą z niego brać nic (dlatego `humanize_ago` mieszka w
+  `services/timeago.py`).
 - `app/routers/` — route'y podzielone tematycznie (był jeden plik `main.py`
   na ~1300 linii, rozbity 2026-09-03):
   - `auth.py` — login/register/logout, `/prywatnosc`.
   - `profile.py` — `GET/PUT /api/profile`, `/profile-form`, `POST /api/sync`.
-  - `day.py` — waga/kroki, `day_report()` (raport dnia), `GET /api/day/{day}`,
+  - `day.py` — waga/kroki, `GET /api/day/{day}` (liczy
+    `services/day.py:day_report`, mapuje `DayReportUnavailable` na 409),
     ręczne aktywności (`/api/activities`).
   - `meals.py` — zdjęcie/tekst posiłku, zapis/usunięcie, kolejka offline
     (`/api/queue/*`), zapisane posiłki (`/api/saved-meals/*`).
@@ -54,7 +57,13 @@ o wdrożeniu [deploy/README.md](deploy/README.md).
 - `app/services/` — `energy` (BMR, TDEE, kroki), `macros` (WHO + `bar_pct`),
   `meal_vision` (Gemini/Claude vision), `meal_queue` (kolejka offline),
   `balance`, `charts`, `quips`, `settings` (`get_llm_keys` per user),
-  `sync` (throttled Garmin sync), `transfer` (export/import JSON).
+  `sync` (throttled Garmin sync), `transfer` (export/import JSON),
+  `day` (`day_report` — raport dnia), `trends` (`payload` — jedno źródło dla
+  `/trends` i `/api/trends`), `timeago` (`humanize_ago`), `forecast`, `consent`,
+  `crypto`, `usage`.
+  **Warstwa serwisów jest wolna od FastAPI** — brak danych zgłasza wyjątkiem
+  domenowym (wzorzec: `day.DayReportUnavailable` → router robi z tego 409),
+  nigdy `HTTPException`. Pilnuje tego test w `tests/test_day_trends_services.py`.
 - `app/templates/` — Jinja2. Server-rendered: `dashboard.html`, `settings.html`,
   `trends.html`, `login.html`, `register.html`. SPA-lite dla telefonu:
   `mobile.html` (fetch do `/api/*`, ta sama sesja).

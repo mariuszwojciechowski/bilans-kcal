@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from .. import auth
 from ..config import ADMIN_EMAIL, CONSENT_DEADLINE, PRIVACY_VERSION
 from ..db import db_session
-from ..deps import STATIC_DIR, humanize_ago, templates
+from ..deps import STATIC_DIR, templates
 from ..models import DailySummary, PendingMeal, User, UserProfile
 from ..providers import garmin as garmin_provider
 from ..services import consent as consent_service
@@ -18,6 +18,7 @@ from ..services import meal_queue, meal_vision
 from ..services import settings as settings_service
 from ..services import usage as usage_service
 from ..services.macros import lifestyle_options
+from ..services.timeago import humanize_ago
 
 router = APIRouter()
 
