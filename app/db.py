@@ -1,7 +1,7 @@
 import os
 import uuid
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .config import DB_PATH, ensure_dirs
@@ -14,12 +14,41 @@ class Base(DeclarativeBase):
 _engine = None
 _SessionLocal: sessionmaker | None = None
 
+# Czekanie na zwolnienie blokady zapisu, zanim SQLite zwróci "database is locked".
+# Zadania w tle (`maybe_sync`, `process_queue` — BackgroundTasks) otwierają własne
+# sesje i piszą równolegle z obsługą requestu, więc kolizje zapisów się zdarzają.
+BUSY_TIMEOUT_MS = 10_000
+
+
+def _sqlite_pragmas(dbapi_connection, _record) -> None:
+    """PRAGMA ustawiane przy każdym nowym połączeniu.
+
+    - `journal_mode=WAL`: czytający nie blokują piszącego i odwrotnie. Bez tego
+      każdy zapis w tle wstrzymywał odczyty (dashboard, `/api/day`). Ustawienie
+      jest trwałe w pliku bazy, ale ustawiamy je przy każdym połączeniu — jest
+      idempotentne i obejmuje też bazy tworzone od zera (testy).
+    - `busy_timeout`: patrz `BUSY_TIMEOUT_MS`; to ustawienie jest per
+      połączenie, więc MUSI być tutaj, nie jednorazowo przy starcie.
+
+    Świadomie NIE włączamy `foreign_keys=ON`: to zmiana zachowania, nie
+    wydajności — SQLite domyślnie kluczy obcych nie pilnuje, a część kodu
+    i testów operuje na `user_id` bez istniejącego wiersza `user`. Do zrobienia
+    osobno, razem z przeglądem fixture'ów.
+    """
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
+    finally:
+        cursor.close()
+
 
 def get_engine():
     global _engine, _SessionLocal
     if _engine is None:
         ensure_dirs()
         _engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
+        event.listen(_engine, "connect", _sqlite_pragmas)
         _SessionLocal = sessionmaker(bind=_engine, expire_on_commit=False)
     return _engine
 
@@ -35,6 +64,12 @@ def init_db() -> None:
     # leniwie, przy pierwszym połączeniu — create_all wyżej je wymusza).
     if os.name == "posix" and DB_PATH.exists():
         DB_PATH.chmod(0o600)
+        # WAL tworzy obok bazy pliki -wal i -shm z tą samą treścią transakcji —
+        # muszą mieć te same prawa co baza, inaczej higiena plików jest pozorna.
+        for suffix in ("-wal", "-shm"):
+            sidecar = DB_PATH.with_name(DB_PATH.name + suffix)
+            if sidecar.exists():
+                sidecar.chmod(0o600)
 
 
 def _migrate(engine) -> None:

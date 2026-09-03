@@ -1,4 +1,5 @@
 import json
+import logging
 import secrets
 import uuid
 from datetime import date, datetime, timedelta
@@ -17,7 +18,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from . import auth
 from .config import (ADMIN_EMAIL, CONSENT_DEADLINE, DEBUG, DEV_SECRET_KEY, ENC_KEY,
                      INVITE_CODE, MAX_PHOTO_BYTES, PHOTOS_DIR, PRIVACY_VERSION, SECRET_KEY,
-                     ensure_dirs)
+                     USAGE_SALT, ensure_dirs)
 from .db import db_session, get_session, init_db
 from .models import (Activity, DailySummary, Meal, PendingMeal, SavedMeal, UsageDaily, User,
                      UserProfile, WeightLog)
@@ -56,6 +57,15 @@ def startup() -> None:
         raise RuntimeError(
             "Produkcja wymaga FIT_KRASNAL_SECRET_KEY (nie domyślnego) i "
             "FIT_KRASNAL_ENC_KEY ustawionych w /etc/fit-krasnal/env."
+        )
+    # Brak soli nie blokuje startu (telemetria nie jest funkcją krytyczną), ale
+    # NIE może być cichy: `usage.bump` zjada wyjątek do logu, więc bez tego
+    # ostrzeżenia /usage po prostu stoi puste i nikt nie wie dlaczego.
+    if not DEBUG and not USAGE_SALT:
+        logging.getLogger(__name__).warning(
+            "FIT_KRASNAL_USAGE_SALT nie jest ustawiony — statystyki użycia nie "
+            "będą się zapisywać (/usage zostanie puste). Dopisz go do "
+            "/etc/fit-krasnal/env i zrestartuj usługę."
         )
     ensure_dirs()
     init_db()
@@ -111,6 +121,8 @@ REGISTER_ERRORS = {
     "short": f"Hasło musi mieć co najmniej {auth.MIN_PASSWORD_LEN} znaków.",
     "long": "Hasło jest za długie (maks. 72 bajty).",
     "taken": "Konto z tym adresem już istnieje.",
+    "locked": (f"Za dużo nieprawidłowych kodów zaproszenia. Odczekaj "
+               f"{auth.INVITE_LOCKOUT_S // 60} minut i spróbuj ponownie."),
 }
 
 
@@ -160,8 +172,13 @@ def register_submit(request: Request, email: str = Form(...), password: str = Fo
                     db: Session = Depends(db_session)):
     if not INVITE_CODE:
         raise HTTPException(503, "Rejestracja jest wyłączona.")
+    ip = auth.client_ip(request)
+    if auth.invite_is_locked(ip):
+        return RedirectResponse("/register?error=locked", status_code=303)
     if not secrets.compare_digest(invite_code.strip(), INVITE_CODE):
+        auth.note_failed_invite(ip)
         return RedirectResponse("/register?error=invite", status_code=303)
+    auth.reset_failed_invite(ip)
     problem = auth.password_problem(password, password2)
     if problem:
         return RedirectResponse(f"/register?error={problem}", status_code=303)
