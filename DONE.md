@@ -10,7 +10,7 @@ listy, po tym akapicie.
 
 ---
 
-## ~~Duplikat trendów i `day_report` w routerze — wyniesienie do serwisów~~ ✓ zrobione (commit SHA-PO-COMMICIE), pytest zielony (150 passed)
+## ~~Duplikat trendów i `day_report` w routerze — wyniesienie do serwisów~~ ✓ zrobione (commit a4aa213), pytest zielony (150 passed)
 
 Największy dług architektoniczny wskazany w audycie 2026-09-03, spłacony zaraz
 po podziale `main.py` na routery — tamten podział **przeniósł** duplikat do
