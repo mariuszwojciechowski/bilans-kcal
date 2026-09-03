@@ -1167,3 +1167,99 @@ testerzy: **baner z terminem 14 dni**, po terminie twarda bramka.
 Weryfikacja: pełny pytest zielony → commit + push. Treść noty przed wdrożeniem
 czyta właściciel — to jedyny punkt, którego LLM nie powinien wypuścić na
 produkcję bez przeczytania przez człowieka.
+
+## Rok urodzenia zamiast pełnej daty — minimalizacja danych (3/10)
+
+**Ustalenie faktów (sprawdzone w kodzie 2026-09-03, nie zgaduj inaczej):**
+`user_profile.birth_date` jest czytane w DOKŁADNIE dwóch miejscach —
+`app/main.py:329` i `app/main.py:353` — i oba wołają `energy.age_years`, którego
+wynik idzie do:
+
+- `bmr_mifflin` (`app/services/energy.py:14`), człon `− 5 · wiek` → **jeden rok
+  wieku to 5 kcal BMR**, przy ~2400 kcal wydatku to 0.2%, przy błędzie
+  szacowania posiłków ±25–40% (setki kcal) — szum;
+- `macros.resolve_norms` → grupa wiekowa `adult 18–64` / `senior 65+`
+  (podbite minimum białka wg PROT-AGE).
+
+Nic więcej. Żadnego pola, wykresu ani reguły opartej o dzień czy miesiąc
+urodzenia. **Rok wystarcza; miesiąc nie wnosi nic mierzalnego.** Odwrotnie niż
+przy większości pól: pełna data urodzenia to silny identyfikator (w połączeniu
+z e-mailem i danymi o zdrowiu), rok jest znacznie słabszy — trzymanie jej bez
+zastosowania to gromadzenie danych na zapas. To jest argument główny, dokładność
+jest tylko przy okazji.
+
+**Decyzje (wiążące):**
+
+- Profil trzyma `birth_year: int`. Pełna data znika z formularzy, z API
+  i z eksportu.
+- Wiek liczony konwencją **środka roku** (tak, jakby każdy rodził się 1 lipca):
+  błąd ≤ 1 rok, bez systematycznego przesunięcia w żadną stronę. Prostsze
+  `day.year − birth_year` też by wystarczyło, ale zawyża wiek średnio o pół roku
+  u wszystkich urodzonych po lipcu — przy progu 65+ wolimy błąd symetryczny.
+- Kolumna `birth_date` w SQLite ZOSTAJE (konwencja repo: migracje wyłącznie
+  addytywne, `app/db.py:_migrate()`), ale przestaje cokolwiek znaczyć — zapisujemy
+  w niej `date(birth_year, 7, 1)` jako wartość pochodną, z komentarzem przy
+  modelu. Faktyczne usunięcie kolumny to osobne zadanie na kiedyś, po przebudowie
+  tabeli; nie robimy go przy okazji.
+
+**Kroki dla implementującego LLM:**
+
+1. **Model i migracja.** W `app/models.py` do `UserProfile` dodaj
+   `birth_year: Mapped[int | None] = mapped_column(Integer)`; przy `birth_date`
+   dopisz komentarz „legacy: pochodna `birth_year` (1 lipca), nieczytana przez
+   kod". W `app/db.py:_migrate()` addytywnie, wzorzec jak `target_weight_kg`:
+   `PRAGMA table_info(user_profile)` → `ALTER TABLE user_profile ADD COLUMN
+   birth_year INTEGER` → backfill
+   `UPDATE user_profile SET birth_year = CAST(strftime('%Y', birth_date) AS INTEGER)
+   WHERE birth_year IS NULL`. Istniejący testerzy nie muszą nic klikać.
+2. **`app/services/energy.py`** — nowa `age_from_year(birth_year: int,
+   on_date: date) -> int`: `on_date.year − birth_year − (0 if (on_date.month,
+   on_date.day) >= (7, 1) else 1)`. `age_years` zostaje (używa jej
+   `tests/test_energy.py` i mogą skrypty), ale w aplikacji nie ma już wywołań —
+   dopisz w docstringu, że to funkcja pomocnicza, a profil operuje na roku.
+3. **`app/main.py`** — `ProfileIn`: `birth_year: int`, `birth_date: date | None
+   = None` zostawione WYŁĄCZNIE jako wejście zgodnościowe (stary klient
+   z cache'a, stary plik transferu): gdy `birth_year` nie podano, a jest
+   `birth_date`, weź z niej rok; gdy nie ma żadnego → 422. Walidacja zakresu:
+   `date.today().year − 120 <= birth_year <= date.today().year − 13`
+   (dolna granica to zdrowy rozsądek, nie regulamin). W `put_profile`
+   (linia 188) zapisuj `profile.birth_year` oraz `profile.birth_date =
+   date(birth_year, 7, 1)`. Linie 329 i 353 → `age_from_year(profile.birth_year,
+   day)`. Route `/profile-form` (linia 1122): `birth_year: int = Form(...)`.
+4. **`GET /api/profile`** zwraca dziś surowy obiekt ORM, więc po migracji
+   wystawiłby oba pola. Dodaj model odpowiedzi (albo ręczny dict) zwracający
+   `birth_year`, `sex`, `height_cm`, `target_deficit_kcal`, `target_weight_kg`,
+   `lifestyle`, `tz` — bez `birth_date`. Minimalizacja dotyczy też tego, co
+   aplikacja o sobie opowiada.
+5. **UI** (`app/templates/mobile.html`): linia 319 — `<input type="date"
+   id="s-birth">` na `<input type="number" id="s-birth-year" min="1900"
+   max="…" step="1" inputmode="numeric" placeholder="np. 1985">` z etykietą
+   „Rok urodzenia"; linia 865 (prefill) → `profile.birth_year`; linia 890
+   (zapis) → `birth_year: Number(...)`. Pod polem jedno zdanie, w tonie sekcji
+   9.1: „Wiek wpływa tylko na przemianę spoczynkową (5 kcal na rok) i na próg
+   65+ w normach — dokładna data nie jest nam potrzebna". To jest tani sygnał
+   zaufania i warto go pokazać.
+6. **Transfer** (`app/services/transfer.py:53` i `:116`): eksport zapisuje
+   `birth_year` i PRZESTAJE zapisywać `birth_date`; import bierze `birth_year`,
+   a gdy go nie ma (stary plik) — rok z `birth_date`. `FORMAT`/`VERSION` bez
+   zmian: to rozszerzenie zgodne wstecz, nie nowy format.
+7. **Powiązania.** Nota `/prywatnosc` z planu RODO wymienia „rok urodzenia",
+   nie datę — jeśli ten punkt robisz po tamtym, popraw treść noty. Decyzję
+   dopisz do `CLAUDE.md` (sekcja „Kluczowe konwencje"), NIE do `WYMAGANIA.md`
+   — ten plik jest zapisem pierwotnego kontraktu (3.1 mówi o dacie urodzenia)
+   i zgodnie z własną adnotacją nie jest aktualizowany do stanu kodu.
+8. **Testy.** `tests/test_energy.py`: `age_from_year` przed i po 1 lipca
+   (1985 → 40 w czerwcu 2026, 41 w lipcu 2026); różnica BMR między wiekiem
+   z roku a wiekiem z pełnej daty ≤ 5 kcal dla tego samego człowieka.
+   `tests/test_macros.py` albo nowy: rocznik dający 65 lat wpada w grupę
+   `senior`, rocznik o rok młodszy w `adult`. Nowy test migracji w duchu
+   strażnika z `tests/test_activities_api.py`: zbuduj `user_profile` STARYM
+   DDL-em (bez `birth_year`, z `birth_date`), wywołaj `app.db._migrate(engine)`,
+   sprawdź, że `birth_year` jest wypełniony rokiem z daty i że ORM-owy
+   `select(UserProfile)` działa. API: `PUT /api/profile` z samym `birth_year`
+   → 200 i poprawny wiek w `/api/day`; ze starym `birth_date` → też 200
+   (zgodność); `birth_year: 1850` i `birth_year: <rok+1>` → 422; round-trip
+   transferu w obie strony (nowy plik i stary plik z `birth_date`).
+
+Weryfikacja: pełny pytest zielony → commit + push. Deploy i produkcja —
+właściciel.
