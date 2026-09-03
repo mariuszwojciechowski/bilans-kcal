@@ -10,6 +10,28 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Statystyki użycia — dopracowanie po zgłoszeniach~~ ✓ zrobione (commity ae065c8, eb1f1a7, f300e98), pytest zielony (141 passed)
+
+Nie z TODO.md — poprawki wprost z bieżących zgłoszeń właściciela po wdrożeniu
+poprzedniego punktu. (1) 500 na `/usage`: `FIT_KRASNAL_USAGE_SALT` nie był
+ustawiony na produkcji — celowy `RuntimeError` w `_salt()` (bez tego pseudonimizacja
+byłaby niebezpieczna), naprawa to dodanie zmiennej w `/etc/fit-krasnal/env`, nie
+zmiana kodu. (2) Mobilny widok ustawień (`mobile.html`) miał tylko jeden link do
+pełnych ustawień desktopowych — „Zarządzaj połączeniem z Garminem” — przez co
+dostęp do `/usage` szedł tą samą, nielogiczną drogą; dodany osobny link „Statystyki
+użycia →” w sekcji Administracja (`is_admin` teraz też w kontekście `dashboard()`).
+(3) Lejek wejścia liczył się z telemetrii (`UsageDaily`), która działa tylko od
+dnia wdrożenia — zaniżał konta założone wcześniej. Przepisany na realne tabele:
+`UserProfile` (profil), `AppSetting` (klucz LLM, tokeny Garmina), `Meal` (pierwszy
+posiłek, rozpiętość dat ≥7 dni = „wrócił w tygodniu 2”). (4) Dodany wykres „Posiłki
+dziennie (30 dni)” liczony z `Meal`, nie z eventów klienckich. (5) Admin (`ADMIN_EMAIL`)
+wykluczony z wszystkich agregatów `/usage` — własna aktywność testowa nie miesza się
+ze statystykami userów. (6) Nowy widok `/admin/consents` (`require_admin`) — kto i na
+co wyraził zgodę RODO, z e-mailem (w przeciwieństwie do celowo zanonimizowanego
+`/usage`): tabela email/rodzaj zgody/status (aktualna/wycofana/nieaktualna
+wersja/brak zgody)/wersja noty/daty, `consent.admin_overview()`. Link z sekcji
+Administracja w `/settings` i `mobile.html`, wzajemny link z `/usage`.
+
 ## ~~Statystyki użycia — adopcja i najczęściej klikane opcje~~ ✓ zrobione (commit be997a0), pytest zielony (139 passed)
 
 Liczniki dzienne po pseudonimie (`app/models.py:UsageDaily`, HMAC z `user_id`,
