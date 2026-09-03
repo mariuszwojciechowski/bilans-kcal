@@ -23,8 +23,16 @@ curl -fsSL https://raw.githubusercontent.com/mariuszwojciechowski/bilans-kcal/ma
 ```
 
 Skrypt: instaluje pakiety, zakłada użytkownika `fitkrasnal`, klonuje repo, robi venv,
-generuje `FIT_KRASNAL_SECRET_KEY`, wstawia usługę systemd i wąską regułę sudo
-(pozwala CI tylko na restart tej jednej usługi, nie na cokolwiek innego).
+generuje `FIT_KRASNAL_SECRET_KEY`, `FIT_KRASNAL_ENC_KEY` i `FIT_KRASNAL_USAGE_SALT`,
+wstawia usługę systemd i wąską regułę sudo (pozwala CI tylko na restart tej jednej
+usługi, nie na cokolwiek innego).
+
+Trzy zmienne, których brak boli inaczej: bez `FIT_KRASNAL_SECRET_KEY` (własnego)
+i `FIT_KRASNAL_ENC_KEY` proces **nie wstanie** (świadomie — lepiej awaria niż ciche
+szyfrowanie kluczem deweloperskim). Bez `FIT_KRASNAL_USAGE_SALT` wstanie, ale
+statystyki użycia nie zapiszą ani jednego zdarzenia i `/usage` zostanie puste —
+w logu jest wtedy ostrzeżenie przy starcie. Sól jest **stała**: jej zmiana zrywa
+ciągłość statystyk (ten sam użytkownik dostaje nowy pseudonim).
 
 Potem ustaw kod zaproszenia:
 
@@ -101,6 +109,8 @@ się nie przeładuje.
 - Logi Caddy: `sudo journalctl -u caddy -f`
 - Restart ręczny: `sudo systemctl restart fit-krasnal`
 - Backup danych: `sudo tar czf ~/fk-backup.tar.gz /var/lib/fit-krasnal`
+  (baza chodzi w trybie WAL, więc obok `fit-krasnal.db` leżą `-wal` i `-shm` —
+  archiwizuj **cały katalog**, sam plik `.db` może nie mieć ostatnich transakcji)
 - Retencja logów journald: 30 dni (`/etc/systemd/journald.conf.d/fit-krasnal.conf`,
   zgodne z `/prywatnosc`) — zakłada `setup-vm.sh`; jeśli VM postawiona przed tym
   punktem, dopisz plik ręcznie i `sudo systemctl restart systemd-journald`.
