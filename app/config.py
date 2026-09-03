@@ -42,6 +42,12 @@ DEBUG = os.getenv("FIT_KRASNAL_DEBUG", "").lower() in ("1", "true", "yes")
 # Wspólny kod zaproszenia do rejestracji. Bez niego rejestracja jest wyłączona.
 INVITE_CODE = os.getenv("FIT_KRASNAL_INVITE_CODE", "")
 
+# Klucz szyfrujący sekretów użytkownika (klucze LLM, tokeny Garmina) — Fernet.
+# Osobna zmienna od FIT_KRASNAL_SECRET_KEY: rotacja klucza sesji nie może
+# unieważniać cudzych kluczy API. Wygeneruj:
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+ENC_KEY = os.getenv("FIT_KRASNAL_ENC_KEY")
+
 # Backend LLM do szacowania posiłków: auto | claude | gemini
 # auto = gemini, jeśli jest GEMINI_API_KEY/GOOGLE_API_KEY; w przeciwnym razie claude.
 LLM_BACKEND = os.getenv("FIT_KRASNAL_LLM", "auto")
@@ -58,11 +64,11 @@ PRIVACY_VERSION = os.getenv("FIT_KRASNAL_PRIVACY_VERSION", "2026-09-03")
 CONSENT_DEADLINE = date(2026, 9, 17)
 
 
-def garmin_tokens_dir(user_id: int) -> Path:
-    """Katalog tokenów Garmina dla konkretnego użytkownika (izolacja multi-user)."""
-    return GARMIN_TOKENS_DIR / str(user_id)
-
-
 def ensure_dirs() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
+    # Higiena plików (plan „Szyfrowanie sekretów") — DATA_DIR/PHOTOS_DIR tylko
+    # dla właściciela procesu; nie na Windows (chmod tam nie ma sensu).
+    if os.name == "posix":
+        DATA_DIR.chmod(0o700)
+        PHOTOS_DIR.chmod(0o700)

@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from ..config import PHOTOS_DIR
 from ..models import Meal, PendingMeal
-from . import meal_vision
+from . import crypto, meal_vision
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +145,7 @@ def process_queue(user_id: int) -> dict:
                 db.commit()
                 continue
             except Exception as exc:
-                logger.warning("Kolejka: posiłek %s nieprzetworzony: %s", row.id, exc)
+                logger.warning("Kolejka: posiłek %s nieprzetworzony: %s", row.id, crypto.scrub(str(exc)))
                 failed += 1
                 continue
             db.add(meal_from_estimate(user_id, row.date, row.time, estimate, source))
