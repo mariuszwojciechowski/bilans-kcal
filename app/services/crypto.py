@@ -63,6 +63,13 @@ def decrypt(value: str) -> str:
     return _fernet().decrypt(token.encode()).decode()
 
 
+def encrypt_with_key(value: str, key: bytes) -> str:
+    """Jak encrypt(), ale z jawnie podanym kluczem — do rotacji klucza
+    (scripts/rotate_enc_key.py), gdzie stary i nowy klucz muszą współistnieć
+    w jednym przebiegu."""
+    return PREFIX + Fernet(key).encrypt(value.encode()).decode()
+
+
 _SECRET_PATTERNS = [
     re.compile(r"AIza[\w-]{10,}"),
     re.compile(r"sk-ant-[\w-]{10,}"),

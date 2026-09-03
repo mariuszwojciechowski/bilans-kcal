@@ -105,6 +105,29 @@ się nie przeładuje.
   zgodne z `/prywatnosc`) — zakłada `setup-vm.sh`; jeśli VM postawiona przed tym
   punktem, dopisz plik ręcznie i `sudo systemctl restart systemd-journald`.
 
+### Rotacja klucza szyfrującego (`FIT_KRASNAL_ENC_KEY`)
+
+Klucze LLM i tokeny Garmina leżą w bazie zaszyfrowane Fernetem
+(`FIT_KRASNAL_ENC_KEY` w `/etc/fit-krasnal/env`). Rotacja (np. po podejrzeniu
+wycieku):
+
+```bash
+cd /opt/fit-krasnal
+sudo -u fitkrasnal bash -c '
+  export FIT_KRASNAL_ENC_KEY=$(grep ^FIT_KRASNAL_ENC_KEY= /etc/fit-krasnal/env | cut -d= -f2-)
+  NEW=$(.venv/bin/python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+  .venv/bin/python scripts/rotate_enc_key.py "$NEW"
+  echo "Nowy klucz: $NEW"
+'
+```
+
+Skrypt sam nie zmienia `/etc/fit-krasnal/env` — po jego sukcesie wklej
+wypisany nowy klucz jako `FIT_KRASNAL_ENC_KEY` ręcznie i
+`sudo systemctl restart fit-krasnal`. Bez tego kroku proces nadal używa
+starego klucza (zgodnie z wypisanym środowiskiem `EnvironmentFile`), a baza
+ma już sekrety zaszyfrowane nowym — restart jest częścią rotacji, nie
+opcjonalnym krokiem.
+
 ## Onboarding testera
 
 1. Wejdź na `https://fit.krasnal.cc` (przez basic_auth Caddy, dopóki nie
@@ -116,8 +139,8 @@ się nie przeładuje.
    (https://aistudio.google.com → *Get API key*) — dzięki temu szacowanie
    posiłków idzie z Twojej quoty, nie z jakiegoś wspólnego.
 4. (Opcjonalnie) w Ustawieniach podłącz konto Garmin — login/hasło + kod MFA
-   z aplikacji Garmin. Tokeny lądują w `~/.fit-krasnal/garth/<user_id>/`
-   izolowane od innych testerów.
+   z aplikacji Garmin. Token sesji leży zaszyfrowany w bazie (per użytkownik),
+   nie jako plik na dysku.
 5. Dwa widoki, ta sama sesja:
    - `/` — pełny dashboard desktopowy (server-rendered).
    - `/mobile` — cienki klient dla telefonu (SPA używający `/api/*`;
