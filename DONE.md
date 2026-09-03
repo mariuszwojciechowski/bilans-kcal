@@ -10,6 +10,19 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Prognoza osiągnięcia celu ciężaru — WYMAGANIA.md 6.4~~ ✓ zrobione (commit ed1cb9d), pytest zielony (131 passed), zweryfikowane w przeglądarce (desktop /trends i mobile SPA — data ETA i tempo widoczne na kafelku)
+
+`app/services/forecast.py:goal_eta` — tempo z regresji najmniejszych kwadratów
+po wygładzonej wadze z wybranego okresu Trendów (≥6 punktów na ≥14 dniach),
+fallback na bilans (`avg_balance_kcal * 7 / KCAL_PER_KG_FAT`) gdy pomiarów za
+mało. Stany: `reached` (cel osiągnięty), `flat` (tempo ≥ −0.05 kg/tydz., bez
+daty), `eta` (data + tempo), `far` (prognoza > 104 tygodni, bez konkretnej
+daty). Podłączone do `trends()` i `api_trends_data` — czwarty kafelek w
+`.stats` (desktop `trends.html`, mobile SPA `#tr-eta-stat`), z dopiskiem „(wg
+bilansu, za mało pomiarów ciężaru)” gdy `basis="balance"`.
+
+---
+
 ## ~~Szyfrowanie sekretów użytkownika: klucze LLM i tokeny Garmina~~ ✓ zrobione (commity c1e1c9b, 7b4a88d), pytest zielony (124 passed), FIT_KRASNAL_ENC_KEY już ustawiony na produkcji przed wdrożeniem
 
 Zakres pełny: A (klucze LLM) + B (tokeny Garmina). Szyfrowanie Fernet

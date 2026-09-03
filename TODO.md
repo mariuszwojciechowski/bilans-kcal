@@ -281,50 +281,6 @@ migracji istniejących dat — dane sprzed zmiany zostają, jak są.
 
 Weryfikacja: pełny pytest zielony → commit + push. Deploy i produkcja — właściciel.
 
-## Prognoza osiągnięcia celu ciężaru — WYMAGANIA.md 6.4 (3/10)
-
-Trendy pokazują linię celu i „do celu [kg]", ale nie mówią KIEDY. Wymóg 6.4 mówi
-o „prognozie osiągnięcia celu" obok wykresu trendu wagi.
-
-**Decyzje (wiążące):** prognoza liczona z FAKTYCZNEGO tempa zmiany wygładzonej
-wagi (regresja liniowa po punktach `smoothed` z wybranego okresu), nie z obietnicy
-bilansu — bilans kłamie o tyle, o ile kłamie szacowanie posiłków. Bilans jest
-fallbackiem, gdy pomiarów wagi jest za mało, i wtedy jawnie opisany w UI jako
-„wg bilansu". Prognoza dalsza niż 2 lata nie pokazuje daty.
-
-**Kroki dla implementującego LLM:**
-
-1. **Nowy `app/services/forecast.py`** — `goal_eta(smoothed: list[tuple[date,
-   float]], target_kg: float | None, today: date, avg_balance_kcal: float | None
-   = None) -> dict | None`:
-   - `None`, gdy brak celu albo brak jakichkolwiek danych;
-   - tempo z regresji najmniejszych kwadratów po `smoothed` (wymagaj ≥ 6 punktów
-     rozłożonych na ≥ 14 dni), w kg/tydzień; `basis="weight"`;
-   - fallback `basis="balance"`: `avg_balance_kcal * 7 / KCAL_PER_KG_FAT`
-     (stała z `app/services/balance.py`);
-   - cel osiągnięty (`current <= target`) → `{"status": "reached"}`;
-   - tempo ≥ −0.05 kg/tydz. (stoi albo rośnie) → `{"status": "flat", "rate_kg_per_week"}`
-     bez daty;
-   - inaczej `{"status": "eta", "rate_kg_per_week", "weeks", "eta_date"}`,
-     `weeks = (current − target) / |rate|`, `eta_date = today + weeks·7 dni`;
-     `weeks > 104` → `{"status": "far", "rate_kg_per_week"}`.
-2. **Podłączenie.** `trends()` (`app/main.py:750`) i `api_trends_data`
-   (`app/main.py:1046`) liczą już `smoothed`, `target_weight` i `avg_balance` —
-   dołóż `goal_eta(...)` do kontekstu szablonu i do JSON-a (klucz `goal_eta`).
-   Nie licz tego drugi raz w `day_report` — prognoza żyje w Trendach.
-3. **UI.** `app/templates/trends.html`: czwarty kafelek w `.stats` — data
-   (`%d.%m.%Y`) jako duża liczba, pod spodem „prognoza celu · tempo −0.42 kg/tydz.".
-   `app/templates/mobile.html` w `renderTrends()`: ten sam kafelek obok
-   `#tr-goal-stat`. Teksty stanów, w tonie z sekcji 9.1 (rzeczowo, bez
-   wykrzykników): `reached` → „cel osiągnięty", `flat` → „ciężar nie spada —
-   prognozy brak", `far` → „przy tym tempie ponad 2 lata", `basis="balance"` →
-   dopisek „(wg bilansu, za mało pomiarów ciężaru)".
-4. **Testy `tests/test_forecast.py`** (czysto jednostkowe, bez HTTP): seria
-   spadająca 0.5 kg/tydz. przez 8 tygodni i cel 4 kg niżej → `weeks ≈ 8`,
-   `eta_date` w oknie ±3 dni; seria płaska → `flat`; waga poniżej celu →
-   `reached`; 3 punkty → fallback na `avg_balance`, `basis="balance"`; tempo
-   −0.01 kg/tydz. przy celu 10 kg niżej → `far`; brak celu → `None`.
-
 Weryfikacja: pełny pytest zielony → commit + push. Deploy i produkcja — właściciel.
 
 ## „Usuń moje dane i konto" w Ustawieniach (6/10)
