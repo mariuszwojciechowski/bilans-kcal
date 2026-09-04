@@ -4,7 +4,7 @@ Cel produktu: **wsparcie odchudzania przez rzetelny dzienny bilans energetyczny*
 realnie zmierzony wydatek (Garmin) kontra oszacowane spożycie (zdjęcia posiłków),
 z modelem teoretycznym jako punktem odniesienia i mechanizmem kalibracji.
 
-Etap 1: web app (weryfikacja pomysłu, single-user). Etap 2: aplikacja mobilna
+Etap 1: web-app (weryfikacja pomysłu, single-user). Etap 2: aplikacja mobilna
 (Google Play, potencjalnie iOS/App Store).
 
 ## Decyzje podjęte (2026-08-13)
