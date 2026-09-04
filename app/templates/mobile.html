@@ -914,7 +914,9 @@ async function renderTrends(days) {
     document.getElementById("trends-charts").innerHTML =
       `<h3>Waga [kg]</h3>${d.chart_weight}` +
       `<h3>Kalorie</h3>${d.chart_energy}` +
-      `<h3>Bilans dzienny [kcal]</h3>${d.chart_balance}`;
+      `<h3>Bilans dzienny [kcal]</h3>${d.chart_balance}` +
+      `<p class="muted">Dni z zapisanymi posiłkami. Jaśniejszy słupek = wydatek szacowany ` +
+      `(dzień w toku albo brak pomiaru Garmina) — tak samo jak na „Dziś".</p>`;
   } catch(e) {
     document.getElementById("trends-charts").innerHTML =
       `<p class="muted">Błąd ładowania: ${esc(e.message)}</p>`;

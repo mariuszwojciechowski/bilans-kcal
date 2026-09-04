@@ -10,6 +10,41 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Trendy liczą kcal inaczej niż „Dziś" — jedna logika wydatku w całej aplikacji~~ ✓ zrobione (21.4.0)
+
+Bug zgłoszony 2026-09-04: dzień w toku miał zielony bilans na „Dziś", a
+czerwony słupek w „Trendach" — bo „Trendy" brały surowe `kcal_total_garmin`
+zamiast tej samej logiki (`day_balance`), której używa „Dziś".
+
+| Sytuacja | „Dziś" (przed i po) | „Trendy" przed | „Trendy" po |
+|---|---|---|---|
+| dzień w toku | model/mixed, szacowane | surowy Garmin → fałszywa nadwyżka | jak „Dziś", oznaczony jako szacowany |
+| dzień domknięty + aktywność ręczna | Garmin + ręczne | sam Garmin | Garmin + ręczne |
+| dzień bez wpisu Garmina | model TDEE | dzień pominięty | model TDEE, oznaczony jako szacowany |
+
+**Implementacja:** nowa czysta funkcja `day_energy()` w `app/services/day.py`
+— jedyne miejsce liczące wydatek/bilans dnia, bez dostępu do bazy. `day_report`
+woła ją i buduje z wyniku identyczną odpowiedź `/api/day/{day}` co wcześniej
+(dowód: `test_api_day_returns_exactly_what_service_computes` przeszedł bez
+zmian). `trends.payload` przeszedł na `day_energy` w pętli po zakresie dni,
+z falbackiem na surowy Garmin, gdy brak profilu albo wagi (żeby wykres wagi
+mógł się nadal wyświetlić). Dni szacowane (`estimated=True`) mają jaśniejszy,
+przerywany słupek na wykresie bilansu (`charts.bar_chart(estimated=...)`) i
+pusty okrąg na wykresie energii (`charts.line_chart` / `Series.hollow`) —
+jedno pojęcie „szacowany" zgodne z flagą z `/api/day/{day}`. Średni bilans i
+prognoza celu liczą się tylko z dni domkniętych (`estimated == False`) —
+dzień w toku zmienia się co godzinę i zaburzałby średnią.
+
+Kontrakt `/api/trends` bez zmian — informacja „szacowany" jedzie wyłącznie
+w SVG (kolor/legenda/tekst), nie w JSON. Nota `/prywatnosc` bez zmian — te
+same dane, inne zestawienie.
+
+Testy: rozszerzony `tests/test_day_trends_services.py` (dzień w toku, dzień
+domknięty z aktywnością ręczną, dzień bez Garmina, `avg_balance` z pominięciem
+dni szacowanych) + nowy `tests/test_charts.py` (znaczniki `estimated`/`hollow`
+nie zmieniają SVG, gdy nie podane; oznaczają wyłącznie właściwy punkt/słupek,
+gdy podane).
+
 ## ~~Cztery poprawki UX w widoku mobilnym: zapis wagi, czyszczenie i odświeżanie formularza „Dodaj"~~ ✓ zrobione
 
 Zgłoszone przez właściciela po ręcznym testowaniu `/mobile` (nie wykryte wcześniej

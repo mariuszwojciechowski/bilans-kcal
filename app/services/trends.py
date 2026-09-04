@@ -11,8 +11,10 @@ from datetime import date, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..models import DailySummary, Meal, UserProfile, WeightLog
+from ..models import Activity, DailySummary, Meal, UserProfile, WeightLog
 from .charts import Series, bar_chart, line_chart
+from .day import day_energy
+from .energy import smoothed_weight
 from .forecast import goal_eta
 
 TREND_RANGES = [(7, "Tydzień"), (30, "Miesiąc"), (90, "Kwartał"), (180, "Pół roku")]
@@ -80,19 +82,54 @@ def payload(db: Session, user_id: int, days: int, today: date | None = None) -> 
     summaries = db.scalars(
         select(DailySummary).where(DailySummary.user_id == user_id, DailySummary.date >= start)
     ).all()
-    kcal_out = [(s.date, float(s.kcal_total_garmin)) for s in summaries if s.kcal_total_garmin]
+    summaries_by_day = {s.date: s for s in summaries}
 
     meals = db.scalars(
         select(Meal).where(Meal.user_id == user_id, Meal.date >= start)
     ).all()
-    kcal_in_by_day: dict[date, float] = {}
+    meals_by_day: dict[date, list[Meal]] = {}
     for m in meals:
-        kcal_in_by_day[m.date] = kcal_in_by_day.get(m.date, 0) + m.kcal
-    kcal_in = sorted(kcal_in_by_day.items())
+        meals_by_day.setdefault(m.date, []).append(m)
+    kcal_in = sorted((d, sum(m.kcal for m in ms)) for d, ms in meals_by_day.items())
 
-    # Bilans tylko dla dni, w których znamy OBIE strony równania.
-    out_by_day = dict(kcal_out)
-    balance = [(d, kcal - out_by_day[d]) for d, kcal in kcal_in if d in out_by_day]
+    activities = db.scalars(
+        select(Activity).where(Activity.user_id == user_id, Activity.date >= start)
+    ).all()
+    activities_by_day: dict[date, list[Activity]] = {}
+    for a in activities:
+        activities_by_day.setdefault(a.date, []).append(a)
+
+    # Wydatek dnia liczony dokładnie jak na „Dziś" (`day_energy` — jedna funkcja
+    # dla obu widoków, patrz plan „Trendy liczą kcal inaczej niż «Dziś»" w
+    # TODO.md). Waga do modelu TDEE to ta sama wygładzona wartość co „Dziś"
+    # (z pełnej historii), niezależna od dnia zakresu.
+    weight_for_model = smoothed_weight(all_weights)
+    kcal_out: list[tuple[date, float]] = []
+    balance: list[tuple[date, float]] = []
+    estimated_days: set[date] = set()
+    if profile is not None and weight_for_model is not None:
+        d = start
+        while d <= today:
+            summary = summaries_by_day.get(d)
+            day_meals = meals_by_day.get(d, [])
+            if summary is not None or day_meals:
+                e = day_energy(
+                    profile, weight_for_model, d, summary,
+                    activities_by_day.get(d, []), day_meals, today,
+                )
+                kcal_out.append((d, e.kcal_out))
+                if e.estimated:
+                    estimated_days.add(d)
+                if day_meals:
+                    balance.append((d, e.kcal_in - e.kcal_out))
+            d += timedelta(days=1)
+    else:
+        # Bez profilu albo bez żadnego pomiaru wagi nie da się policzyć modelu
+        # TDEE — świadomy fallback na surowy Garmin, żeby wykres wagi/posiłków
+        # nadal się wyświetlił zamiast rzucać DayReportUnavailable.
+        kcal_out = [(s.date, float(s.kcal_total_garmin)) for s in summaries if s.kcal_total_garmin]
+        out_by_day = dict(kcal_out)
+        balance = [(d, kcal - out_by_day[d]) for d, kcal in kcal_in if d in out_by_day]
 
     weight_series = [
         Series("pomiary", COLOR_MEASURED, weights, dots=True, width=1.5),
@@ -107,7 +144,12 @@ def payload(db: Session, user_id: int, days: int, today: date | None = None) -> 
     period_change = None
     if len(smoothed) >= 2:
         period_change = round(smoothed[-1][1] - smoothed[0][1], 1)
-    avg_balance = round(sum(v for _, v in balance) / len(balance)) if balance else None
+    # Średni bilans i prognoza celu liczą się tylko z dni domkniętych — dzień
+    # w toku zmienia się co godzinę i zaburzałby średnią (patrz plan w TODO.md).
+    closed_balance = [(d, v) for d, v in balance if d not in estimated_days]
+    avg_balance = (
+        round(sum(v for _, v in closed_balance) / len(closed_balance)) if closed_balance else None
+    )
 
     return {
         "days": days,
@@ -115,14 +157,14 @@ def payload(db: Session, user_id: int, days: int, today: date | None = None) -> 
         "chart_weight": line_chart(weight_series, start, today, y_fmt="{:.1f}"),
         "chart_energy": line_chart(
             [Series("spożyte", COLOR_MEASURED, kcal_in, dots=True),
-             Series("spalone (Garmin)", COLOR_BURNED, kcal_out, dots=True)],
+             Series("spalone", COLOR_BURNED, kcal_out, dots=True, hollow=frozenset(estimated_days))],
             start, today,
         ),
-        "chart_balance": bar_chart(balance, start, today),
+        "chart_balance": bar_chart(balance, start, today, estimated=frozenset(estimated_days)),
         "period_change": period_change,
         "weight_avg_7d": round(smoothed[-1][1], 1) if smoothed else None,
         "avg_balance": avg_balance,
-        "balance_days": len(balance),
+        "balance_days": len(closed_balance),
         "to_goal_kg": (round(smoothed[-1][1] - target_weight, 1)
                        if target_weight and smoothed else None),
         "goal_eta": goal_eta(smoothed, target_weight, today, avg_balance),

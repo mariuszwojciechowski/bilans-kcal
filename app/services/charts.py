@@ -19,6 +19,7 @@ class Series:
     dots: bool = False
     width: float = 2.5
     extra: dict = field(default_factory=dict)
+    hollow: frozenset = field(default_factory=frozenset)
 
 
 def _x(d: date, d0: date, d1: date, w: int, pad: int) -> float:
@@ -75,8 +76,15 @@ def line_chart(series: list[Series], d0: date, d1: date,
                          f'stroke-width="{s.width}" stroke-linejoin="round"{dash}/>')
         if s.dots or len(pts) == 1:
             for d, v in pts:
+                if d in s.hollow:
+                    continue
                 parts.append(f'<circle cx="{_x(d, d0, d1, width, pad):.1f}" '
                              f'cy="{_y(v, vmin, vmax, height, pad):.1f}" r="3" fill="{s.color}"/>')
+        for d, v in pts:
+            if d in s.hollow:
+                parts.append(f'<circle cx="{_x(d, d0, d1, width, pad):.1f}" '
+                             f'cy="{_y(v, vmin, vmax, height, pad):.1f}" r="3" '
+                             f'fill="white" stroke="{s.color}" stroke-width="1.5"/>')
         parts.append(f'<rect x="{legend_x}" y="8" width="12" height="4" fill="{s.color}"/>')
         parts.append(f'<text x="{legend_x + 16}" y="14" font-size="11" fill="{INK_MUTED}">{s.label}</text>')
         legend_x += 16 + 7 * len(s.label) + 24
@@ -86,8 +94,13 @@ def line_chart(series: list[Series], d0: date, d1: date,
 
 def bar_chart(points: list[tuple[date, float]], d0: date, d1: date,
               width: int = 780, height: int = 230, pad: int = 42,
-              color_pos: str = "#DC3545", color_neg: str = "#28A745") -> str:
-    """Słupki wokół zera — dla bilansu: deficyt (ujemny) zielony, nadwyżka czerwona."""
+              color_pos: str = "#DC3545", color_neg: str = "#28A745",
+              estimated: frozenset = frozenset()) -> str:
+    """Słupki wokół zera — dla bilansu: deficyt (ujemny) zielony, nadwyżka czerwona.
+
+    `estimated`: daty, dla których wydatek jest szacowany (dzień w toku albo
+    brak pomiaru Garmina) — rysowane jaśniej i z przerywanym obrysem, żeby
+    różnica była widoczna nawet bez rozróżniania nasycenia koloru."""
     if not points:
         return _empty(width, height, "Brak danych w tym okresie")
     values = [v for _, v in points]
@@ -102,6 +115,15 @@ def bar_chart(points: list[tuple[date, float]], d0: date, d1: date,
     parts = [f'<svg viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" '
              f'style="max-width:100%;height:auto">']
     parts += _frame(width, height, pad, d0, d1, vmin, vmax)
+    if estimated:
+        parts.append(f'<rect x="{pad}" y="6" width="12" height="8" fill="{color_neg}" rx="2"/>')
+        parts.append(f'<text x="{pad + 16}" y="14" font-size="11" fill="{INK_MUTED}">dzień domknięty</text>')
+        legend2_x = pad + 16 + 7 * len("dzień domknięty") + 24
+        parts.append(f'<rect x="{legend2_x}" y="6" width="12" height="8" fill="{color_neg}" '
+                     f'fill-opacity=".45" stroke="{color_neg}" stroke-width="1" '
+                     f'stroke-dasharray="3,2" rx="2"/>')
+        parts.append(f'<text x="{legend2_x + 16}" y="14" font-size="11" fill="{INK_MUTED}">'
+                     f'szacowany (dzień w toku lub brak pomiaru)</text>')
     y0 = _y(0, vmin, vmax, height, pad)
     parts.append(f'<line x1="{pad}" y1="{y0:.1f}" x2="{width - pad}" y2="{y0:.1f}" '
                  f'stroke="{INK_MUTED}" stroke-width="1.5"/>')
@@ -110,7 +132,9 @@ def bar_chart(points: list[tuple[date, float]], d0: date, d1: date,
         y = _y(v, vmin, vmax, height, pad)
         top, hgt = (y, y0 - y) if v >= 0 else (y0, y - y0)
         color = color_pos if v > 0 else color_neg
+        style = (f'fill="{color}" fill-opacity=".45" stroke="{color}" stroke-width="1" '
+                 f'stroke-dasharray="3,2"') if d in estimated else f'fill="{color}"'
         parts.append(f'<rect x="{x:.1f}" y="{top:.1f}" width="{bar_w:.1f}" '
-                     f'height="{max(hgt, 1):.1f}" fill="{color}" rx="2"/>')
+                     f'height="{max(hgt, 1):.1f}" {style} rx="2"/>')
     parts.append("</svg>")
     return "".join(parts)

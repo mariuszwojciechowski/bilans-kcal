@@ -18,12 +18,12 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from app import auth
 from app.db import Base, db_session
-from app.models import DailySummary, Meal, WeightLog
+from app.models import Activity, DailySummary, Meal, WeightLog
 from app.services import day as day_service
 from app.services import trends as trends_service
 
@@ -144,6 +144,131 @@ def test_missing_profile_and_weight_give_409_not_500(client):
     resp = client.get(f"/api/day/{TODAY.isoformat()}")                      # brak wagi
     assert resp.status_code == 409
     assert "wagi" in resp.json()["detail"]
+
+
+def _seed_profile(client, weight_kg: float = 85.0, weight_days: int = 10) -> None:
+    """Profil + historia wagi, bez posiłków/aktywności — dokładane per test."""
+    r = client.put("/api/profile", json={
+        "birth_year": 1985, "sex": "M", "height_cm": 180,
+        "target_deficit_kcal": 500, "target_weight_kg": 78.0, "lifestyle": "active",
+    })
+    assert r.status_code == 200, r.text
+    db = client.session_factory()
+    for i in range(weight_days):
+        db.add(WeightLog(user_id=1, date=TODAY - timedelta(days=i), weight_kg=weight_kg,
+                         source="garmin"))
+    db.commit()
+    db.close()
+
+
+def _meal(day, kcal: float) -> Meal:
+    return Meal(user_id=1, date=day, time=time(12, 30), description="obiad", kcal=kcal,
+                protein_g=30.0, fat_g=20.0, carbs_g=80.0, fiber_g=8.0, sugars_g=15.0,
+                source="manual")
+
+
+def test_trends_in_progress_day_matches_day_report_and_is_estimated(client):
+    """Dzień w toku (bug zgłoszony 2026-09-04): Trendy mają liczyć wydatek tak
+    samo jak «Dziś» — gałąź `mixed`/`model` z `day_balance` — i oznaczyć go
+    jako szacowany, zamiast brać surowy `kcal_total_garmin`."""
+    _seed_profile(client)
+    db = client.session_factory()
+    db.add(DailySummary(user_id=1, date=TODAY, kcal_total_garmin=1300, steps=9000,
+                        sync_ts=datetime(2026, 1, 1, 12, 0), complete=False))
+    db.add(_meal(TODAY, 1600))
+    db.commit()
+    db.close()
+
+    db = client.session_factory()
+    report = day_service.day_report(db, 1, TODAY)
+    # Te same wiersze, ta sama funkcja, którą wewnętrznie woła `trends.payload`
+    # — dowód, że oba widoki produkują jedną liczbę, bez duplikowania jej logiki.
+    profile = db.get(day_service.UserProfile, 1)
+    weights = [(w.date, w.weight_kg)
+              for w in db.scalars(select(WeightLog).where(WeightLog.user_id == 1)).all()]
+    weight = day_service.smoothed_weight(weights)
+    summary = db.scalar(select(DailySummary).where(DailySummary.user_id == 1,
+                                                    DailySummary.date == TODAY))
+    meals = db.scalars(select(Meal).where(Meal.user_id == 1, Meal.date == TODAY)).all()
+    e = day_service.day_energy(profile, weight, TODAY, summary, [], meals, TODAY)
+    view = trends_service.payload(db, 1, 7)
+    db.close()
+
+    assert report["estimated"] is True
+    assert report["balance"] < 0                      # 1600 spożyte < 2600 (model) spalone
+    assert round(e.kcal_in - e.kcal_out) == report["balance"]
+
+    # jedyny słupek bilansu to dzisiejszy, więc szacowany marker (obrys + legenda)
+    # wystąpi dokładnie dwa razy: raz w legendzie, raz na słupku
+    assert view["chart_balance"].count('stroke-dasharray="3,2"') == 2
+
+
+def test_trends_closed_day_with_manual_activity_matches_day_report(client):
+    """Dzień domknięty z ręczną aktywnością — Trendy mają doliczać `manual_kcal`
+    tak jak «Dziś», nie sam surowy Garmin."""
+    _seed_profile(client)
+    day = TODAY - timedelta(days=1)
+    db = client.session_factory()
+    db.add(DailySummary(user_id=1, date=day, kcal_total_garmin=2000, steps=9000,
+                        sync_ts=datetime(2026, 1, 1, 12, 0), complete=True))
+    db.add(Activity(user_id=1, date=day, type="strength_training", duration_s=1800,
+                    kcal_garmin=300, source="manual"))
+    db.add(_meal(day, 2200))
+    db.commit()
+    db.close()
+
+    db = client.session_factory()
+    report = day_service.day_report(db, 1, day)
+    db.close()
+
+    assert report["estimated"] is False
+    assert report["out_source"] == "garmin"
+    assert report["kcal_out"] == 2300                 # 2000 Garmin + 300 ręczne
+    assert report["balance"] == report["kcal_in"] - 2300
+
+
+def test_trends_day_without_garmin_entry_uses_model_and_is_estimated(client):
+    """Dzień bez żadnego wpisu Garmina (np. użytkownik bez zegarka) ma się
+    pojawić w Trendach — wcześniej był pomijany, bo brakowało `kcal_total_garmin`."""
+    _seed_profile(client)
+    day = TODAY - timedelta(days=2)
+    db = client.session_factory()
+    db.add(_meal(day, 1800))
+    db.commit()
+    db.close()
+
+    db = client.session_factory()
+    report = day_service.day_report(db, 1, day)
+    view = trends_service.payload(db, 1, 7)
+    db.close()
+
+    assert report["out_source"] == "model"
+    assert report["estimated"] is True
+    assert "Brak danych" not in view["chart_balance"]
+
+
+def test_trends_avg_balance_excludes_estimated_days(client):
+    """Średni bilans i `balance_days` liczą się tylko z dni domkniętych —
+    dzień w toku zmienia się co godzinę i zaburzałby średnią."""
+    _seed_profile(client)
+    db = client.session_factory()
+    for i in (1, 2):
+        d = TODAY - timedelta(days=i)
+        db.add(DailySummary(user_id=1, date=d, kcal_total_garmin=2000, steps=9000,
+                            sync_ts=datetime(2026, 1, 1, 12, 0), complete=True))
+        db.add(_meal(d, 1800))
+    db.add(DailySummary(user_id=1, date=TODAY, kcal_total_garmin=500, steps=9000,
+                        sync_ts=datetime(2026, 1, 1, 12, 0), complete=False))
+    db.add(_meal(TODAY, 1800))
+    db.commit()
+    db.close()
+
+    db = client.session_factory()
+    view = trends_service.payload(db, 1, 7)
+    db.close()
+
+    assert view["balance_days"] == 2
+    assert view["avg_balance"] == -200                # 1800 − 2000, dwa dni domknięte
 
 
 def test_services_layer_does_not_import_fastapi():
