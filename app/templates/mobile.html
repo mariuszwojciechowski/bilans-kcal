@@ -165,8 +165,9 @@
   </section>
   <section class="card">
     <h2>Posiłki</h2>
-    <div id="t-meals"></div>
+    <p class="muted" id="queue-status" style="display:none;margin:4px 0"></p>
     <div id="t-pending"></div>
+    <div id="t-meals"></div>
   </section>
 </div>
 
@@ -614,6 +615,7 @@ function renderMeals(meals, pending) {
     pending.map(p => `
       <div class="entry">
         <div style="flex:1"><div class="muted">${esc(p.label)}${p.has_photo ? " 📷" : ""}</div></div>
+        <button class="ghost" style="flex:none;padding:6px 10px;margin:0;width:auto" onclick="playPending(${p.id})">▶</button>
         <button class="x" onclick="delPending(${p.id})">✕</button>
       </div>`).join("") : "";
 }
@@ -634,6 +636,19 @@ async function delPending(id) {
   if (!confirm("Usunąć wpis z kolejki?")) return;
   await api(`/api/queue/${id}`, {method: "DELETE"});
   renderToday();
+}
+
+async function playPending(id) {
+  const el = document.getElementById("queue-status");
+  el.style.display = "";
+  el.textContent = "Przetwarzam kolejkę…";
+  try {
+    await api("/api/queue/process", {method: "POST"});
+    el.textContent = "Zlecono przetworzenie — odśwież za chwilę, jeśli wpis nadal tu jest.";
+    renderToday();
+  } catch(e) {
+    el.textContent = "Błąd: " + e.message;
+  }
 }
 
 async function delMeal(id) {

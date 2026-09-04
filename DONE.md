@@ -10,6 +10,52 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Implementacja zgubionej funkcjonalności~~ ✓ zrobione
+
+Backend miał od dawna gotowy endpoint `POST /api/queue/process`
+(`app/routers/meals.py:172-176`, woła `meal_queue.process_queue` w tle) do
+ręcznego wymuszenia przetworzenia kolejki offline — ale żaden element UI go
+nie wywoływał. Widok mobilny (`/mobile`) pozwalał tylko usunąć wpis z kolejki
+(✕), nie dawał sposobu, żeby kazać aplikacji spróbować ponownie od razu,
+zamiast czekać na kolejny zapis klucza LLM czy import transferu.
+
+**Co jest:**
+
+1. `app/templates/mobile.html`, `renderMeals()` — przy każdym wpisie kolejki
+   nowy przycisk „▶" (`playPending(id)`) obok istniejącego „✕"
+   (`delPending(id)`); `id` na razie tylko dekoracyjnie, bo `process_queue`
+   i tak przetwarza całą kolejkę usera naraz (`order_by(created_at)`), nie
+   pojedynczy wpis — to świadome uproszczenie, zgodne z tym, co endpoint już
+   robił.
+2. Nowa funkcja JS `playPending(id)` woła istniejący `POST /api/queue/process`
+   i odświeża widok (`renderToday()`); komunikat stanu w nowym,
+   stałym elemencie `#queue-status` (nad `#t-pending`, poza obszarem, który
+   `renderMeals` nadpisuje przy każdym odświeżeniu, więc komunikat przeżywa
+   `renderToday()`).
+3. **Uwaga UX doprecyzowana przy weryfikacji:** przetwarzanie idzie w tle
+   (`background.add_task`), więc `renderToday()` wywołane zaraz po odpowiedzi
+   `{"ok": true}` prawie zawsze pokaże wpis nadal w kolejce — to nie błąd,
+   LLM jeszcze nie zdążył odpowiedzieć. Bez pollingu; jeśli po chwili
+   ręcznego odświeżenia wpis nadal wisi, to sygnał realnego niepowodzenia
+   (brak/zły klucz LLM), tak jak dziś.
+4. Przy okazji: sekcja „W kolejce" przeniesiona nad listę posiłków w karcie
+   „Posiłki" (`#t-pending` przed `#t-meals`) — na prośbę właściciela, żeby
+   wpisy czekające na LLM rzucały się w oczy pierwsze.
+
+**Zweryfikowane ręcznie** (dev serwer na osobnym `FIT_KRASNAL_DATA`, żeby nie
+tykać danych produkcyjnych/lokalnych, `GEMINI_API_KEY` celowo podmieniony na
+nieprawidłowy na czas testu): posiłek tekstowy bez skonfigurowanego klucza
+trafia do kolejki, przycisk ▶ woła endpoint, `#queue-status` pokazuje
+komunikat, kolejka po przetworzeniu z błędnym kluczem zostaje (zgodnie z
+oczekiwaniem — brak regresji w istniejącej logice `process_queue`).
+`pytest tests/test_queue_settings.py` zielony (12 passed) — backend
+niezmieniony.
+
+Nota `/prywatnosc` bez zmian — nie zmienia się nic w zbieraniu/przetwarzaniu
+danych, tylko dodano ręczny spust dla istniejącego mechanizmu.
+
+---
+
 ## ~~Duplikat trendów i `day_report` w routerze — wyniesienie do serwisów~~ ✓ zrobione (commit a4aa213), pytest zielony (150 passed)
 
 Największy dług architektoniczny wskazany w audycie 2026-09-03, spłacony zaraz
