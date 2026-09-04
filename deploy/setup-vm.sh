@@ -86,6 +86,12 @@ cp "$APP_DIR/deploy/fit-krasnal.service" /etc/systemd/system/fit-krasnal.service
 systemctl daemon-reload
 systemctl enable --now fit-krasnal
 
+echo "== kolejka posiłków (timer co minutę) =="
+cp "$APP_DIR/deploy/fit-krasnal-queue.service" /etc/systemd/system/fit-krasnal-queue.service
+cp "$APP_DIR/deploy/fit-krasnal-queue.timer" /etc/systemd/system/fit-krasnal-queue.timer
+systemctl daemon-reload
+systemctl enable --now fit-krasnal-queue.timer
+
 echo "== pozwolenie na restart usługi z CI (bez pełnego sudo) =="
 cat > /etc/sudoers.d/fit-krasnal-deploy <<EOF
 $APP_USER ALL=(root) NOPASSWD: /bin/systemctl restart fit-krasnal, /bin/systemctl status fit-krasnal

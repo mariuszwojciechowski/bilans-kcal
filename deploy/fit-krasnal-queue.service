@@ -1,0 +1,25 @@
+[Unit]
+Description=Fit Krasnal — przetwarzanie kolejki posiłków offline
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=fitkrasnal
+Group=fitkrasnal
+WorkingDirectory=/opt/fit-krasnal
+
+# Sekrety i konfiguracja poza repo (root:fitkrasnal, chmod 640) — bez tego
+# skrypt nie ma FIT_KRASNAL_ENC_KEY i nie odszyfruje kluczy LLM użytkowników.
+EnvironmentFile=/etc/fit-krasnal/env
+
+ExecStart=/opt/fit-krasnal/.venv/bin/python /opt/fit-krasnal/scripts/process_meal_queue.py
+
+# Ograniczenie uprawnień procesu (jak fit-krasnal.service).
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/fit-krasnal
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true

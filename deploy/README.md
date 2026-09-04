@@ -11,6 +11,7 @@ Deploy uruchamia się automatycznie po pushu na `main`.
 | `/var/lib/fit-krasnal` | **dane**: baza SQLite, zdjęcia, tokeny Garmina |
 | `/etc/fit-krasnal/env` | sekrety (`root:fitkrasnal`, `640`) — poza repo |
 | `/etc/systemd/system/fit-krasnal.service` | usługa |
+| `/etc/systemd/system/fit-krasnal-queue.{service,timer}` | timer: przetwarzanie kolejki posiłków co minutę |
 
 Dane leżą **poza katalogiem repo**, więc `git reset --hard` przy deployu ich nie rusza.
 
@@ -25,7 +26,9 @@ curl -fsSL https://raw.githubusercontent.com/mariuszwojciechowski/bilans-kcal/ma
 Skrypt: instaluje pakiety, zakłada użytkownika `fitkrasnal`, klonuje repo, robi venv,
 generuje `FIT_KRASNAL_SECRET_KEY`, `FIT_KRASNAL_ENC_KEY` i `FIT_KRASNAL_USAGE_SALT`,
 wstawia usługę systemd i wąską regułę sudo (pozwala CI tylko na restart tej jednej
-usługi, nie na cokolwiek innego).
+usługi, nie na cokolwiek innego), a także timer `fit-krasnal-queue.timer`, który co
+minutę woła `scripts/process_meal_queue.py` (przetwarza zaległe posiłki offline dla
+wszystkich użytkowników — patrz `app/services/meal_queue.py`).
 
 Trzy zmienne, których brak boli inaczej: bez `FIT_KRASNAL_SECRET_KEY` (własnego)
 i `FIT_KRASNAL_ENC_KEY` proces **nie wstanie** (świadomie — lepiej awaria niż ciche
@@ -114,6 +117,10 @@ się nie przeładuje.
 - Retencja logów journald: 30 dni (`/etc/systemd/journald.conf.d/fit-krasnal.conf`,
   zgodne z `/prywatnosc`) — zakłada `setup-vm.sh`; jeśli VM postawiona przed tym
   punktem, dopisz plik ręcznie i `sudo systemctl restart systemd-journald`.
+- Kolejka posiłków offline: `sudo systemctl status fit-krasnal-queue.timer`,
+  logi ostatniego przebiegu `sudo journalctl -u fit-krasnal-queue -n 20`.
+  Jeśli VM postawiona przed dodaniem timera, doinstaluj ręcznie:
+  `sudo cp deploy/fit-krasnal-queue.{service,timer} /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now fit-krasnal-queue.timer`.
 
 ### Rotacja klucza szyfrującego (`FIT_KRASNAL_ENC_KEY`)
 
