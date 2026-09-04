@@ -1,4 +1,4 @@
-"""Prognoza osiągnięcia celu ciężaru — WYMAGANIA.md 6.4.
+"""Prognoza osiągnięcia celu wagi — WYMAGANIA.md 6.4.
 
 Tempo liczone z FAKTYCZNEGO tempa zmiany wygładzonej wagi (regresja liniowa
 najmniejszych kwadratów), nie z obietnicy bilansu — bilans kłamie o tyle, o

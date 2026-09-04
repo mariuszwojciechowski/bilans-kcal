@@ -44,7 +44,7 @@ def goal_category(weight_to_goal_kg: float) -> str:
 
 def pick(kcal_in: float, e_target: float, balance: float, macros: dict,
          weight_to_goal_kg: float | None = None) -> str:
-    """Losuje tekst: kategoria dnia albo — gdy ustawiono cel ciężaru — kategoria
+    """Losuje tekst: kategoria dnia albo — gdy ustawiono cel wagi — kategoria
     dystansu do celu (osiągnięty cel zawsze wygrywa). Losowanie odbywa się przy
     każdym renderze dashboardu, czyli w tych samych momentach co auto-sync."""
     candidates = [pick_category(kcal_in, e_target, balance, macros)]

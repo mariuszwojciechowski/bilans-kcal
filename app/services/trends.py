@@ -1,7 +1,7 @@
-"""Dane widoku trendów (M9): ciężar, energia, bilans w zadanym zakresie dni.
+"""Dane widoku trendów (M9): waga, energia, bilans w zadanym zakresie dni.
 
 Jedno źródło dla strony HTML (`GET /trends`) i JSON API (`GET /api/trends`).
-Wcześniej ta sama logika — te same zapytania, to samo wygładzanie ciężaru, te
+Wcześniej ta sama logika — te same zapytania, to samo wygładzanie wagi, te
 same serie wykresów — leżała w dwóch niemal identycznych kopiach w routerze;
 poprawka w jednej nie trafiała do drugiej.
 """

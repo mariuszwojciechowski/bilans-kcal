@@ -144,8 +144,8 @@
       <div class="stat"><b id="t-out">—</b><span>kcal spalone</span></div>
       <div class="stat"><b id="t-bal">—</b><span>bilans</span></div>
       <div class="stat"><b id="t-left">—</b><span>zostało do celu dnia</span></div>
-      <div class="stat"><b id="t-weight">—</b><span>ostatni ciężar [kg]</span></div>
-      <div class="stat"><b id="t-goal">—</b><span>do celu ciężaru</span></div>
+      <div class="stat"><b id="t-weight">—</b><span>ostatnia waga [kg]</span></div>
+      <div class="stat"><b id="t-goal">—</b><span>do celu wagi</span></div>
     </div>
     <div style="display:flex;gap:6px;align-items:center;margin:4px 0">
       <button class="ghost" style="flex:none;padding:8px 14px;margin:0;width:auto" onclick="changeDay(-1)">◀</button>
@@ -154,7 +154,7 @@
     </div>
     <div class="row2" style="align-items:flex-end">
       <button class="ghost" style="flex:1;margin:4px 0;border:1px solid transparent" onclick="goActivities()">Aktywności/Kroki</button>
-      <span style="flex:1"><label>pomiar ciężaru [kg]</label>
+      <span style="flex:1"><label>pomiar wagi [kg]</label>
         <input type="number" id="t-newweight" step="0.1" placeholder="—" onchange="saveWeighIn()"></span>
     </div>
     <div id="tdee-breakdown"></div>
@@ -231,11 +231,11 @@
     <h2>Trendy</h2>
     <div class="trend-btns" id="trend-btns"></div>
     <div class="stats" style="margin-bottom:8px">
-      <div class="stat"><b id="tr-change">—</b><span>zmiana ciężaru [kg]</span></div>
-      <div class="stat"><b id="tr-avgweight">—</b><span>śr. ciężar 7d [kg]</span></div>
+      <div class="stat"><b id="tr-change">—</b><span>zmiana wagi [kg]</span></div>
+      <div class="stat"><b id="tr-avgweight">—</b><span>śr. waga 7d [kg]</span></div>
       <div class="stat"><b id="tr-balance">—</b><span>śr. bilans [kcal/d]</span></div>
       <div class="stat" id="tr-goal-stat" style="display:none">
-        <b id="tr-goal">—</b><span>do celu ciężaru</span>
+        <b id="tr-goal">—</b><span>do celu wagi</span>
       </div>
       <div class="stat" id="tr-eta-stat" style="display:none">
         <b id="tr-eta">—</b><span id="tr-eta-label">prognoza celu</span>
@@ -351,7 +351,7 @@
         <input type="number" id="s-deficit" step="50" min="0" max="1500">
       </span>
       <span style="flex:1">
-        <label>Cel ciężaru [kg]</label>
+        <label>Cel wagi [kg]</label>
         <input type="number" id="s-goalweight" step="0.5" min="30" max="250" placeholder="—"
                onchange="saveProfile()">
       </span>
@@ -912,7 +912,7 @@ async function renderTrends(days) {
     }
     renderGoalEta(d.goal_eta);
     document.getElementById("trends-charts").innerHTML =
-      `<h3>Ciężar [kg]</h3>${d.chart_weight}` +
+      `<h3>Waga [kg]</h3>${d.chart_weight}` +
       `<h3>Kalorie</h3>${d.chart_energy}` +
       `<h3>Bilans dzienny [kcal]</h3>${d.chart_balance}`;
   } catch(e) {
@@ -926,7 +926,7 @@ function renderGoalEta(g) {
   const b = document.getElementById("tr-eta");
   const label = document.getElementById("tr-eta-label");
   if (!g) { stat.style.display = "none"; return; }
-  const balanceNote = g.basis === "balance" ? " (wg bilansu, za mało pomiarów ciężaru)" : "";
+  const balanceNote = g.basis === "balance" ? " (wg bilansu, za mało pomiarów wagi)" : "";
   if (g.status === "eta") {
     const [y, m, d] = g.eta_date.split("-");
     b.textContent = `${d}.${m}.${y}`;
@@ -936,7 +936,7 @@ function renderGoalEta(g) {
     label.textContent = "cel osiągnięty";
   } else if (g.status === "flat") {
     b.textContent = "—";
-    label.textContent = "ciężar nie spada — prognozy brak";
+    label.textContent = "waga nie spada — prognozy brak";
   } else if (g.status === "far") {
     b.textContent = ">2 lata";
     label.textContent = `przy tym tempie ponad 2 lata${balanceNote}`;

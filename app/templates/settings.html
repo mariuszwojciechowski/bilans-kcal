@@ -107,9 +107,9 @@
 </section>
 
 <section class="card">
-  <h2>Cel ciężaru</h2>
+  <h2>Cel wagi</h2>
   <form method="post" action="/settings/goal">
-    <label>Docelowy ciężar [kg] <span class="muted">(rysowany na trendach, używany w tekstach motywacyjnych)</span></label>
+    <label>Docelowa waga [kg] <span class="muted">(rysowana na trendach, używana w tekstach motywacyjnych)</span></label>
     <input name="target_weight_kg" type="number" step="0.1" min="30" max="250" required
            value="{{ target_weight_kg or '' }}">
     <button class="primary" style="margin-top:10px">Zapisz cel</button>

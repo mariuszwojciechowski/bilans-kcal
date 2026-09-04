@@ -114,7 +114,7 @@ def settings_lifestyle(lifestyle: str = Form(...), db: Session = Depends(db_sess
 @router.post("/settings/goal")
 def settings_goal(target_weight_kg: float = Form(...), db: Session = Depends(db_session),
                   user: User = Depends(auth.current_user)):
-    """Cel ciężaru — rysowany na trendach, używany w tekstach motywacyjnych."""
+    """Cel wagi — rysowany na trendach, używany w tekstach motywacyjnych."""
     profile = db.get(UserProfile, user.id)
     if profile is None:
         raise HTTPException(409, "Najpierw skonfiguruj profil na dashboardzie")

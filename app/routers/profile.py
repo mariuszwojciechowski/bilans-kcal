@@ -25,7 +25,7 @@ class ProfileIn(BaseModel):
     sex: str  # 'M' | 'F'
     height_cm: float
     target_deficit_kcal: int = 500
-    target_weight_kg: float | None = None  # cel ciężaru
+    target_weight_kg: float | None = None  # cel wagi
     lifestyle: str = "active"
     tz: str = "Europe/Warsaw"
 
