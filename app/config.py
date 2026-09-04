@@ -4,6 +4,10 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Wersja aplikacji (X.Y.Z) — jedyne źródło prawdy: plik VERSION w korzeniu repo.
+# Zasady bumpowania: patrz VERSIONING.md. Widoczna w navbarze pod datą.
+APP_VERSION = (BASE_DIR / "VERSION").read_text().strip()
+
 
 def _load_dotenv() -> None:
     """Wczytuje BASE_DIR/.env do środowiska (bez nadpisywania istniejących zmiennych).

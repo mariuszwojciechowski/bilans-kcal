@@ -4,7 +4,12 @@ Ten plik ma pomóc nowej sesji Claude Code szybko wejść w projekt bez
 kilkuset requestów rekonesansu. Nie jest publiczną dokumentacją —
 o produkcie mówi [README.md](README.md), o wymaganiach [WYMAGANIA.md](WYMAGANIA.md),
 o rzeczach do zrobienia [TODO.md](TODO.md), o już zrobionych [DONE.md](DONE.md),
-o wdrożeniu [deploy/README.md](deploy/README.md).
+o wdrożeniu [deploy/README.md](deploy/README.md), o wersjonowaniu
+[VERSIONING.md](VERSIONING.md).
+
+**Każda zmiana w kodzie musi podnosić wersję aplikacji** (plik `VERSION`) wg
+zasad w [VERSIONING.md](VERSIONING.md) — to część definicji "done", nie
+opcjonalny krok.
 
 ## Stan bieżący (stan na sierpień 2026)
 

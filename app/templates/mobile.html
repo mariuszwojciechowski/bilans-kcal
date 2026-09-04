@@ -118,7 +118,7 @@
     {% if has_logo %}<img class="logo" src="/static/logo-bw.png" alt="" style="width:32px;height:32px">{% endif %}
     <h1>Fit Krasnal</h1>
   </a>
-  <span class="muted" id="hdr-date" style="align-self:center;padding:0 8px"></span>
+  <span class="muted" id="hdr-date" style="align-self:center;padding:0 8px;text-align:center;line-height:1.2"></span>
   <span id="hdr-view" style="align-self:center;padding:0 8px"></span>
   <div class="hdr-nav" style="display:none;margin-left:auto;gap:2px;align-items:center">
     <a class="hdr-link" data-view-link="today" href="#" onclick="goToday();return false">Dziś</a>
@@ -412,6 +412,7 @@
 <script>
 /* Cienki klient backendu: żadnego IndexedDB, żadnego bezpośredniego LLM.
    Wszystko przez /api/* pod tą samą sesją co dashboard. */
+const APP_VERSION = "{{ app_version }}";
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js", {scope: "/"}).catch(() => {});
@@ -546,7 +547,7 @@ let _manual = false;
 async function renderToday() {
   const day = document.getElementById("t-date").value || todayIso();
   document.getElementById("t-day").textContent = day === todayIso() ? "dziś" : day;
-  document.getElementById("hdr-date").textContent = day;
+  document.getElementById("hdr-date").innerHTML = `${esc(day)}<br><span style="font-size:11px;opacity:.7">v${APP_VERSION}</span>`;
   try {
     const rep = await api(`/api/day/${day}`);
     document.getElementById("t-in").textContent = rep.kcal_in;

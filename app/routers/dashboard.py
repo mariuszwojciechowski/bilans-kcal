@@ -3,7 +3,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import HTMLResponse
 
 from .. import auth
-from ..config import ADMIN_EMAIL
+from ..config import ADMIN_EMAIL, APP_VERSION
 from ..deps import STATIC_DIR, templates
 from ..models import User
 from ..services.sync import maybe_sync
@@ -21,5 +21,6 @@ def dashboard(request: Request, background: BackgroundTasks,
         request,
         "mobile.html",
         {"has_logo": (STATIC_DIR / "logo.png").exists(),
-         "is_admin": user.email == ADMIN_EMAIL},
+         "is_admin": user.email == ADMIN_EMAIL,
+         "app_version": APP_VERSION},
     )
