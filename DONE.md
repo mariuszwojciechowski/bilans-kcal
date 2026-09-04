@@ -46,15 +46,18 @@ panelu w `toggleSavedMeals()` („Moje posiłki"). Init na końcu pliku uproszcz
 — `show("today")` i tak to teraz robi, więc zniknęło duplikujące ręczne
 ustawienie `f-date`/`f-time` przy starcie.
 
-**Świadomy kompromis (do wiedzy, nie zaimplementowany osobno):** `refreshMealWhen()`
-nadpisuje *również* ręcznie wybraną wcześniej datę/godzinę, jeśli użytkownik
-zdąży kliknąć „Szacuj"/„Wpisz ręcznie"/„Moje posiłki" po takiej ręcznej zmianie
-w tej samej sesji formularza — np. celowe wsteczne wpisanie zapomnianego
-posiłku sprzed kilku godzin zostanie nadpisane bieżącym czasem, jeśli ktoś
-najpierw poprawi pole, a dopiero potem kliknie któryś z tych przycisków.
-Właściciel świadomie wybrał prostotę (jeden helper, bez śledzenia
-"ręcznie zmienione vs domyślne") nad tym rogiem przypadku — do rewizji, jeśli
-backdating w praktyce zacznie przeszkadzać.
+**5. Rozróżnienie „ręcznie zmienione vs domyślne" dla daty/godziny.** Pierwsza
+wersja `refreshMealWhen()` (punkt 3+4) nadpisywała też datę/godzinę ręcznie
+poprawioną przez użytkownika (np. celowe wsteczne wpisanie zapomnianego
+posiłku), jeśli zdążył potem kliknąć „Szacuj"/„Wpisz ręcznie"/„Moje posiłki".
+Dopisane po zgłoszeniu tego jako realnego ryzyka, nie tylko teoretycznego.
+Fix: flaga `_mealWhenAuto` (`true` = pola stoją na domyślnym "teraz", wolno je
+nadpisywać; `false` = użytkownik dotknął `#f-date`/`#f-time` ręcznie —
+`oninput="_mealWhenAuto = false"` na obu polach). `refreshMealWhen()` nic nie
+robi, gdy flaga jest `false`. Flaga wraca do `true` w `resetAddForm()` — czyli
+przy każdym zakończonym (zakolejkowanym albo zapisanym) posiłku, więc kolejny,
+nowy wpis znów startuje od "teraz", a ręczna korekta chroni tylko bieżącą,
+niedokończoną próbę.
 
 **Zweryfikowane ręcznie** (dev serwer na osobnym `FIT_KRASNAL_DATA`, klucz
 Gemini celowo nieprawidłowy): (1) wartość ustawiona programowo w polu wagi
@@ -62,8 +65,12 @@ bez natywnego `change` i tak trafia do `/api/weight` po przejściu na inną
 zakładkę (`weight_smoothed_kg` w `/api/day` się zgadza); (2)+(3)+(4) spreparowane
 "stare" `f-date`/`f-time`/`f-desc` (2000-01-01, 01:23, opis) zostają
 poprawnie zresetowane do bieżącej daty/godziny i wyczyszczone po `estimate()`,
-`showManual()` i `toggleSavedMeals()`. Testów pytest **nie uruchamiano po tej
-zmianie** na wyraźną prośbę właściciela (zmiana czysto frontendowa, backend
+`showManual()` i `toggleSavedMeals()`; (5) ręczna zmiana obu pól przez
+`dispatchEvent(input)` przed „Szacuj" przeżywa wywołanie (data/godzina
+zostają nietknięte), a kolejny, nieedytowany wpis zaraz potem znów dostaje
+świeże „teraz" — potwierdza, że ochrona jest per-wpis, nie trwała. Testów
+pytest **nie uruchamiano po tej zmianie** na wyraźną prośbę właściciela
+(zmiana czysto frontendowa, backend
 niedotknięty).
 
 Nota `/prywatnosc` bez zmian — żadna z czterech poprawek nie zmienia zakresu

@@ -176,8 +176,8 @@
   <section class="card">
     <h2>Dodaj posiłek</h2>
     <div class="row2">
-      <input type="date" id="f-date">
-      <input type="time" id="f-time">
+      <input type="date" id="f-date" oninput="_mealWhenAuto = false">
+      <input type="time" id="f-time" oninput="_mealWhenAuto = false">
     </div>
     <div id="add-llm-fields" style="display:none">
       <input type="file" id="f-photo" accept="image/*" capture="environment" onchange="track('photo_pick')">
@@ -442,11 +442,18 @@ const localTime = () => {
   const d = new Date();
   return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 };
+// true = pola daty/godziny w "Dodaj posiłek" nadal stoją na domyślnym "teraz"
+// i refreshMealWhen() wolno je nadpisywać; false = użytkownik sam je zmienił
+// (np. wsteczny wpis zapomnianego posiłku) — wtedy zostawiamy jego wybór aż
+// do kolejnego udanego zapisu posiłku, który wraca do trybu "auto".
+let _mealWhenAuto = true;
 function refreshMealWhen() {
   // Data+godzina w "Dodaj posiłek" to domyślne "teraz" — bez tego, przy dłużej
   // otwartej stronie, kolejne posiłki dziedziczą godzinę (i przy przejściu przez
   // północ — datę) sprzed godzin. Odświeżane przy każdym wejściu/akcji w tym
-  // formularzu, nie tylko raz przy starcie strony.
+  // formularzu, nie tylko raz przy starcie strony — ale tylko dopóki użytkownik
+  // sam nie poprawi pola ręcznie (patrz _mealWhenAuto).
+  if (!_mealWhenAuto) return;
   document.getElementById("f-date").value = todayIso();
   document.getElementById("f-time").value = localTime();
 }
@@ -723,6 +730,7 @@ function resetAddForm() {
   document.getElementById("f-photo").value = "";
   document.getElementById("f-desc").value = "";
   document.getElementById("f-note").value = "";
+  _mealWhenAuto = true;  // koniec tego posiłku — kolejny znów zaczyna od "teraz"
 }
 
 function showDraft(e) {
