@@ -442,6 +442,19 @@ const localTime = () => {
   const d = new Date();
   return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 };
+function refreshMealWhen() {
+  // Data+godzina w "Dodaj posiłek" to domyślne "teraz" — bez tego, przy dłużej
+  // otwartej stronie, kolejne posiłki dziedziczą godzinę (i przy przejściu przez
+  // północ — datę) sprzed godzin. Odświeżane przy każdym wejściu/akcji w tym
+  // formularzu, nie tylko raz przy starcie strony.
+  document.getElementById("f-date").value = todayIso();
+  document.getElementById("f-time").value = localTime();
+}
+function flushPendingWeight() {
+  const el = document.getElementById("t-newweight");
+  const v = el && +el.value;
+  if (v > 0) saveWeighIn();
+}
 
 async function api(path, opts = {}) {
   opts.credentials = "same-origin";
@@ -502,6 +515,8 @@ function goAdd() {
 const VIEW_LABELS = {today: "Dziś", add: "Dodaj", activities: "Aktywności", trends: "Trendy", settings: "Ustawienia"};
 
 function show(page) {
+  flushPendingWeight();
+  if (page === "today" || page === "add") refreshMealWhen();
   document.querySelectorAll(".page").forEach(p => p.classList.remove("visible"));
   document.getElementById("page-" + page).classList.add("visible");
   document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
@@ -669,6 +684,7 @@ async function saveWeighIn() {
 
 /* ── DODAJ: szacowanie i zapis posiłku ── */
 async function estimate() {
+  refreshMealWhen();
   const msg = document.getElementById("msg");
   const file = document.getElementById("f-photo").files[0];
   const desc = document.getElementById("f-desc").value.trim();
@@ -692,12 +708,21 @@ async function estimate() {
       if (day) fd.append("day", day);
       est = await apiForm("/api/meals/text", fd);
     }
-    if (est.queued) { msg.textContent = est.message; return; }
+    if (est.queued) { msg.textContent = est.message; resetAddForm(); return; }
     showDraft(est);
+    resetAddForm();
     msg.textContent = "";
   } catch (e) {
     msg.textContent = "Nie udało się oszacować: " + e.message;
   }
+}
+
+function resetAddForm() {
+  // Dane trafiły już do draftu/kolejki — pola wejściowe formularza "Dodaj"
+  // nie muszą (i nie powinny) dalej stać wypełnione po udanym szacowaniu.
+  document.getElementById("f-photo").value = "";
+  document.getElementById("f-desc").value = "";
+  document.getElementById("f-note").value = "";
 }
 
 function showDraft(e) {
@@ -724,6 +749,7 @@ function showDraft(e) {
 }
 
 function showManual() {
+  refreshMealWhen();
   track("manual_open");
   draft = null;
   _manual = true;
@@ -765,7 +791,7 @@ function toggleSavedMeals() {
   const panel = document.getElementById("saved-meals-panel");
   const wasHidden = panel.style.display === "none";
   panel.style.display = wasHidden ? "" : "none";
-  if (wasHidden) { loadSavedMeals(); track("saved_meals_open"); }
+  if (wasHidden) { refreshMealWhen(); loadSavedMeals(); track("saved_meals_open"); }
 }
 
 async function useSavedMeal(id) {
@@ -835,9 +861,7 @@ async function saveDraft() {
   draft = null;
   _manual = false;
   document.getElementById("draft").style.display = "none";
-  document.getElementById("f-desc").value = "";
-  document.getElementById("f-photo").value = "";
-  document.getElementById("f-note").value = "";
+  resetAddForm();
   document.getElementById("msg").textContent = "Zapisano ✓";
   show("today");
   renderToday();
@@ -1206,8 +1230,6 @@ async function deleteActivity(id, callback) {
 
 /* ── init ── */
 document.getElementById("t-date").value = todayIso();
-document.getElementById("f-date").value = todayIso();
-document.getElementById("f-time").value = localTime();
 show("today");
 renderToday();
 api("/api/settings").then(applyConsentUi).catch(() => {});

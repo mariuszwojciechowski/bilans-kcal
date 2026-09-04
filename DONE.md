@@ -10,6 +10,67 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Cztery poprawki UX w widoku mobilnym: zapis wagi, czyszczenie i odświeżanie formularza „Dodaj"~~ ✓ zrobione
+
+Zgłoszone przez właściciela po ręcznym testowaniu `/mobile` (nie wykryte wcześniej
+testami/API — to błędy interakcji w przeglądarce, niewidoczne przy testach na
+poziomie serwisu/endpointu).
+
+**1. Waga w widoku dziennym nie zapisywała się przy zmianie zakładki.** Pole
+`#t-newweight` polegało wyłącznie na natywnym `onchange` (blur). W SPA
+z chowaniem stron (`show()`) i klawiaturą numeryczną telefonu to zdarzenie bywa
+gubione — działał tylko jawny „Zapisz profil". Fix: `flushPendingWeight()`
+wywoływane na starcie `show(page)`, niezależnie od tego, czy natywny `change`
+się odpalił.
+
+**2. `#f-photo`/`#f-desc`/`#f-note` nie czyściły się po udanym „Szacuj".** Dane
+trafiały już do draftu albo kolejki, ale pola wejściowe formularza stały
+wypełnione aż do finalnego „Zapisz posiłek". Fix: nowa `resetAddForm()`,
+wołana w obu gałęziach sukcesu `estimate()` (kolejka i draft) — `saveDraft()`
+też przepisany na to samo wywołanie zamiast trzech powtórzonych linii.
+
+**3. Godzina w „Dodaj posiłek" nie odświeżała się.** `#f-time` ustawiane raz,
+przy starcie strony — kolejne posiłki w tej samej, długo otwartej sesji
+dziedziczyły starą godzinę (przykład właściciela: wpis o 7:00, dodanie
+kolejnego 3h później nadal brało 7:00).
+
+**4. To samo dla daty — z uwagi na przejścia przez północ.** Właściciel zwrócił
+uwagę, że przy sesji trwającej po północy stara data też by się utrzymywała.
+
+**Wspólny fix (3+4):** nowa `refreshMealWhen()` (`#f-date` + `#f-time` :=
+teraz), wołana w: `show(page)` gdy `page` to `"today"` lub `"add"` (pokrywa oba
+warianty przycisków „Dziś"/„Dodaj" — mobilny dolny pasek i górną nawigację
+desktopową, `goToday()`/`goAdd()` i tak przechodzą przez `show()`), na starcie
+`estimate()` („Szacuj"), `showManual()` („Wpisz ręcznie") i przy otwieraniu
+panelu w `toggleSavedMeals()` („Moje posiłki"). Init na końcu pliku uproszczony
+— `show("today")` i tak to teraz robi, więc zniknęło duplikujące ręczne
+ustawienie `f-date`/`f-time` przy starcie.
+
+**Świadomy kompromis (do wiedzy, nie zaimplementowany osobno):** `refreshMealWhen()`
+nadpisuje *również* ręcznie wybraną wcześniej datę/godzinę, jeśli użytkownik
+zdąży kliknąć „Szacuj"/„Wpisz ręcznie"/„Moje posiłki" po takiej ręcznej zmianie
+w tej samej sesji formularza — np. celowe wsteczne wpisanie zapomnianego
+posiłku sprzed kilku godzin zostanie nadpisane bieżącym czasem, jeśli ktoś
+najpierw poprawi pole, a dopiero potem kliknie któryś z tych przycisków.
+Właściciel świadomie wybrał prostotę (jeden helper, bez śledzenia
+"ręcznie zmienione vs domyślne") nad tym rogiem przypadku — do rewizji, jeśli
+backdating w praktyce zacznie przeszkadzać.
+
+**Zweryfikowane ręcznie** (dev serwer na osobnym `FIT_KRASNAL_DATA`, klucz
+Gemini celowo nieprawidłowy): (1) wartość ustawiona programowo w polu wagi
+bez natywnego `change` i tak trafia do `/api/weight` po przejściu na inną
+zakładkę (`weight_smoothed_kg` w `/api/day` się zgadza); (2)+(3)+(4) spreparowane
+"stare" `f-date`/`f-time`/`f-desc` (2000-01-01, 01:23, opis) zostają
+poprawnie zresetowane do bieżącej daty/godziny i wyczyszczone po `estimate()`,
+`showManual()` i `toggleSavedMeals()`. Testów pytest **nie uruchamiano po tej
+zmianie** na wyraźną prośbę właściciela (zmiana czysto frontendowa, backend
+niedotknięty).
+
+Nota `/prywatnosc` bez zmian — żadna z czterech poprawek nie zmienia zakresu
+zbieranych/przetwarzanych danych.
+
+---
+
 ## ~~Implementacja zgubionej funkcjonalności~~ ✓ zrobione
 
 Backend miał od dawna gotowy endpoint `POST /api/queue/process`
