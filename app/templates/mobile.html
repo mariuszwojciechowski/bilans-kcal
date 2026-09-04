@@ -144,7 +144,7 @@
       <div class="stat"><b id="t-out">—</b><span>kcal spalone</span></div>
       <div class="stat"><b id="t-bal">—</b><span>bilans</span></div>
       <div class="stat"><b id="t-left">—</b><span>zostało do celu dnia</span></div>
-      <div class="stat"><b id="t-weight">—</b><span>ciężar 7d [kg]</span></div>
+      <div class="stat"><b id="t-weight">—</b><span>ostatni ciężar [kg]</span></div>
       <div class="stat"><b id="t-goal">—</b><span>do celu ciężaru</span></div>
     </div>
     <div style="display:flex;gap:6px;align-items:center;margin:4px 0">
@@ -232,6 +232,7 @@
     <div class="trend-btns" id="trend-btns"></div>
     <div class="stats" style="margin-bottom:8px">
       <div class="stat"><b id="tr-change">—</b><span>zmiana ciężaru [kg]</span></div>
+      <div class="stat"><b id="tr-avgweight">—</b><span>śr. ciężar 7d [kg]</span></div>
       <div class="stat"><b id="tr-balance">—</b><span>śr. bilans [kcal/d]</span></div>
       <div class="stat" id="tr-goal-stat" style="display:none">
         <b id="tr-goal">—</b><span>do celu ciężaru</span>
@@ -556,7 +557,7 @@ async function renderToday() {
     setColored("t-bal", rep.balance,
       rep.balance <= -rep.target_deficit_kcal ? "pos" : (rep.balance <= 0 ? "mid" : "neg"));
     setColored("t-left", rep.remaining_kcal, rep.remaining_kcal >= 0 ? "pos" : "neg");
-    document.getElementById("t-weight").textContent = rep.weight_smoothed_kg;
+    document.getElementById("t-weight").textContent = rep.weight_last_kg;
     document.getElementById("t-goal").textContent =
       rep.to_goal_kg === null ? "—" : rep.to_goal_kg + " kg";
     document.getElementById("quip").textContent = rep.quip || "";
@@ -900,6 +901,7 @@ async function renderTrends(days) {
     const d = await api(`/api/trends?days=${days}`);
     document.getElementById("tr-change").textContent = _fmtChange(d.period_change, "kg");
     document.getElementById("tr-change").className = d.period_change < 0 ? "pos" : (d.period_change > 0 ? "neg" : "");
+    document.getElementById("tr-avgweight").textContent = d.weight_avg_7d === null ? "—" : d.weight_avg_7d;
     document.getElementById("tr-balance").textContent = _fmtChange(d.avg_balance, "kcal");
     document.getElementById("tr-balance").className = d.avg_balance < 0 ? "pos" : (d.avg_balance > 0 ? "neg" : "");
     if (d.to_goal_kg !== null) {

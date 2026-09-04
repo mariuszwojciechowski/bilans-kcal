@@ -34,7 +34,7 @@ TODAY = date.today()
 # oznacza zmianę API, nie poprawkę testu.
 API_TRENDS_KEYS = {
     "days", "ranges", "chart_weight", "chart_energy", "chart_balance",
-    "period_change", "avg_balance", "balance_days", "to_goal_kg", "goal_eta",
+    "period_change", "weight_avg_7d", "avg_balance", "balance_days", "to_goal_kg", "goal_eta",
 }
 
 

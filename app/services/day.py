@@ -53,6 +53,7 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
     if weight is None:
         raise DayReportUnavailable(
             "Brak pomiarów wagi — zsynchronizuj Garmina (POST /api/sync)")
+    weight_last_kg = round(max(weights, key=lambda w: w[0])[1], 1)
 
     summary = db.scalar(
         select(DailySummary).where(DailySummary.user_id == user_id, DailySummary.date == day)
@@ -132,6 +133,7 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
     return {
         "date": day.isoformat(),
         "weight_smoothed_kg": round(weight, 1),
+        "weight_last_kg": weight_last_kg,
         "kcal_in": round(kcal_in),
         "kcal_out": round(bal.kcal_out),
         "out_source": bal.out_source,

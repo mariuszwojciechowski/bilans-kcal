@@ -120,6 +120,7 @@ def payload(db: Session, user_id: int, days: int, today: date | None = None) -> 
         ),
         "chart_balance": bar_chart(balance, start, today),
         "period_change": period_change,
+        "weight_avg_7d": round(smoothed[-1][1], 1) if smoothed else None,
         "avg_balance": avg_balance,
         "balance_days": len(balance),
         "to_goal_kg": (round(smoothed[-1][1] - target_weight, 1)
