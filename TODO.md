@@ -208,6 +208,38 @@ w [deploy/README.md](deploy/README.md).
 
 ## Poprawa wyliczania kcal na dzień w toku (5/10)
 
+### Wdrożenie łączone z „Kalibracją adaptacyjną" (decyzja właściciela 2026-09-05)
+
+Oba punkty — ten i „Kalibracja adaptacyjna" niżej — dostaje **jedna sesja
+implementującego LLM**. Zasady dla tej sesji:
+
+1. **Kolejność: najpierw ten punkt do końca, potem kalibracja.** Kalibracja
+   uczy się na `kcal_out`; zaczęta na starym liczeniu nauczy się śmieci.
+   Nie przeplataj — skończ i zacommituj poprawkę, dopiero potem czytaj plan
+   kalibracji.
+2. **Dwa commity, dwa bumpy wersji:** poprawka **21.4.0 → 21.5.0** (Y, zmiana
+   zachowania), kalibracja **21.5.0 → 22.0.0** (X, nowa funkcjonalność).
+   VERSIONING.md każe bumpować niezależne zmiany osobno; jeden commit
+   z jednym bumpem to błąd. Każdy commit ma własny wpis w DONE.md.
+3. **Czytaj pliki raz.** Tabele „co czytać" obu punktów nakładają się na
+   `day.py`, `balance.py`, `energy.py`, `models.py`, `test_day_trends_services.py`
+   — przy kalibracji **nie czytaj ich ponownie**, masz je w kontekście
+   z poprawki (jeśli kontekst został skompresowany, czytaj tylko fragmenty,
+   które sam zmieniłeś). Nowe dla kalibracji są wyłącznie: `routers/dashboard.py`
+   (3 linie), `trends.py` (miejsce na kartę), nowy `services/calibration.py`.
+4. **Jedno miejsce przesunięć w `day_report`:** zaokrąglenie `remaining_kcal`
+   w dół do 50 wprowadzasz **od razu w poprawce** (krok 5 niżej), a w kalibracji
+   tylko wstawiasz `× factor` przed nim. Nie rób tego dwa razy inaczej.
+5. **Historia dla kalibracji:** przy wspólnym wdrożeniu warunek „licz tylko
+   dni po poprawce" sprowadza się do stałej `CALIBRATION_EPOCH = date(<dzień
+   wdrożenia>)` w `calibration.py` — `catch_up()` i `compute()` nie patrzą
+   na dni przed nią. Bez skanowania DONE.md, bez heurystyk na ręcznych
+   aktywnościach. Dla właściciela: filtr startuje z priora 0.97 w dniu
+   wdrożenia, pierwsze korekty po tygodniu.
+6. **Testy:** na bieżąco tylko pliki dotknięte w danym kroku; pełną suitę
+   **raz**, po skończeniu obu punktów i po zgodzie właściciela (zasada
+   z nagłówka TODO).
+
 ### Objaw (2026-09-05, konto właściciela)
 
 Krasnal pokazał wydatek **4213 kcal**, Garmin Connect za ten sam dzień
@@ -374,12 +406,13 @@ zmiana noty **nie** jest potrzebna, odnotuj to w DONE.md), `WYMAGANIA.md`,
    Uruchamiaj tylko te cztery pliki; pełną suitę po zgodzie właściciela
    (zasada z nagłówka TODO).
 8. **Wersja i porządki.** `VERSION` 21.4.0 → **21.5.0** (zmiana zachowania
-   istniejącej funkcjonalności = Y). Ten punkt przenieś do DONE.md z sha
-   commitu, zapisz wynik weryfikacji z kroku 0 i zdanie o nocie prywatności.
+   istniejącej funkcjonalności = Y); **commit i push tu, przed startem
+   kalibracji** (patrz „Wdrożenie łączone"). Ten punkt przenieś do DONE.md
+   z sha commitu, zapisz wynik weryfikacji z kroku 0 i zdanie o nocie prywatności.
    W punkcie „Tabela MET jako dane" (wyżej) popraw wzmiankę o `MET_DEFAULT`
    i progach roweru, jeśli po zmianie nie zgadzają się numery linii/wartości.
 
-## Kalibracja adaptacyjna — WYMAGANIA.md 6.2 (6/10)
+## Kalibracja adaptacyjna — WYMAGANIA.md 6.2 (7/10: wsad + filtr dzienny)
 
 Jedyny duży brak z pierwotnego kontraktu ("przewaga produktu": model uczy się
 na danych użytkownika jak MacroFactor). Kroki dla implementującego LLM:
@@ -409,12 +442,10 @@ na danych użytkownika jak MacroFactor). Kroki dla implementującego LLM:
      **wygładzaj z poprzednim**: `factor = 0.5·poprzedni + 0.5·nowy` (pierwszy
      wpis bez wygładzania) — jeden dziwny tydzień nie ma skakać celem
      o 15%. Zwróć `None`, gdy < 10 dni ważnych albo brak pomiarów wagi
-     na obu końcach okresu. **Warunek wstępny:** licz kalibrację wyłącznie
-     z dni po wdrożeniu punktu „Poprawa wyliczania kcal na dzień w toku" —
-     dni domknięte używają surowego `kcal_total_garmin`, więc historyczne
-     `complete == True` są OK, ale sprawdź w DONE.md datę wdrożenia i wyklucz
-     dni sprzed niej, jeśli w bazie są ręczne aktywności (te były liczone
-     brutto MET).
+     na obu końcach okresu. **Warunek wstępny:** licz wyłącznie dni
+     `>= CALIBRATION_EPOCH` (stała z datą wspólnego wdrożenia z poprawką
+     kcal — patrz „Wdrożenie łączone" w punkcie wyżej); dni sprzed niej
+     były liczone starym modelem i nie wchodzą.
    - `current_factor(db, user_id) -> float` — `factor` z najnowszego wpisu
      `Calibration` albo `1.0`.
    - `maybe_recalibrate(db, user_id)` — liczy i zapisuje nowy wpis, jeśli
@@ -451,6 +482,98 @@ na danych użytkownika jak MacroFactor). Kroki dla implementującego LLM:
    (waga spadająca dwa razy szybciej niż bilans → factor dokładnie 1.05,
    nie więcej), wygładzanie z poprzednim wpisem (drugi wpis = średnia). Wszystko musi
    być zielone — czerwony pytest blokuje deploy.
+
+### Warstwa 2: filtr dzienny od pierwszego dnia (rozruch) — pytanie właściciela 2026-09-05
+
+**Pytanie:** czy da się wyliczać współczynnik już po 1-2 dniach logowania,
+zanim zbierze się 10-14 dni na kalibrację z kroków 1-6?
+
+**Odpowiedź (fizyka, nie decyzja — nie próbuj jej „przechytrzyć" kodem):**
+dobowy szum wagi (woda, glikogen, sól, treść jelit) to 0,3-1 kg, czyli
+2300-7700 kcal pozornego bilansu. Sygnał, którego szukamy (błąd wydatku
+10% ≈ 250 kcal/dzień ≈ 0,03 kg/dzień), jest **10-30× mniejszy** od szumu jednego
+pomiaru. Współczynnik „na podstawie 2 dni" byłby współczynnikiem na podstawie
+tego, ile wypiłeś wody. Jedyne, co można uczciwie zrobić od dnia pierwszego:
+**filtr z małym krokiem dziennym** (uproszczony Kalman). Daje liczbę od razu
+(prior), koryguje ją codziennie, ale wielkość korekty rośnie z ilością danych:
+po 3 dniach maksymalnie ~2-3%, po 2-3 tygodniach dochodzi do prawdy. To
+**zastępuje** wsadową kalibrację z kroków 1-6 jako mechanizm (jeden kod, nie
+dwa), a 14-dniowe porównanie wag zostaje tylko jako **karta w tygodniówce**
+(wymóg 6.4) i strażnik: gdy filtr i wsad różnią się > 10%, reset filtru do
+wsadu i wpis w logu.
+
+**Model (świadomie prosty, wszystkie stałe w jednym miejscu):**
+
+- Stan per użytkownik: `factor` (start = **prior 0.97**, jawny konserwatyzm
+  z zasady w nagłówku TODO — tłumaczy go użytkownikowi tekst „współczynnik
+  startowy, kalibruje się z każdym dniem"), `trend_kg` (wygładzona waga,
+  EMA α = 0.1 — konwencja Hacker's Diet; przy pierwszym pomiarze
+  `trend_kg = waga`), `days_used` (licznik dni, które wniosły dowód),
+  `updated_on` (ostatni przetworzony dzień).
+- Krok dnia `d` (tylko dzień **ważny**: `DailySummary.complete`,
+  `kcal_total_garmin` ≠ None, ≥1 posiłek, pomiar wagi w `d` **lub** `d+1`):
+  1. `pred_kg = (kcal_in − factor·kcal_out) / 7700` — przewidywana zmiana masy.
+  2. `trend_new = trend_kg + α·(waga_d − trend_kg)`; `obs_kg = trend_new − trend_kg`.
+  3. `innov = obs_kg − pred_kg` (dodatnie = waga spadła wolniej niż obiecane
+     = realnie spalasz mniej → factor w dół).
+  4. `gain = min(G_MAX, 1 / (days_used + 5))` — duży na starcie (1/6 ≈ 0.17),
+     malejący do `G_MAX = 0.05` po ~15 dniach; **G_MAX i „+5" to jedyne dwie
+     gałki filtru**.
+  5. `factor -= gain · innov · 7700 / kcal_out`, następnie **ogranicz krok
+     dnia do ±1%** i clamp asymetryczny **[0.85, 1.05]** (jak wsad).
+  6. `days_used += 1`, `trend_kg = trend_new`, `updated_on = d`.
+- Dzień nieważny (brak posiłków, brak wagi, dzień w toku) — pomiń, nie resetuj.
+  Przerwa > 21 dni bez ważnego dnia → `days_used = 0` (od nowa duży gain),
+  factor zostaje.
+- Rozruch w liczbach (żeby właściciel wiedział, czego oczekiwać): dzień 1
+  factor 0.97; dni 2-3 zmiana najwyżej ±1%/dzień, realnie ±0,3% przez szum;
+  dzień 7 typowo ±2-3% od priora; dzień 21 zbieżny w granicach ±3% od
+  prawdy przy codziennym ważeniu. Bez wagi filtr stoi — to poprawne.
+
+**Instrukcja dla implementującego LLM — co czytać:** ten punkt w całości
+(kroki 1-6 wyżej opisują tabelę i podpięcia; **zamiast** `compute()` z kroku
+2 implementujesz `step_day()` + `catch_up()` wg modelu wyżej — `compute()`
+z kroku 2 zostaje wyłącznie na potrzeby karty 6.4 i strażnika), plus:
+
+| Plik | Zakres | Po co |
+|---|---|---|
+| `app/services/energy.py` | 28-36 (`smoothed_weight`) | nie używaj do filtru — EMA α=0.1 to inne wygładzanie; ale karta 6.4 używa tej funkcji |
+| `app/services/balance.py` | 8 (`KCAL_PER_KG_FAT`) | jedna stała 7700, importuj |
+| `app/services/day.py` | `day_energy` i miejsce `e_target = ...` w `day_report` | tu wchodzi `factor`; nic więcej w tym pliku |
+| `app/models.py` | `WeightLog`, `DailySummary`, `Meal` (nazwy kolumn) | zapytania w `catch_up()` |
+| `app/routers/dashboard.py` | wywołanie `maybe_sync` | wzorzec `background.add_task` — dopnij `catch_up` obok, po sync |
+| `tests/test_day_trends_services.py` | 124-136 | kontrakt „serwis == /api/day" — nowe pola dodajesz w obu naraz |
+
+**Nie czytaj:** `trends.py` poza miejscem, w które wchodzi karta 6.4;
+`transfer.py` (stan filtru **nie** wchodzi do eksportu — po imporcie
+`catch_up()` przelicza od zera z historii, to kilkaset kroków, milisekundy);
+`privacy.html` (filtr przetwarza dane już zbierane, brak nowej kategorii —
+odnotuj w DONE.md).
+
+**Model danych:** zamiast tabeli `Calibration` z kroku 1 — jedna tabela
+`CalibrationState` (1 wiersz na `user_id`: `factor`, `trend_kg`, `days_used`,
+`updated_on`, `updated_at`) **plus** `CalibrationLog` (append-only, po
+wierszu na ważny dzień: `user_id`, `day`, `innov_kg`, `gain`, `factor_after`)
+— log jest po to, żeby karta 6.4 rysowała historię współczynnika i żeby
+dało się zdiagnozować „dlaczego factor skoczył". `catch_up()` przetwarza
+dni od `updated_on + 1` (pierwszy run: od `CALIBRATION_EPOCH`) do wczoraj;
+idempotentne.
+
+**UI (minimum):** na „Dziś" przy zapotrzebowaniu jedna linia:
+„zapotrzebowanie skorygowane o −3% (kalibracja: 4 dni, współczynnik
+startowy)" — do `days_used < 10` słowo „startowy", potem bez. W tygodniówce
+karta 6.4: wykres `factor_after` z `CalibrationLog` + oczekiwana vs
+rzeczywista zmiana wagi z `compute()`.
+
+**Testy `tests/test_calibration.py` (zastępują listę z kroku 6):** syntetyczny
+użytkownik z **losowym szumem wagi ±0,5 kg** (seed stały) i prawdziwym
+wydatkiem = 0.9 × Garmin: (a) po 1 dniu factor ∈ [0.96, 0.98] — filtr
+**nie** reaguje na jeden pomiar; (b) po 21 dniach factor ∈ [0.87, 0.93];
+(c) krok dnia nigdy > 1%; (d) clamp 1.05 przy wadze spadającej dwa razy
+szybciej niż bilans; (e) dzień bez wagi nie zmienia stanu; (f) `catch_up()`
+dwa razy pod rząd = ten sam stan; (g) strażnik: filtr 1.05 vs wsad 0.90 →
+reset do 0.90. Bump wersji: **X** (nowa funkcjonalność), jeden dla całej
+kalibracji (wsad + filtr wdrażane razem).
 
 ## Integracja z innymi źródłami spalanych kcal (fundament 6/10 + osobno per producent)
 
