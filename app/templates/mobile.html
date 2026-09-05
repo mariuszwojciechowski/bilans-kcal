@@ -66,7 +66,10 @@
   .bar::after { left: 66.667%; }
   .bar .goal-mark { position: absolute; top: 0; bottom: 0; width: 2px;
                      background: #0d6efd; z-index: 1; }
-  .krasnal-ico { width: 20px; height: 20px; vertical-align: -4px; margin-right: 6px; }
+  .krasnal-ico { display: inline-block; width: 20px; height: 20px; vertical-align: -4px;
+    margin-right: 6px; background: currentColor;
+    -webkit-mask: url(/static/krasnal-24.png) center / contain no-repeat;
+    mask: url(/static/krasnal-24.png) center / contain no-repeat; }
   .entry { display: flex; gap: 10px; align-items: center; padding: 8px 0;
            border-bottom: 1px solid rgba(108,117,125,.25); }
   .entry .x { width: auto; padding: 6px 10px; margin: 0; }
@@ -476,8 +479,8 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c =>
 const r0 = (v) => Math.round(v || 0);
 
 // Ikonka krasnala przed komunikatami stanu (TODO/DONE „Ikona krasnala przy
-// komunikatach") — dopóki właściciel nie dostarczy wyciętej `krasnal-24.png`,
-// używamy istniejącej ikony PWA. Nowe teksty „głosu krasnala" tylko tutaj.
+// komunikatach") — grafikę generuje scripts/make_krasnal_icon.py z
+// data/krasnal-icon-source.png. Nowe teksty „głosu krasnala" tylko tutaj.
 const KRASNAL_STATUS = {
   sync: "Krasnal synchronizuje z Garminem…",
   synced: "Krasnal wrócił z Garmina ✓",
@@ -489,7 +492,7 @@ const KRASNAL_STATUS = {
 function krasnalSays(el, text) {
   if (!el) return;
   if (!text) { el.innerHTML = ""; return; }
-  el.innerHTML = '<img class="krasnal-ico" src="/static/icon-192.png" alt="">' + esc(text);
+  el.innerHTML = '<span class="krasnal-ico" aria-hidden="true"></span>' + esc(text);
 }
 const todayIso = () => SERVER_TODAY;
 const localTime = () => {
@@ -692,27 +695,16 @@ function setColored(id, value, cls) {
 }
 
 // Cel białka zależny od bilansu (TODO/DONE „Cel białka zależny od bilansu") —
-// g/kg zwierciadlą app/resources/who_norms.json protein_cut/bulk_g_per_kg;
-// jeden słownik czytany zarówno na „Dziś", jak i w Ustawieniach.
+// g/kg zwierciadlą app/resources/who_norms.json protein_cut/bulk_g_per_kg.
+// Tekst objaśniający znacznik pokazujemy TYLKO w Ustawieniach (pod polem
+// bilansu, `renderBalanceProteinNote`); na „Dziś" jest sam znacznik na pasku
+// i zakres celu w etykiecie — decyzja właściciela 2026-09-06.
 const PROTEIN_GOAL_TEXT = {
   cut: {kg: [1.2, 1.6], sign: "ujemnym", label: "cel redukcyjny",
         explain: "w deficycie wyższe białko chroni mięśnie i syci"},
   bulk: {kg: [1.6, 2.2], sign: "dodatnim", label: "cel przy budowie masy",
          explain: "nadwyżka bez białka to głównie tłuszcz"},
 };
-
-function proteinGoalText(kind, goalRangeG, lifestyleRangeG) {
-  const cfg = PROTEIN_GOAL_TEXT[kind];
-  if (!cfg) return "Bilans 0: utrzymanie wagi, bez dodatkowego celu białka.";
-  const kgStr = `${cfg.kg[0]}`.replace(".", ",") + "–" + `${cfg.kg[1]}`.replace(".", ",");
-  const goalStr = `${r0(goalRangeG[0])}–${r0(goalRangeG[1])}`;
-  const lifeStr = `${r0(lifestyleRangeG[0])}–${r0(lifestyleRangeG[1])}`;
-  const dir = (lifestyleRangeG[0] + lifestyleRangeG[1]) < (goalRangeG[0] + goalRangeG[1])
-    ? "niżej" : "wyżej";
-  return `Przy ${cfg.sign} bilansie zobaczysz na pasku białka dodatkowy znacznik — `
-    + `${cfg.label} ${kgStr} g/kg (dla Ciebie ${goalStr} g): ${cfg.explain}. `
-    + `Norma z Twojego stylu życia (${lifeStr} g) jest ${dir}.`;
-}
 
 function renderMacros(m) {
   if (!m) return;
@@ -733,15 +725,11 @@ function renderMacros(m) {
     const goalSuffix = hasGoal
       ? ` · ${item.goal_kind === "cut" ? "cel redukcyjny" : "cel masy"} ${r0(item.goal_range_g[0])}–${r0(item.goal_range_g[1])} g`
       : "";
-    const goalCaption = hasGoal
-      ? `<p class="muted" style="font-size:12px;margin:2px 0 8px">${esc(proteinGoalText(item.goal_kind, item.goal_range_g, item.range_g))}</p>`
-      : "";
     return `
     <div style="display:flex;justify-content:space-between">
       <span>${label} — ${item.consumed_g.toFixed(1)} g <span class="muted">(${range}${goalSuffix})</span></span>
       <span class="${statusClass[item.status]}">${statusText[item.status]}</span></div>
-    <div class="bar"><i style="width:${item.bar_pct}%;background:${color}"></i>${goalMarks}</div>
-    ${goalCaption}`;
+    <div class="bar"><i style="width:${item.bar_pct}%;background:${color}"></i>${goalMarks}</div>`;
   }).join("");
 }
 
