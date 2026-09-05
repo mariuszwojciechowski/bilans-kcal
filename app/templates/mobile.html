@@ -725,9 +725,12 @@ function renderMacros(m) {
     const goalSuffix = hasGoal
       ? ` · ${item.goal_kind === "cut" ? "cel redukcyjny" : "cel masy"} ${r0(item.goal_range_g[0])}–${r0(item.goal_range_g[1])} g`
       : "";
+    // Z celem białka nawias jest długi („96–141 g · cel redukcyjny 86–126 g") —
+    // idzie do nowej linii pod „Białko — 0.0 g" (właściciel 2026-09-06).
+    const rangeStyle = hasGoal ? ' style="display:block"' : "";
     return `
     <div style="display:flex;justify-content:space-between">
-      <span>${label} — ${item.consumed_g.toFixed(1)} g <span class="muted">(${range}${goalSuffix})</span></span>
+      <span>${label} — ${item.consumed_g.toFixed(1)} g <span class="muted"${rangeStyle}>(${range}${goalSuffix})</span></span>
       <span class="${statusClass[item.status]}">${statusText[item.status]}</span></div>
     <div class="bar"><i style="width:${item.bar_pct}%;background:${color}"></i>${goalMarks}</div>`;
   }).join("");
