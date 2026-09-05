@@ -355,8 +355,6 @@
       <span style="flex:1">
         <label>Docelowy bilans dnia [kcal]</label>
         <input type="number" id="s-balance" step="50" min="-1500" max="1000" oninput="renderBalanceCaption()">
-        <p class="muted" id="s-balance-caption" style="margin:2px 0 0"></p>
-        <p class="muted" id="s-balance-protein-note" style="margin:2px 0 0;font-size:12px"></p>
       </span>
       <span style="flex:1">
         <label>Cel wagi [kg]</label>
@@ -364,6 +362,10 @@
                onchange="saveProfile()">
       </span>
     </div>
+    <!-- opis bilansu pod całym wierszem, na pełną szerokość karty (jak przycisk
+         „Zapisz profil"), a nie w połówce kolumny nad polem — decyzja właściciela 2026-09-06 -->
+    <p class="muted" id="s-balance-caption" style="margin:2px 0 0"></p>
+    <p class="muted" id="s-balance-protein-note" style="margin:2px 0 0;font-size:12px"></p>
     <label>Styl życia</label>
     <select id="s-lifestyle"></select>
     <label>Strefa czasowa</label>
