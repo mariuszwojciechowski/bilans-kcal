@@ -193,6 +193,166 @@ administracyjne, bez kodu — sprawdzić dostępność w Play Console (i App Sto
 Connect, jeśli iOS w planie), zarezerwować, zapisać wybór tutaj oraz
 w [deploy/README.md](deploy/README.md).
 
+## Poprawa wyliczania kcal na dzień w toku (5/10)
+
+### Objaw (2026-09-05, konto właściciela)
+
+Krasnal pokazał wydatek **4213 kcal**, Garmin Connect za ten sam dzień
+**2889 kcal** (1802 spoczynkowe + 1087 aktywne). Dwie aktywności z zegarka:
+marsz ~4,5 h / 11 704 kroków (Garmin: 498 aktywnych + 341 spoczynkowych = 839)
+i rower ~46 min (417 + 58 = 475). Kroki dnia 16 038 (zgodne).
+Skutek dla użytkownika: „zostało ~850 kcal" zamiast „jesteś ~470 kcal nad celem".
+
+### Diagnoza (zweryfikowana w kodzie, nie powtarzaj analizy)
+
+Dzień w toku → `day_balance` bierze `max(pomiar Garmina, model)`
+(`app/services/balance.py:37-39`). Model wygrał (4213 > 2889), bo:
+
+1. **Marsz z zegarka liczony MET 5.0 przez cały czas trwania.**
+   `activity_kcal_model` nie ma gałęzi `walking`/`hiking` → `MET_DEFAULT = 5.0`
+   (`app/services/energy.py:84`). 4,5 h × 5 MET × ~78 kg ≈ 1750 kcal wobec 498
+   aktywnych wg Garmina. To ~1200 kcal z 1300 kcal nadwyżki.
+2. **Model dla aktywności z zegarka ignoruje `kcal_garmin`.** W `day_energy`
+   `act_dict["kcal"]` podkładane jest tylko dla `source == "manual"`
+   (`app/services/day.py:85-86`); Garminowe aktywności idą przez MET.
+3. **Podwójne liczenie spoczynku.** MET jest brutto (1 MET = spoczynek), a
+   model dodaje pełne 24 h BMR. Za 5 h aktywności ≈ 350 kcal policzone dwa razy.
+   Ta sama wada dotyczy `kcal_garmin` z aktywności — Garmin podaje
+   `calories` **brutto** (aktywne + spoczynkowe, patrz liczby w objawie).
+4. **Rower > 20 km/h = MET 10** (`energy.py:44`); Garmin wyszedł na ~7-8 brutto.
+5. **Rozbicie na ekranie jest fikcją dla dnia w toku.** `out_breakdown.steps_kcal`
+   to reszta `total − BMR − aktywności(Garmin) − TEF` (`day.py:160`), więc
+   „kroki 969 kcal" wchłonęły błąd modelu; prawdziwy NEAT poza aktywnościami
+   to ~170 kcal (16 038 − 11 704 kroków). TEF pokazany obok totalu Garmina
+   nie ma sensu — Garmin nie wyodrębnia TEF.
+
+Kluczowy fakt do decyzji: Garminowe `bmrKilocalories` w podsumowaniu dnia to
+**spoczynek za całą dobę już od rana** (1802 = prognoza doby, nie „dotąd").
+Total Garmina w ciągu dnia nie jest więc zaniżony o BMR — brakuje mu tylko
+aktywności, które jeszcze nie nastąpiły. Reguła `max(...)` chroniła przed
+problemem, którego nie ma, a otwiera drogę modelowi, który chybia o 1300 kcal.
+
+### Decyzje (podjęte przez właściciela 2026-09-05, nie otwieraj ponownie)
+
+- **Dzień w toku: wydatek = pomiar Garmina + ręczne aktywności.** Bez `max`
+  z modelem. Model teoretyczny zostaje wyłącznie jako fallback, gdy
+  `kcal_total_garmin is None`. `estimated` dla dnia w toku zostaje `True`
+  (Trendy nadal wykluczają go ze średnich), `out_source` zostaje `"mixed"`.
+- **Model używa `kcal_garmin` netto dla aktywności z zegarka**, MET tylko dla
+  ręcznych bez kcal i dla braku `kcal_garmin`. Netto = brutto − spoczynek za
+  czas trwania.
+- **MET jako fallback poprawiony:** gałęzie `walking` (3.5) i `hiking` (6.0),
+  wzór netto `(MET − 1) × kg × h`, rower ≥ 20 km/h obniżony z 10 na 8.
+- **BMR zostaje Mifflin.** Garmin liczy spoczynek ~8-10% wyżej — to systematyczne
+  przesunięcie ma łapać „Kalibracja adaptacyjna" (punkt niżej), nie ten plan.
+- **Rozbicie na ekranie z danych Garmina, gdy są.** Gdy `out_source` ∈
+  {garmin, mixed}: spoczynek (`kcal_bmr_garmin`), aktywności netto, kroki poza
+  aktywnościami (= `kcal_active_garmin` − suma netto aktywności, floor 0),
+  ręczne, bez TEF. Gdy `model`: stare rozbicie BMR + NEAT + aktywności + TEF.
+
+### Instrukcja dla implementującego LLM — co czytać (budżet tokenów)
+
+Czytaj **tylko** wskazane zakresy; reszta plików nie ma znaczenia dla zadania.
+
+| Plik | Zakres | Po co |
+|---|---|---|
+| `app/services/balance.py` | całość (54 linie) | `day_balance` — zmieniasz gałąź dnia w toku |
+| `app/services/energy.py` | 39-125 | stałe MET, `activity_kcal_model`, `tdee_theoretical` |
+| `app/services/day.py` | 26-123 (`_est_steps`, `DayEnergy`, `day_energy`) i 160-168 (`out_breakdown`) | jedyne miejsce liczenia wydatku i rozbicia |
+| `app/providers/__init__.py` | 26-34 (`ActivityData`) | nowe pola z zegarka |
+| `app/providers/garmin.py` | 168-188 (`get_activities`) | mapowanie JSON Garmina |
+| `app/services/sync.py` | 61-75 | upsert aktywności — dopisz nowe kolumny |
+| `app/models.py` | 81-95 (`Activity`) | nowe kolumny |
+| `app/db.py` | 114-117 | wzorzec migracji `ALTER TABLE activity ADD COLUMN` — skopiuj |
+| `app/templates/mobile.html` | 592-603 (`renderEnergyBreakdown`) | jedyne miejsce renderujące rozbicie |
+| `tests/test_balance.py` | 19-24 | test `takes_max` do przepisania |
+| `tests/test_day_trends_services.py` | 170-203 | test dnia w toku — asercja `balance < 0` przestanie być prawdziwa |
+| `tests/test_activities_api.py` | 174-217 | testy `out_breakdown` — sprawdź, które asercje trzymają nowy kontrakt |
+| `tests/test_energy.py` | 73-95 | testy MET/TDEE do aktualizacji |
+
+**Nie czytaj:** `app/routers/*` (router tylko woła `day_report`), `trends.py`
+(woła `day_energy`, nic nie zmieniasz), `transfer.py` (eksportuje tylko ręczne
+aktywności; nowe kolumny zegarkowe **nie** wchodzą do eksportu), `privacy.html`
+(nota już mówi „aktywności" z Garmina — nowe pola to ta sama kategoria danych,
+zmiana noty **nie** jest potrzebna, odnotuj to w DONE.md), `WYMAGANIA.md`,
+`deploy/`, `DONE.md` poza dopisaniem wpisu na końcu.
+
+### Kroki
+
+0. **Weryfikacja dwu założeń (10 min, zanim ruszysz kod).** Na koncie z
+   podłączonym Garminem (lokalnie: `scripts/garmin_login.py`, albo poproś
+   właściciela o surowy JSON) sprawdź w odpowiedzi `get_activities_by_date`
+   obecność pól `bmrCalories` i `steps`, a w `get_user_summary` z godzin
+   przedpołudniowych — czy `bmrKilocalories` już jest wartością całodobową.
+   Fallbacki, jeśli założenia nie trzymają: brak `bmrCalories` → spoczynek
+   aktywności licz `kcal_bmr_garmin / 86400 × duration_s` (a gdy i to `None`:
+   `bmr_mifflin / 86400 × duration_s`); `bmrKilocalories` narastające →
+   dzień w toku liczy `kcal_active_garmin + max(kcal_bmr_garmin, bmr_mifflin)`.
+   Wynik weryfikacji zapisz jednym zdaniem w DONE.md.
+1. **Dane z zegarka.** `ActivityData` + `Activity` + migracja + `sync.py` +
+   `garmin.py`: dwie nowe kolumny `kcal_bmr_garmin: int | None`
+   (z `bmrCalories`) i `steps: int | None` (z `steps`). Migracja jak
+   `source` w `db.py:114-117`, bez backfillu (stare wiersze zostają `NULL`,
+   fallbacki z kroku 0 je obsługują). Test migracji: wzorzec
+   `test_migration_backfills_garmin_source` w `tests/test_activities_api.py:238`.
+2. **`energy.py`.** (a) `activity_kcal_model` zwraca **netto**:
+   `(met − 1) × kg × h`; dodaj gałąź `"walking"` → 3.5 i `"hiking"` → 6.0
+   (sprawdzaj `hiking` przed `walking`); `MET_CYCLING_BY_SPEED_KMH` ostatni
+   próg 10.0 → 8.0. (b) `running_kcal` zostaje (1.0 kcal/kg/km to już wartość
+   ~netto). (c) `tdee_theoretical`: `activities` przyjmuje opcjonalne
+   `kcal_net` i `steps` w słowniku; gdy `kcal_net` jest — użyj go zamiast
+   modelu; do `activity_steps` bierz `a["steps"]`, gdy jest, inaczej dotychczasowe
+   `distance × 1400`. Docstring: „kcal aktywności są netto, BMR liczone osobno".
+3. **`day.py:day_energy`.** Dla każdej aktywności zbuduj `act_dict` z
+   `kcal_net` = `kcal_garmin − spoczynek` (spoczynek wg kroku 0/1) dla
+   `source != "manual"`; dla ręcznych `kcal_net = kcal_garmin` (ręczne MET są
+   liczone w `manual_activity_kcal` brutto — **zostaw**, różnica dla
+   30-60 min wpisów to <10%, a zmiana rozjechałaby zapisane wartości).
+   `_est_steps` → najpierw `activity.steps`, potem dystans. Dodaj do `DayEnergy`
+   pole `activities_net_kcal` (suma netto zegarkowych) i `activities_steps`.
+4. **`balance.py:day_balance`.** Gałąź `not day_complete` przy
+   `garmin_total is not None`: `DayBalance(kcal_in, measured, "mixed", True)`.
+   Usuń parametr `model_tdee` z tej gałęzi tylko logicznie — sygnatura
+   zostaje (fallback `garmin_total is None` dalej go używa). Zaktualizuj
+   docstring modułu (linie 3-4) i komentarz w 37-38.
+5. **`day.py:day_report` — `out_breakdown`.** Dwa kształty, wybierane po
+   `e.out_source`:
+   - garmin/mixed: `{"kind": "garmin", "resting": kcal_bmr_garmin,
+     "activities_kcal": suma netto zegarkowych, "steps_kcal": max(kcal_active_garmin
+     − activities_kcal, 0), "steps_count": e.steps_effective, "manual_kcal":
+     e.manual_kcal, "total": kcal_out}`. Gdy `kcal_bmr_garmin is None`
+     (stare wiersze) — `resting = kcal_total − kcal_active` gdy oba są, inaczej
+     `round(e.tdee.bmr)`.
+   - model: `{"kind": "model", "bmr", "steps_kcal": neat, "steps_count",
+     "activities_kcal", "tef", "total"}` — jak dziś, ale `steps_kcal` z
+     `e.tdee.neat`, nie z reszty.
+   Klucz `total` musi się zgadzać z `kcal_out` w obu kształtach (pilnuje
+   `test_closed_garmin_day_plus_manual_activity_sums_to_kcal_out`).
+6. **`mobile.html:renderEnergyBreakdown`.** Rozgałęzienie po `b.kind`:
+   garmin → „spoczynek **1802** + aktywności **915** + kroki **172** [+ ręczne
+   **X**] = **2889 kcal**"; model → dotychczasowa linia. Pod spodem dla dnia
+   w toku dopisz szarym: „Garmin dosyła dane co kilka godzin — wydatek
+   urośnie do końca dnia". Nic więcej w UI.
+7. **Testy.** `test_balance.py`: `test_day_in_progress_takes_max` →
+   `test_day_in_progress_uses_measurement` (kcal_out == garmin_total +
+   manual, `mixed`, `estimated True`); dodaj test, że fallback bez Garmina
+   nadal daje model. `test_energy.py`: netto dla MET, gałąź walking/hiking,
+   rower 8.0 przy 25 km/h, `kcal_net` wygrywa nad modelem, `steps` z aktywności
+   wygrywa nad dystansem. `test_day_trends_services.py:170-203`: seed
+   `kcal_total_garmin=1300` przy `kcal_in=1600` → `balance > 0` teraz;
+   zmień asercję i komentarz (nadal `estimated is True`, marker na wykresie
+   bez zmian). `test_activities_api.py`: dopisz test odtwarzający objaw —
+   dzień w toku, marsz 4,5 h `kcal_garmin=839`, `kcal_bmr_garmin=341`,
+   `steps=11704`, summary 2889/1087/1802/16038 → `kcal_out == 2889`,
+   `out_breakdown.activities_kcal == 498 + 417`, `steps_kcal == 172`.
+   Uruchamiaj tylko te cztery pliki; pełną suitę po zgodzie właściciela
+   (zasada z nagłówka TODO).
+8. **Wersja i porządki.** `VERSION` 21.4.0 → **21.5.0** (zmiana zachowania
+   istniejącej funkcjonalności = Y). Ten punkt przenieś do DONE.md z sha
+   commitu, zapisz wynik weryfikacji z kroku 0 i zdanie o nocie prywatności.
+   W punkcie „Tabela MET jako dane" (wyżej) popraw wzmiankę o `MET_DEFAULT`
+   i progach roweru, jeśli po zmianie nie zgadzają się numery linii/wartości.
+
 ## Kalibracja adaptacyjna — WYMAGANIA.md 6.2 (6/10)
 
 Jedyny duży brak z pierwotnego kontraktu ("przewaga produktu": model uczy się
