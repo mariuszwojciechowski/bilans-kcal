@@ -12,9 +12,10 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..models import Activity, DailySummary, WeightLog
+from ..models import Activity, DailySummary, UserProfile, WeightLog
 from ..providers import DataProvider
 from . import crypto
+from .clock import user_today
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +25,13 @@ _last_attempt: dict[int, datetime] = {}
 _lock = threading.Lock()
 
 
-def sync_range(db: Session, provider: DataProvider, user_id: int, days: int = 7) -> dict:
-    today = date.today()
+def sync_range(db: Session, provider: DataProvider, user_id: int, days: int = 7,
+              today: date | None = None) -> dict:
+    """`today` domyślnie `date.today()` (zegar serwera) — do skryptów CLI bez
+    kontekstu użytkownika. Routery i `maybe_sync` mają podawać
+    `clock.user_today(profile)`, żeby `complete` (dzień domknięty) liczył się
+    względem strefy użytkownika, nie serwera."""
+    today = today or date.today()
     start = today - timedelta(days=days - 1)
 
     synced_days = 0
@@ -103,7 +109,8 @@ def maybe_sync(user_id: int, days: int = 7, force: bool = False) -> None:
 
     db = get_session()
     try:
-        result = sync_range(db, GarminProvider(user_id, db), user_id, days=days)
+        today = user_today(db.get(UserProfile, user_id))
+        result = sync_range(db, GarminProvider(user_id, db), user_id, days=days, today=today)
         logger.info("Auto-sync Garmin: %s", result)
     except Exception as exc:
         logger.warning("Auto-sync Garmin nieudany: %s", crypto.scrub(str(exc)))

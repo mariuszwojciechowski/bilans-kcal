@@ -13,9 +13,10 @@ from sqlalchemy.orm import Session
 
 from .. import auth
 from ..db import db_session
-from ..models import Activity, DailySummary, User, WeightLog
+from ..models import Activity, DailySummary, User, UserProfile, WeightLog
 from ..services import day as day_service
 from ..services import usage as usage_service
+from ..services.clock import user_today
 from ..services.energy import manual_activity_kcal, smoothed_weight
 
 router = APIRouter()
@@ -98,7 +99,7 @@ class ActivityIn(BaseModel):
 def add_manual_activity(data: ActivityIn, db: Session = Depends(db_session),
                         user: User = Depends(auth.current_user)):
     """Zapisz ręcznie logowaną aktywność."""
-    day = data.day or date.today()
+    day = data.day or user_today(db.get(UserProfile, user.id))
     duration_s = data.duration_s if data.duration_s is not None else data.duration_min * 60
     weights = [
         (w.date, w.weight_kg)

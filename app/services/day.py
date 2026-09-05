@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from ..models import Activity, DailySummary, Meal, PendingMeal, UserProfile, WeightLog
 from ..providers import garmin as garmin_provider
 from . import calibration, quips
+from .clock import user_today
 from .balance import day_balance, deficit_warning, projected_weekly_change_kg
 from .energy import (
     DEFAULT_STEPS,
@@ -201,7 +202,7 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
         select(func.max(DailySummary.sync_ts)).where(DailySummary.user_id == user_id)
     )
 
-    e = day_energy(profile, weight, day, summary, activities, meals, date.today())
+    e = day_energy(profile, weight, day, summary, activities, meals, user_today(profile))
 
     if e.out_source in ("garmin", "mixed"):
         if summary and summary.kcal_bmr_garmin is not None:

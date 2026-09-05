@@ -10,9 +10,10 @@ from sqlalchemy.orm import Session
 from .. import auth
 from ..db import db_session
 from ..deps import STATIC_DIR, templates
-from ..models import User
+from ..models import User, UserProfile
 from ..services import trends as trends_service
 from ..services import usage as usage_service
+from ..services.clock import user_today
 from ..services.sync import maybe_sync
 
 router = APIRouter()
@@ -36,7 +37,8 @@ def trends(
     days = trends_service.clamp_days(days)
     _bump_trends(db, user.id, days)
 
-    view = trends_service.payload(db, user.id, days)
+    profile = db.get(UserProfile, user.id)
+    view = trends_service.payload(db, user.id, days, today=user_today(profile))
     today = view.pop("today")
     return templates.TemplateResponse(
         request,
@@ -58,7 +60,8 @@ def api_trends_data(days: int = 30, db: Session = Depends(db_session),
     days = trends_service.clamp_days(days)
     _bump_trends(db, user.id, days)
 
-    view = trends_service.payload(db, user.id, days)
+    profile = db.get(UserProfile, user.id)
+    view = trends_service.payload(db, user.id, days, today=user_today(profile))
     view.pop("today")      # data jest potrzebna tylko szablonowi HTML
     return {
         **view,

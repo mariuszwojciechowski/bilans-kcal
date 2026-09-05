@@ -1,6 +1,5 @@
 """Przenoszenie danych między urządzeniami (eksport/import pliku JSON)."""
 import json
-from datetime import date
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
@@ -8,9 +7,10 @@ from sqlalchemy.orm import Session
 
 from .. import auth
 from ..db import db_session
-from ..models import User
+from ..models import User, UserProfile
 from ..services import meal_queue, transfer
 from ..services import usage as usage_service
+from ..services.clock import user_today
 
 router = APIRouter()
 
@@ -21,11 +21,12 @@ def transfer_export(db: Session = Depends(db_session),
     """'Przygotuj dane do przeniesienia na inne urządzenie' — plik JSON do pobrania."""
     payload = transfer.export_payload(db, user.id)
     usage_service.bump(db, user.id, "transfer_export")
+    today = user_today(db.get(UserProfile, user.id))
     return Response(
         json.dumps(payload, ensure_ascii=False),
         media_type="application/json",
         headers={"Content-Disposition":
-                 f'attachment; filename="fit-krasnal-{date.today().isoformat()}.json"'},
+                 f'attachment; filename="fit-krasnal-{today.isoformat()}.json"'},
     )
 
 

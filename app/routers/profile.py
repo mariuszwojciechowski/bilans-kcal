@@ -1,5 +1,6 @@
 """Profil użytkownika i ręczna synchronizacja Garmin."""
 from datetime import date
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, Form, HTTPException
 from fastapi.responses import RedirectResponse
@@ -11,6 +12,7 @@ from ..db import db_session
 from ..models import User, UserProfile
 from ..providers.garmin import GarminNotLoggedIn, GarminProvider
 from ..services import usage as usage_service
+from ..services.clock import user_today
 from ..services.macros import lifestyle_options
 from ..services.sync import mark_attempt, sync_range
 
@@ -69,6 +71,10 @@ def put_profile(data: ProfileIn, db: Session = Depends(db_session),
                 user: User = Depends(auth.current_user)):
     if data.sex.upper() not in ("M", "F"):
         raise HTTPException(422, "sex musi być 'M' lub 'F'")
+    try:
+        ZoneInfo(data.tz)
+    except ZoneInfoNotFoundError:
+        raise HTTPException(422, f"Nieznana strefa czasowa: {data.tz!r}")
     birth_year = _resolve_birth_year(data)
     birth_date = date(birth_year, 7, 1)
     profile = db.get(UserProfile, user.id)
@@ -117,7 +123,9 @@ def sync(days: int = 7, db: Session = Depends(db_session),
     """Ręczna synchronizacja — bez throttla, synchronicznie, zwraca liczniki."""
     mark_attempt(user.id)
     usage_service.bump(db, user.id, "sync_manual")
+    profile = db.get(UserProfile, user.id)
     try:
-        return sync_range(db, GarminProvider(user.id, db), user.id, days=days)
+        return sync_range(db, GarminProvider(user.id, db), user.id, days=days,
+                          today=user_today(profile))
     except GarminNotLoggedIn as exc:
         raise HTTPException(409, str(exc))

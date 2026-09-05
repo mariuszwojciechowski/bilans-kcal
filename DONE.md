@@ -10,6 +10,55 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Strefa czasowa użytkownika jako granica dnia~~ ✓ zrobione (23.0.0) — WYMAGANIA.md 8.3
+
+`user_profile.tz` było zapisywane i eksportowane, ale nigdzie nieczytane —
+wszystkie granice dnia brały się z `date.today()` procesu (strefa serwera,
+GCP). Tester w innej strefie widział „dzisiaj" serwera, a dzień zamykał mu
+się (`DailySummary.complete`) w środku jego doby.
+
+**Nowy `app/services/clock.py`**: `user_tz`/`user_now`/`user_today`/`user_time`,
+każda przyjmuje `UserProfile | None` (profil może jeszcze nie istnieć).
+Nieznana/pusta strefa → `Europe/Warsaw` (dotychczasowy efektywny default).
+Znaczniki czasu w bazie zostają w UTC (`sync_ts`, `created_at`,
+`last_used_at`) — zmienia się wyłącznie wyliczanie daty/godziny dnia; brak
+migracji istniejących dat.
+
+**Wpięcie:** `app/routers/meals.py` (`_queue_meal`, `estimate_meal_photo`/
+`estimate_meal_text` — domyślny dzień, `save_meal` — domyślna godzina),
+`app/routers/transfer.py` (nazwa pliku eksportu), `app/routers/day.py`
+(`add_manual_activity` — domyślny dzień), `app/services/day.py:day_report`
+(dzień „dziś" dla `day_energy`, profil już ma), `app/routers/trends.py` (oba
+route'y podają `today=user_today(profile)` do `trends.payload`, który już
+przyjmował ten parametr), `app/services/sync.py:sync_range` (nowy parametr
+`today: date | None`, `None` zostawia zegar serwera — do skryptów CLI;
+`maybe_sync` i `POST /api/sync` dociągają profil i podają swój `user_today`),
+`app/routers/dashboard.py` (embeduje `today` do szablonu), `mobile.html`
+(`todayIso()` czyta `SERVER_TODAY` osadzone z backendu zamiast `new Date()` —
+telefon w podróży ma pokazywać ten sam dzień, co liczy backend), nowe pole
+„Strefa czasowa" w karcie Profil (`#page-settings`, prefill z
+`Intl.DateTimeFormat().resolvedOptions().timeZone` gdy profil jeszcze nie ma
+ustawionej strefy). `PUT /api/profile` waliduje `tz` przez `ZoneInfo(...)` →
+422 przy nieznanej strefie zamiast cichego zapisu śmiecia.
+
+Pułapka po drodze w `app/models.py:DailySummary` (dotyczy też kolumn dodanych
+w poprzednim punkcie): kolumna nazywa się `date`, więc w ciele klasy adnotacja
+`Mapped[date | None]` dla kolumny zdefiniowanej *po* niej odnosi się już do
+kolumny `date`, nie do `datetime.date` — SQLAlchemy dostaje wtedy `nullable`
+niewykryty z Optional. Rozwiązanie: forward-ref (`Mapped["date | None"]`) +
+jawny `nullable=True`.
+
+Nota `/prywatnosc`: bez zmian — to wyliczenie granicy dnia z danych już
+zebranych (profil), bez nowej kategorii ani odbiorcy.
+
+Testy `tests/test_timezone.py` (bez freezegun — `clock.datetime` podmieniane
+monkeypatchem na wariant ze stałym `.now(tz)`): profil `Pacific/Auckland`
+23:30 UTC → `user_today` dzień dalej niż UTC; brak profilu → Europe/Warsaw;
+nieznana/pusta strefa → Europe/Warsaw; `POST /api/meals/text` bez daty ląduje
+w dniu użytkownika (HTTP, ten sam mechanizm freeze); `sync_range(today=...)`
+respektuje przekazany dzień niezależnie od zegara maszyny; `PUT /api/profile`
+z nieznaną strefą → 422.
+
 ## ~~Statystyki: obserwowalność poprawki kcal (21.5.0) i kalibracji adaptacyjnej (22.0.0)~~ ✓ zrobione (22.2.0)
 
 Oba wdrożenia z 2026-09-05 weszły bez kroku „Statystyki" — ten punkt go

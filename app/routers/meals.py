@@ -11,10 +11,11 @@ from .. import auth
 from ..config import MAX_PHOTO_BYTES
 from ..db import db_session
 from ..deps import require_llm_consent
-from ..models import Meal, PendingMeal, SavedMeal, User
+from ..models import Meal, PendingMeal, SavedMeal, User, UserProfile
 from ..services import meal_queue, meal_vision
 from ..services import settings as settings_service
 from ..services import usage as usage_service
+from ..services.clock import user_time, user_today
 from ..services.sync import maybe_sync
 
 router = APIRouter()
@@ -23,7 +24,8 @@ router = APIRouter()
 def _queue_meal(db: Session, user_id: int, day: date, reason: str,
                 description: str | None = None, note: str | None = None,
                 photo_bytes: bytes | None = None) -> dict:
-    meal_queue.enqueue(db, user_id, day, datetime.now().time(), description=description,
+    profile = db.get(UserProfile, user_id)
+    meal_queue.enqueue(db, user_id, day, user_time(profile), description=description,
                        note=note, photo_bytes=photo_bytes)
     return {
         "queued": True,
@@ -54,7 +56,7 @@ async def estimate_meal_photo(
     except Exception as exc:
         raise HTTPException(422, f"Nie można odczytać zdjęcia: {exc}")
     ext = "jpg"
-    target_day = day or date.today()
+    target_day = day or user_today(db.get(UserProfile, user.id))
     if not meal_vision.llm_configured(keys.gemini, keys.anthropic):
         return _queue_meal(db, user.id, target_day, "brak klucza LLM",
                            note=note, photo_bytes=data)
@@ -83,7 +85,7 @@ def estimate_meal_text(
     background.add_task(maybe_sync, user.id)
     usage_service.bump(db, user.id, "meal_text")
     keys = settings_service.get_llm_keys(db, user.id)
-    target_day = day or date.today()
+    target_day = day or user_today(db.get(UserProfile, user.id))
     if not meal_vision.llm_configured(keys.gemini, keys.anthropic):
         return _queue_meal(db, user.id, target_day, "brak klucza LLM", description=description)
     try:
@@ -123,7 +125,8 @@ def save_meal(data: MealIn, background: BackgroundTasks,
     meal = Meal(
         user_id=user.id,
         date=data.date,
-        time=datetime.strptime(data.time, "%H:%M").time() if data.time else datetime.now().time(),
+        time=(datetime.strptime(data.time, "%H:%M").time() if data.time
+              else user_time(db.get(UserProfile, user.id))),
         description=data.description,
         photo_path=data.photo_path,
         kcal=round(data.kcal),

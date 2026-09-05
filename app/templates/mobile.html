@@ -359,6 +359,29 @@
     </div>
     <label>Styl życia</label>
     <select id="s-lifestyle"></select>
+    <label>Strefa czasowa</label>
+    <select id="s-tz">
+      <option value="Europe/Warsaw">Europe/Warsaw</option>
+      <option value="Europe/London">Europe/London</option>
+      <option value="Europe/Berlin">Europe/Berlin</option>
+      <option value="Europe/Madrid">Europe/Madrid</option>
+      <option value="Europe/Rome">Europe/Rome</option>
+      <option value="Europe/Paris">Europe/Paris</option>
+      <option value="Europe/Dublin">Europe/Dublin</option>
+      <option value="Europe/Lisbon">Europe/Lisbon</option>
+      <option value="Europe/Athens">Europe/Athens</option>
+      <option value="Europe/Moscow">Europe/Moscow</option>
+      <option value="America/New_York">America/New_York</option>
+      <option value="America/Chicago">America/Chicago</option>
+      <option value="America/Denver">America/Denver</option>
+      <option value="America/Los_Angeles">America/Los_Angeles</option>
+      <option value="Asia/Dubai">Asia/Dubai</option>
+      <option value="Asia/Kolkata">Asia/Kolkata</option>
+      <option value="Asia/Shanghai">Asia/Shanghai</option>
+      <option value="Asia/Tokyo">Asia/Tokyo</option>
+      <option value="Australia/Sydney">Australia/Sydney</option>
+      <option value="UTC">UTC</option>
+    </select>
     <button class="primary" id="s-profile-btn" onclick="saveProfile()">Zapisz profil</button>
   </section>
 
@@ -416,6 +439,10 @@
 /* Cienki klient backendu: żadnego IndexedDB, żadnego bezpośredniego LLM.
    Wszystko przez /api/* pod tą samą sesją co dashboard. */
 const APP_VERSION = "{{ app_version }}";
+// Dzień w strefie czasowej profilu (backend, `clock.user_today`) — NIE zegar
+// przeglądarki, żeby telefon w podróży (inna strefa niż profil) pokazywał
+// ten sam dzień, co liczy backend (granica `DailySummary.complete` itd.).
+const SERVER_TODAY = "{{ today }}";
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js", {scope: "/"}).catch(() => {});
@@ -438,10 +465,7 @@ function downscale(file) {
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const r0 = (v) => Math.round(v || 0);
-const todayIso = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-};
+const todayIso = () => SERVER_TODAY;
 const localTime = () => {
   const d = new Date();
   return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
@@ -1007,6 +1031,20 @@ async function renderSettings() {
       document.getElementById("s-deficit").value = profile.target_deficit_kcal ?? 500;
       sel.value = profile.lifestyle || "active";
       document.getElementById("s-goalweight").value = profile.target_weight_kg || "";
+      document.getElementById("s-tz").value = profile.tz || "Europe/Warsaw";
+    } else {
+      // profil jeszcze nie istnieje — podpowiedz strefę przeglądarki zamiast
+      // zostawiać domyślny Europe/Warsaw (patrz TODO.md „Strefa czasowa…").
+      try {
+        const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const tzSel = document.getElementById("s-tz");
+        if (detected && ![...tzSel.options].some(o => o.value === detected)) {
+          const opt = document.createElement("option");
+          opt.value = detected; opt.textContent = detected;
+          tzSel.appendChild(opt);
+        }
+        if (detected) tzSel.value = detected;
+      } catch(e) { /* Intl niedostępny — zostaje domyślna opcja */ }
     }
     document.getElementById("s-gemini-masked").textContent = settings.gemini_masked || "—";
     document.getElementById("s-llm-status").textContent =
@@ -1077,6 +1115,7 @@ async function saveProfile() {
       target_deficit_kcal: +document.getElementById("s-deficit").value,
       lifestyle: document.getElementById("s-lifestyle").value,
       target_weight_kg: goalStr ? +goalStr : null,
+      tz: document.getElementById("s-tz").value,
     }, "PUT");
     btn.textContent = "Zapisano ✓";
     _settingsLoaded = false; _trendDays = 0;  // odśwież trendy po zapisie profilu

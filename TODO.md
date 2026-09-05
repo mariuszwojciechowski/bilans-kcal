@@ -70,7 +70,7 @@ istnieje, nie dopisuj drugiego planu na to samo**, bo się rozjadą.
 |---|---|---|
 | 6.2 Kalibracja adaptacyjna | ✓ zrobione (22.0.0) — patrz DONE.md „Kalibracja adaptacyjna" | — |
 | 6.4 Karta kalibracji w tygodniówce | ✓ zrobione razem z 6.2 (22.0.0) — karta w `/trends` | — |
-| 8.3 Strefa czasowa jako granica dnia | `user_profile.tz` zapisywane i eksportowane, nieczytane — wszędzie `date.today()` procesu | „Strefa czasowa użytkownika…" (4/10) |
+| 8.3 Strefa czasowa jako granica dnia | ✓ zrobione (23.0.0) — patrz DONE.md „Strefa czasowa użytkownika…" | — |
 | 8.3 Prawo do usunięcia (samoobsługowe) | realizowane mailem; nota `/prywatnosc` mówi o tym wprost, więc nie jest to kłamstwo — tylko brak | „«Usuń moje dane i konto»…" (6/10) |
 | §4 Tabela MET konfigurowalna | MET to stałe w `app/services/energy.py` (43-45, 131-137), w przeciwieństwie do norm WHO wyniesionych do JSON | „Tabela MET jako dane…" (3/10) |
 | §10.2 Cel redukcyjny białka | `protein_cut_g_per_kg` leży w `who_norms.json`, ale nic go nie czyta | „Cel redukcyjny białka…" (2/10) |
@@ -651,64 +651,6 @@ Health Connect).
 Weryfikacja każdej części: pełny pytest zielony → commit + push (bump `X`).
 Deploy i rejestracje klientów OAuth u producentów — właściciel.
 
-## Strefa czasowa użytkownika jako granica dnia — WYMAGANIA.md 8.3 (4/10)
-
-`user_profile.tz` jest zapisywane (`app/routers/profile.py:ProfileIn`) i eksportowane, ale nigdzie
-nie używane: wszystkie granice dnia biorą się z `date.today()` procesu, czyli ze
-strefy serwera (VM w GCP). Tester w innej strefie widzi „dzisiaj" serwera, a dzień
-zamyka mu się (`DailySummary.complete`) w środku jego doby.
-
-**Decyzje (wiążące):** znaczniki czasu w bazie zostają w UTC (`sync_ts`,
-`created_at`, `last_used_at`) — zmienia się WYŁĄCZNIE wyliczanie DATY dnia. Strefa
-pusta lub nieznana → `Europe/Warsaw` (dotychczasowy default). Nie wprowadzamy
-migracji istniejących dat — dane sprzed zmiany zostają, jak są.
-
-**Kroki dla implementującego LLM:**
-
-1. **Nowy `app/services/clock.py`**: `user_tz(profile) -> ZoneInfo` (łap
-   `ZoneInfoNotFoundError` → Europe/Warsaw), `user_now(profile) -> datetime`
-   (aware), `user_today(profile) -> date`, `user_time(profile) -> time`. Każda
-   funkcja przyjmuje `UserProfile | None` — profil może jeszcze nie istnieć
-   (rejestracja przed konfiguracją) i wtedy działa fallback.
-2. **Routery i serwisy — zamień wszystkie zegary procesu** na wersje z profilu:
-   `app/routers/meals.py` (`_queue_meal` — godzina wpisu; `estimate_meal_photo`
-   i `estimate_meal_text` — domyślny dzień szacowania; `save_meal` — godzina),
-   `app/routers/transfer.py` (`transfer_export` — data w nazwie pliku eksportu),
-   `app/routers/day.py` (`add_manual_activity`). Każdy z tych route'ów ma już
-   `user`; profil pobierz przez `db.get(UserProfile, user.id)`.
-   `app/services/day.py:day_report` profil już ma — użyj go zamiast dokładać
-   drugie zapytanie. **Trendy są już gotowe na tę zmianę:**
-   `app/services/trends.py:payload(db, user_id, days, today=None)` przyjmuje
-   dzień parametrem — wystarczy, że oba route'y w `app/routers/trends.py`
-   podadzą `today=user_today(profile)` zamiast zdawać się na domyślne
-   `date.today()`.
-3. **`app/services/sync.py`** — `sync_range(db, provider, user_id, days=7,
-   today: date | None = None)`; `None` zostawia `date.today()` (skrypty CLI),
-   a `app/routers/profile.py:sync()` i `maybe_sync` przekazują
-   `user_today(profile)`. To `today` decyduje o `row.complete = day < today`
-   (linia 46) i o oknie synchronizacji. `maybe_sync` otwiera własną sesję —
-   profil dociąga w niej sam.
-4. **Walidacja w `put_profile`** (`app/routers/profile.py`): `ZoneInfo(data.tz)`
-   w try/except → 422 przy nieznanej strefie, zamiast cichego zapisu śmiecia.
-5. **UI.** `dashboard()` (`app/routers/dashboard.py`) przekazuje do szablonu `today =
-   user_today(profile)`, a `mobile.html` (linie ~409 i ~413, dziś `new Date()`)
-   czyta datę z osadzonej stałej zamiast z zegara przeglądarki — inaczej telefon
-   w podróży pokaże inny dzień niż backend liczy. W zakładce Ustawienia
-   (`#page-settings`, sekcja Profil) dodaj pole „Strefa czasowa": `<select>`
-   z kilkunastoma popularnymi strefami, prefill z
-   `Intl.DateTimeFormat().resolvedOptions().timeZone` gdy profil jeszcze nie ma
-   ustawionej; zapis istniejącym `PUT /api/profile` (pole `tz` już przyjmuje).
-6. **Testy `tests/test_timezone.py`** (bez freezegun — wstrzykuj czas parametrem
-   albo monkeypatchem na `clock.user_now`): profil `Pacific/Auckland` o 23:30 UTC
-   → `user_today` o dzień dalej niż `date.today()`; `POST /api/meals` bez daty
-   ląduje w dniu użytkownika; `sync_range(today=<jutro>)` nie zamyka dnia
-   bieżącego; `PUT /api/profile` z `tz: "Mars/Olympus"` → 422; brak profilu →
-   Europe/Warsaw.
-
-Weryfikacja: pełny pytest zielony → commit + push. Deploy i produkcja — właściciel.
-
-Weryfikacja: pełny pytest zielony → commit + push. Deploy i produkcja — właściciel.
-
 ## „Usuń moje dane i konto" w Ustawieniach (6/10)
 
 Zastępuje i konsoliduje dwa wcześniejsze punkty tej listy („Kasowanie konta
@@ -802,9 +744,8 @@ kodem apki. Istnieje, żeby nie zgubić warunków wejścia.
    w podpisanym ciasteczku (`SessionMiddleware`) — klient mobilny potrzebuje
    tokenu urządzenia (tabela tokenów + nagłówek `Authorization`, unieważnianie
    per urządzenie). To przebudowa `current_user`, nie dopisek.
-2. **Strefa czasowa użytkownika** — telefon jeździ po strefach, a dziś dzień
-   liczy się ze strefy serwera. Bez tego apka pokaże inny dzień, niż backend
-   policzy. Patrz punkt „Strefa czasowa użytkownika…".
+2. **Strefa czasowa użytkownika** — ✓ zrobione (23.0.0), patrz DONE.md
+   „Strefa czasowa użytkownika…" (`app/services/clock.py`).
 3. **Kasowanie konta i danych z poziomu aplikacji** — wymóg regulaminowy
    Google Play (ścieżka usunięcia konta w apce **i** przez stronę). Patrz
    punkt „«Usuń moje dane i konto»…".
