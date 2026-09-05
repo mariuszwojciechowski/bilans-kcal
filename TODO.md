@@ -22,6 +22,19 @@ w tym samym zadaniu i odnotuj to wprost we wpisie w [DONE.md](DONE.md)
 („nota `/prywatnosc` zaktualizowana — co się zmieniło"). Nota ma zostać
 zgodna ze stanem kodu, nie z pamięcią z dnia jej napisania.
 
+**Zasada dla implementującego LLM (kierunek błędu w bilansie — decyzja
+właściciela 2026-09-05):** bilans na ekranie „Dziś" ma być **lekko
+konserwatywny**: przy niepewności pokazuj raczej **mniej** pozostałych kcal
+do zjedzenia, nigdy więcej. Lekko zaniżony wydatek (mniejszy budżet) motywuje
+do zakończenia jedzenia; zawyżony wydatek („zostało jeszcze 850 kcal") działa
+odwrotnie. Dopuszczalna skala tego przesunięcia: **rząd 3-5% wydatku
+(~100-150 kcal), nie więcej** — błąd 1300 kcal z 2026-09-05 to nie
+„konserwatyzm", tylko awaria. Przesunięcie ma być **jawne i w jednym miejscu**
+(zaokrąglenie budżetu w dół, asymetryczny clamp kalibracji — patrz punkty
+„Poprawa wyliczania kcal na dzień w toku" i „Kalibracja adaptacyjna"), a nie
+ukryte w stałych MET czy wzorze BMR, bo ukrytego przesunięcia nie da się potem
+skalibrować.
+
 **Zasada dla implementującego LLM (uruchamianie testów):** pełną suitę
 testów (`pytest` bez filtra na konkretny plik) puszczaj dopiero po zgodzie
 właściciela — nie automatycznie po skończeniu implementacji. Testy nowego/
@@ -249,6 +262,17 @@ problemem, którego nie ma, a otwiera drogę modelowi, który chybia o 1300 kcal
   {garmin, mixed}: spoczynek (`kcal_bmr_garmin`), aktywności netto, kroki poza
   aktywnościami (= `kcal_active_garmin` − suma netto aktywności, floor 0),
   ręczne, bez TEF. Gdy `model`: stare rozbicie BMR + NEAT + aktywności + TEF.
+- **Kierunek błędu: konserwatywnie, w małej skali** (zasada z nagłówka TODO).
+  W praktyce dla tego planu: (a) dzień w toku **nie** dostaje prognozy
+  przyszłego NEAT ani „reszty dnia" — wydatek rośnie dopiero, gdy Garmin
+  dośle dane; (b) `remaining_kcal` w `day_report` zaokrąglaj **w dół do
+  pełnych 50 kcal** (jedyne miejsce z celowym przesunięciem — komentarz w
+  kodzie ma odsyłać do tej zasady); (c) fallbacki modelu (MET netto, walking
+  3.5) mają być realistyczne, nie „na zapas" — model ma trafiać, przesuwa
+  tylko punkt (b); (d) nowy test w `tests/test_activities_api.py`
+  (odtworzenie objawu, krok 7) ma dodatkowo asertować, że **model
+  teoretyczny** dla tego samego dnia (`tdee_model.total`) mieści się w
+  **±15%** pomiaru Garmina — to strażnik przed powrotem awarii rzędu 1300 kcal.
 
 ### Instrukcja dla implementującego LLM — co czytać (budżet tokenów)
 
@@ -344,7 +368,9 @@ zmiana noty **nie** jest potrzebna, odnotuj to w DONE.md), `WYMAGANIA.md`,
    bez zmian). `test_activities_api.py`: dopisz test odtwarzający objaw —
    dzień w toku, marsz 4,5 h `kcal_garmin=839`, `kcal_bmr_garmin=341`,
    `steps=11704`, summary 2889/1087/1802/16038 → `kcal_out == 2889`,
-   `out_breakdown.activities_kcal == 498 + 417`, `steps_kcal == 172`.
+   `out_breakdown.activities_kcal == 498 + 417`, `steps_kcal == 172`,
+   `tdee_model.total` w ±15% od 2889, `remaining_kcal` podzielne przez 50
+   i nie większe od surowej różnicy.
    Uruchamiaj tylko te cztery pliki; pełną suitę po zgodzie właściciela
    (zasada z nagłówka TODO).
 8. **Wersja i porządki.** `VERSION` 21.4.0 → **21.5.0** (zmiana zachowania
@@ -373,8 +399,22 @@ na danych użytkownika jak MacroFactor). Kroki dla implementującego LLM:
      wagi 7d (`energy.smoothed_weight` na oknie kończącym się na końcu i na
      początku okresu). Współczynnik korekty wydatku:
      `factor = (suma_kcal_in − actual_delta_kg·7700) / suma_kcal_out`,
-     przycięty do [0.85, 1.15]. Zwróć `None`, gdy < 10 dni ważnych albo brak
-     pomiarów wagi na obu końcach okresu.
+     przycięty **asymetrycznie do [0.85, 1.05]** (zasada „bilans konserwatywny"
+     z nagłówka TODO — decyzja właściciela 2026-09-05, zastępuje wcześniejsze
+     symetryczne [0.85, 1.15]): korekta **w dół** (realnie spalasz mniej →
+     mniejszy budżet) wchodzi w pełni, korekta **w górę** (waga spada szybciej
+     niż bilans obiecuje → większy budżet) tylko do +5%, bo większy budżet
+     to zachęta do jedzenia, a błąd wagi w 14 dni (woda, glikogen) sięga
+     0,5-1 kg = ±250-500 kcal/dzień pozornej różnicy. Nowy współczynnik
+     **wygładzaj z poprzednim**: `factor = 0.5·poprzedni + 0.5·nowy` (pierwszy
+     wpis bez wygładzania) — jeden dziwny tydzień nie ma skakać celem
+     o 15%. Zwróć `None`, gdy < 10 dni ważnych albo brak pomiarów wagi
+     na obu końcach okresu. **Warunek wstępny:** licz kalibrację wyłącznie
+     z dni po wdrożeniu punktu „Poprawa wyliczania kcal na dzień w toku" —
+     dni domknięte używają surowego `kcal_total_garmin`, więc historyczne
+     `complete == True` są OK, ale sprawdź w DONE.md datę wdrożenia i wyklucz
+     dni sprzed niej, jeśli w bazie są ręczne aktywności (te były liczone
+     brutto MET).
    - `current_factor(db, user_id) -> float` — `factor` z najnowszego wpisu
      `Calibration` albo `1.0`.
    - `maybe_recalibrate(db, user_id)` — liczy i zapisuje nowy wpis, jeśli
@@ -387,7 +427,10 @@ na danych użytkownika jak MacroFactor). Kroki dla implementującego LLM:
    `e_target = bal.kcal_out * factor − profile.target_deficit_kcal`
    (dziś: bez factora). Do odpowiedzi dodaj pola `calibration_factor`
    i `calibration_updated` (data ostatniego wpisu) — UI ma pokazywać
-   "zapotrzebowanie skorygowane o ±X% względem pomiaru". Uwaga: kształt tej
+   "zapotrzebowanie skorygowane o ±X% względem pomiaru". Zaokrąglenie
+   `remaining_kcal` w dół do 50 (z planu „Poprawa wyliczania kcal…") stosuj
+   **po** pomnożeniu przez factor — dwa jawne przesunięcia, oba w tym samym
+   miejscu, oba widoczne w kodzie obok siebie. Nie dodawaj trzeciego. Uwaga: kształt tej
    odpowiedzi pilnuje `tests/test_day_trends_services.py` — dopisanie pól jest
    OK, ale test porównuje wyjście serwisu z wyjściem `/api/day`, więc oba
    muszą dostać je razem.
@@ -404,7 +447,9 @@ na danych użytkownika jak MacroFactor). Kroki dla implementującego LLM:
 6. **Testy.** `tests/test_calibration.py`: syntetyczne 14 dni (posiłki +
    `DailySummary` complete + `WeightLog`) o znanym bilansie; przypadki:
    zgodność wag → factor ≈ 1.0, waga spada wolniej niż bilans obiecuje →
-   factor < 1.0, za mało dni → `None`, clamp na 0.85/1.15. Wszystko musi
+   factor < 1.0, za mało dni → `None`, clamp asymetryczny 0.85/1.05
+   (waga spadająca dwa razy szybciej niż bilans → factor dokładnie 1.05,
+   nie więcej), wygładzanie z poprzednim wpisem (drugi wpis = średnia). Wszystko musi
    być zielone — czerwony pytest blokuje deploy.
 
 ## Integracja z innymi źródłami spalanych kcal (fundament 6/10 + osobno per producent)
