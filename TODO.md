@@ -41,6 +41,15 @@ właściciela — nie automatycznie po skończeniu implementacji. Testy nowego/
 zmienianego pliku (np. `pytest tests/test_usage.py`) można odpalać na
 bieżąco w trakcie pracy.
 
+**Zasada dla implementującego LLM (częste commity):** commituj często —
+za każdym razem, gdy uznasz, że właśnie zaimplementowana zmiana jest istotna,
+zasługuje na osobny bump w `VERSION`, albo ułatwi odwrót (`git revert`/
+`git reset`), gdyby trzeba było ją wycofać. Nie czekaj do końca całego zadania
+z jednym wielkim commitem — małe, opisowe commity po drodze są tańsze do
+wycofania niż jeden duży. **Nie pushuj** (`git push` robi właściciel ręcznie)
+i **nie puszczaj pełnej suity testowej** przy samym commitowaniu — to osobna
+zgoda, patrz zasada wyżej.
+
 ---
 
 ## Mapa braków względem WYMAGANIA.md (audyt 2026-09-03)
