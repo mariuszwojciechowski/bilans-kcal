@@ -360,7 +360,8 @@
     <div class="row2">
       <span style="flex:1">
         <label>Docelowy bilans dnia [kcal]</label>
-        <input type="number" id="s-balance" step="50" min="-1500" max="1000" oninput="renderBalanceCaption()">
+        <input type="number" id="s-balance" step="50" min="-1500" max="1000"
+               oninput="renderBalanceCaption()" onchange="saveProfile()">
       </span>
       <span style="flex:1">
         <label>Cel wagi [kg]</label>
@@ -373,7 +374,7 @@
     <p class="muted" id="s-balance-caption" style="margin:2px 0 0"></p>
     <p class="muted" id="s-balance-protein-note" style="margin:2px 0 0;font-size:12px"></p>
     <label>Styl życia</label>
-    <select id="s-lifestyle"></select>
+    <select id="s-lifestyle" onchange="saveProfile()"></select>
     <label>Strefa czasowa</label>
     <select id="s-tz">
       <option value="Europe/Warsaw">Europe/Warsaw</option>
@@ -397,6 +398,7 @@
       <option value="Australia/Sydney">Australia/Sydney</option>
       <option value="UTC">UTC</option>
     </select>
+    <p class="muted" id="s-profile-msg" style="margin:4px 0 6px"></p>
     <button class="primary" id="s-profile-btn" onclick="saveProfile()">Zapisz profil</button>
   </section>
 
@@ -490,6 +492,7 @@ const KRASNAL_STATUS = {
   estimating: "Krasnal przygląda się talerzowi…",
   queue: "Krasnal stoi w kolejce…",
   nodata: "Krasnal nie ma danych — uzupełnij profil i wagę w Ustawieniach.",
+  profileSaved: "Krasnal zapisał profil",
 };
 
 function krasnalSays(el, text) {
@@ -521,6 +524,12 @@ function flushPendingWeight() {
   const el = document.getElementById("t-newweight");
   const v = el && +el.value;
   if (v > 0) saveWeighIn();
+}
+// Autozapis profilu przy zmianie zakładki (cel wagi, bilans, styl życia mają
+// też onchange="saveProfile()" — to tu domyka przypadek zmiany zakładki bez
+// osobnego zdarzenia blur na polu, patrz notatka właściciela).
+function flushPendingProfile() {
+  if (document.querySelector("main").dataset.view === "settings") saveProfile();
 }
 
 async function api(path, opts = {}) {
@@ -583,6 +592,7 @@ const VIEW_LABELS = {today: "Dziś", add: "Dodaj", activities: "Aktywności", tr
 
 function show(page) {
   flushPendingWeight();
+  flushPendingProfile();
   if (page === "today" || page === "add") refreshMealWhen();
   document.querySelectorAll(".page").forEach(p => p.classList.remove("visible"));
   document.getElementById("page-" + page).classList.add("visible");
@@ -1192,7 +1202,9 @@ function renderBalanceProteinNote(v) {
 
 async function saveProfile() {
   const btn = document.getElementById("s-profile-btn");
+  const msg = document.getElementById("s-profile-msg");
   btn.disabled = true; btn.textContent = "Zapisuję…";
+  if (msg) msg.innerHTML = "";
   try {
     const goalStr = document.getElementById("s-goalweight").value;
     await apiJson("/api/profile", {
@@ -1206,12 +1218,13 @@ async function saveProfile() {
       tz: document.getElementById("s-tz").value,
     }, "PUT");
     btn.textContent = "Zapisano ✓";
+    if (msg) krasnalSays(msg, KRASNAL_STATUS.profileSaved);
     _settingsLoaded = false; _trendDays = 0;  // odśwież trendy po zapisie profilu
   } catch(e) {
     btn.textContent = "Błąd — spróbuj ponownie";
   }
   btn.disabled = false;
-  setTimeout(() => btn.textContent = "Zapisz profil", 2500);
+  setTimeout(() => { btn.textContent = "Zapisz profil"; if (msg) msg.innerHTML = ""; }, 2500);
 }
 
 async function saveLlmKey() {
