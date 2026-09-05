@@ -10,6 +10,50 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Statystyki: obserwowalność poprawki kcal (21.5.0) i kalibracji adaptacyjnej (22.0.0)~~ ✓ zrobione (22.2.0)
+
+Oba wdrożenia z 2026-09-05 weszły bez kroku „Statystyki" — ten punkt go
+nadrabia, na przełączniku `scope` z punktu wyżej (wszystkie nowe agregaty
+honorują `allowed_ids`/`allowed_refs`, żadnych własnych filtrów).
+
+**Trzy nowe zdarzenia telemetrii** w `usage.EVENTS`: `calibration_step`
+(`app/services/calibration.py:catch_up`, bump per ważny dzień filtru, **po**
+commicie stanu, nie w pętli), `calibration_reset` (`_guard_against_batch_divergence`
+przy resecie strażnika), `calibration_error` (`run_catch_up`, w `except`, po
+`db.rollback()`).
+
+**Kolumny `DailySummary.model_total_kcal`/`model_checked_on`** (migracja
+addytywna, bez backfillu) — `day.day_report()` zapisuje migawkę modelu
+teoretycznego (`e.tdee.total`) raz na domknięty dzień, przy pierwszym wejściu
+na ten dzień (`model_checked_on != day`). Pułapka po drodze: w `DailySummary`
+kolumna nazywa się `date`, a nowa kolumna miała adnotację `Mapped[date | None]`
+— w ciele klasy `date` odnosi się już do wcześniej zdefiniowanej kolumny
+(przesłonięcie nazwy w namespace klasy), nie do `datetime.date`, co dawało
+`NOT NULL` zamiast nullable. Naprawione forward-refem (`Mapped["date | None"]`)
++ jawnym `nullable=True` — pilnować tego wzorca przy każdej kolejnej kolumnie
+typu `date`/`Optional` w tym modelu.
+
+**Trzy nowe sekcje na `/usage`** (`app/services/usage.py:_stats_model_vs_measurement`/
+`_stats_calibration`/`_stats_conservative_balance`, ostatnie 30 dni, jedno
+zapytanie per tabela, bez `day_energy` w pętli): „Wydatek: model vs pomiar"
+(% aktywności z `kcal_bmr_garmin`/`steps`, rozkład `model_total_kcal ÷
+kcal_total_garmin` z % poza ±15%, % domkniętych dni z posiłkiem bez Garmina),
+„Kalibracja" (adopcja filtru, rozkład `factor` i liczba na clampie z importowanych
+stałych `CLAMP_LOW`/`CLAMP_HIGH`, współczynnik uczenia, wykres tygodniowy mediany
+`|innov_kg|`, sumy `calibration_reset`/`calibration_error` w 7/30 dni — czerwono
+gdy >0), „Bilans konserwatywny" (% domkniętych dni z posiłkiem, gdzie `kcal_in
+> e_target`, `e_target` odtworzone z bieżącego `CalibrationState.factor`).
+Wyłącznie agregaty — żadna nowa tabela per pseudonim z danymi zdrowotnymi.
+
+Nota `/prywatnosc`: bez zmian — nowe sekcje to wyłącznie agregaty z danych już
+zbieranych (Garmin, posiłki, kalibracja), bez nowej kategorii ani odbiorcy.
+
+Testy: `tests/test_usage.py` (nowe sekcje renderują się, e-mail admina nadal
+nigdzie w HTML, rozkład `model_ratio`/liczba na clampie liczone poprawnie),
+`tests/test_calibration.py` (`calibration_step` bumpuje raz per ważny dzień,
+`calibration_reset` bumpuje przy resecie strażnika), `tests/test_day_trends_services.py`
+(`model_total_kcal` zapisuje się tylko dla dnia domkniętego i tylko raz).
+
 ## ~~Zakres statystyk `/usage`: testerzy / wszyscy / tylko ja~~ ✓ zrobione (22.1.0)
 
 Problem: konto admina było wycięte ze wszystkich agregatów `/usage`, mimo że

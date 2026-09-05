@@ -41,6 +41,13 @@ właściciela — nie automatycznie po skończeniu implementacji. Testy nowego/
 zmienianego pliku (np. `pytest tests/test_usage.py`) można odpalać na
 bieżąco w trakcie pracy.
 
+**Zasada dla każdego przyszłego planu (decyzja właściciela 2026-09-05):** plan
+implementacji, jeśli to ma sens, zawiera krok „Statystyki" — co zliczać i jak
+pokazać na `/usage`, żeby po wdrożeniu było widać **adopcję** funkcji i jej
+**funkcjonowanie**. Wprowadzone po tym, że dwa wdrożenia z 2026-09-05 (poprawka
+kcal 21.5.0, kalibracja adaptacyjna 22.0.0) weszły bez tego kroku — nadrobione
+w DONE.md „Statystyki: obserwowalność poprawki kcal i kalibracji adaptacyjnej".
+
 **Zasada dla implementującego LLM (częste commity):** commituj często —
 za każdym razem, gdy uznasz, że właśnie zaimplementowana zmiana jest istotna,
 zasługuje na osobny bump w `VERSION`, albo ułatwi odwrót (`git revert`/
@@ -79,132 +86,6 @@ w tym miejscu nieaktualne — patrz [CLAUDE.md](CLAUDE.md)), ręczny wpis wagi
 i kroków w widoku mobilnym (odstępstwo od D3), wycofana paczka PWA (M10).
 
 ---
-
-## Statystyki: obserwowalność poprawki kcal (21.5.0) i kalibracji adaptacyjnej (22.0.0) (3/10)
-
-**Zasada dla każdego przyszłego planu (decyzja właściciela 2026-09-05):** plan
-implementacji, jeśli to ma sens, zawiera krok „Statystyki" — co zliczać i jak
-pokazać na `/usage`, żeby po wdrożeniu było widać **adopcję** funkcji i jej
-**funkcjonowanie**. Oba wdrożenia z 2026-09-05 weszły bez tego kroku — ten
-punkt go nadrabia.
-
-### Co chcemy wiedzieć (pytania, nie metryki)
-
-1. Czy założenia o API Garmina, **niezweryfikowane na żywych danych** (DONE.md,
-   krok 0 poprawki), trzymają: czy `Activity.kcal_bmr_garmin` i `Activity.steps`
-   w ogóle się wypełniają, czy zawsze idzie fallback z dobowego BMR.
-2. Czy model teoretyczny po poprawce trafia w pomiar (strażnik ±15% z testu
-   działa na jednym syntetycznym dniu — a na żywych użytkownikach?).
-3. Czy kalibracja się **uczy**: ilu użytkowników ma ważne dni, ile dni z posiłkami
-   przepada przez brak ważenia, jak szybko `days_used` rośnie.
-4. Czy kalibracja jest **zdrowa**: rozkład `factor`, ilu siedzi na clampie
-   (0.85 / 1.05 = model albo dane są złe), ile resetów strażnika, ile błędów
-   `catch_up`.
-5. Czy „bilans konserwatywny" działa produktowo: jak często domknięty dzień
-   kończy się nad celem (`kcal_in > e_target`) — to jedyna liczba, która mówi,
-   czy mniejszy budżet cokolwiek zmienia w zachowaniu.
-
-### Zasady (nie negocjuj z nimi w implementacji)
-
-- **Wyłącznie agregaty** na `/usage`: rozkłady (min / mediana / p90 / max),
-  liczności, wykresy tygodniowe. **Żadnej tabeli per pseudonim z `factor`,
-  wagą czy bilansem** — to dane zdrowotne pochodne; istniejąca tabela „ostatnia
-  aktywność per pseudonim" pokazuje tylko daty i to ma zostać jedynym widokiem
-  per użytkownik. Zakres (testerzy / wszyscy / ja) bierze się z przełącznika
-  `scope` opisanego w punkcie „Zakres statystyk `/usage`" wyżej — wszystkie
-  nowe agregaty **muszą** honorować `allowed_ids`/`allowed_refs` z tamtego
-  punktu, żadnych własnych filtrów na `ADMIN_EMAIL`. Szczegóły per dzień
-  (tabela „Moje dni") tylko przy `scope == "me"`; dla wszystkich pozostałych
-  zakresów wyłącznie agregaty.
-- Dane realne z tabel domenowych (`Activity`, `DailySummary`, `CalibrationState`,
-  `CalibrationLog`, `Meal`), **nie** z telemetrii `UsageDaily` — wzorzec lejka
-  w `dashboard_stats` (komentarz „Lejek liczony z realnych danych"). Telemetria
-  dostaje tylko trzy nowe zdarzenia (niżej), bo to zdarzenia, nie stan.
-- Nota `/prywatnosc` (linie ~81-84 i ~141 o statystykach): **bez zmian**, jeśli
-  trzymasz się agregatów — statystyki nadal są „czy funkcje działają", bez
-  treści i bez nowych odbiorców. Odnotuj to zdanie w DONE.md. Jeśli złamiesz
-  zasadę agregatów, nota musi się zmienić — więc jej nie łam.
-- Koszt: `dashboard_stats` liczy wszystko przy każdym wejściu admina. Nowe
-  agregaty ograniczaj do **ostatnich 30 dni** i do jednego zapytania per
-  tabela (grupowanie w Pythonie jak dziś), bez `day_energy` per dzień per
-  użytkownik w pętli — patrz punkt 2 niżej, jak to obejść.
-
-### Instrukcja dla implementującego LLM — co czytać
-
-| Plik | Zakres | Po co |
-|---|---|---|
-| `app/services/usage.py` | 26-48 (`EVENTS`), 101-234 (`dashboard_stats`) | dopisujesz zdarzenia i agregaty; wzorzec lejka i wykresów |
-| `app/templates/usage.html` | 58-120 | sekcje KPI / lejek / tabela / wykres — kopiuj markup, nie wymyślaj |
-| `app/models.py` | `Activity` (81-97), `DailySummary`, `CalibrationState`/`CalibrationLog`/`Calibration` (190-236) | nazwy kolumn do zapytań |
-| `app/services/calibration.py` | 29-40 (stałe), 302-313 (strażnik), 315-329 (`run_catch_up`) | progi clampów do agregatu „na clampie"; miejsce na `bump` błędu i resetu |
-| `app/services/day.py` | ~55-70 (fallback spoczynku aktywności), ~200-235 (`out_breakdown`, `e_target`) | skąd brać „nad celem" i czy model trafia |
-| `app/routers/dashboard.py` | całość (~25 linii) | tam wchodzi `bump` po `catch_up`? — **nie**: `bump` idzie do `calibration.py`, router nie zmienia się |
-| `tests/test_usage.py` | 100-116 | wzorzec testu strony admina bez wycieku e-maila — rozszerz o nowe pola |
-
-**Nie czytaj:** `routers/usage.py` (tylko woła `dashboard_stats` — nowe klucze
-słownika same trafią do szablonu), `charts.py` (użyj `bar_chart` jak w
-`dashboard_stats:192`, sygnatura widoczna w wywołaniu), `trends.py`,
-`energy.py`, `balance.py`, `WYMAGANIA.md`.
-
-### Kroki
-
-1. **Trzy zdarzenia telemetrii** w `EVENTS`: `calibration_step` (bump w
-   `catch_up` per ważny dzień, z `day=d` — `bump` przyjmuje `day`),
-   `calibration_reset` (w `_guard_against_batch_divergence` przy resecie),
-   `calibration_error` (w `except` w `run_catch_up`). Uwaga: `bump` otwiera
-   własny commit na przekazanej sesji — w `catch_up` wołaj go **po**
-   `db.commit()` stanu, nie w środku pętli (jeden bump per dzień to i tak
-   ≤ 30 zapytań przy pierwszym catch-upie; przy kolejnych 0-1).
-2. **Sekcja „Wydatek: model vs pomiar" na `/usage`** (pytania 1-2):
-   - Z `Activity` (30 dni, `source == "garmin"`): liczba aktywności, **%
-     z `kcal_bmr_garmin`**, **% z `steps`**. Jeśli oba ~0% po tygodniu —
-     założenie z kroku 0 nie trzyma, fallback działa na stałe; wpis do TODO.
-   - Rozjazd modelu: **nie** licz `day_energy` w `dashboard_stats`. Zamiast
-     tego w `day_report` (już liczy oba) dopisz do `DailySummary` dwie kolumny
-     `model_total_kcal: int | None` i `model_checked_on: date | None`,
-     zapisywane **tylko gdy `summary.complete`** i `model_checked_on != day`
-     (jedna aktualizacja per domknięty dzień, przy pierwszym wejściu na
-     ten dzień). Migracja addytywna wg wzorca `db.py:114-117`, bez
-     backfillu. `/usage` pokazuje rozkład `model_total_kcal / kcal_total_garmin`
-     z 30 dni: mediana, p10, p90, **% dni poza ±15%**. To jest strażnik
-     z testu przeniesiony na produkcję.
-   - Udział źródeł: % domkniętych dni z posiłkami, gdzie `kcal_total_garmin
-     is None` (użytkownik bez zegarka / zerwana sesja Garmina → model).
-3. **Sekcja „Kalibracja" na `/usage`** (pytania 3-4):
-   - KPI: użytkownicy z `CalibrationState` (adopcja = wszedł na dashboard po
-     wdrożeniu), z `days_used ≥ 1`, z `days_used ≥ 10` („po rozruchu"),
-     z `factor != PRIOR_FACTOR`.
-   - Rozkład `factor`: min / mediana / max; **liczba na clampie** (`<= CLAMP_LOW
-     + 0.001` albo `>= CLAMP_HIGH − 0.001` — importuj stałe z `calibration.py`,
-     nie wpisuj liczb).
-   - **Współczynnik uczenia:** dni z posiłkami i domkniętym Garminem w 30 dniach
-     vs dni, które weszły do filtru (`CalibrationLog` count) — różnica to dni
-     przepadłe przez brak wagi. Jeśli < 50% wchodzi, przypomnienie o ważeniu
-     jest kolejnym punktem TODO (produktowa decyzja, nie tu).
-   - Wykres tygodniowy (`bar_chart`): mediana `|innov_kg|` z `CalibrationLog`
-     — szum wagi w populacji; rosnący = ktoś waży się nieregularnie / inny
-     zegar.
-   - Z telemetrii: suma `calibration_reset` i `calibration_error` w 7 i 30 dni.
-     **Reset > 0 lub błąd > 0 pokazuj czerwono** — to sygnały do reakcji,
-     nie statystyka adopcji.
-4. **Sekcja „Bilans konserwatywny"** (pytanie 5): z `DailySummary` +
-   `Meal` za 30 dni, dla domkniętych dni z ≥1 posiłkiem: **% dni z
-   `kcal_in > e_target`**. `e_target` trzeba odtworzyć: `kcal_total_garmin ×
-   factor − target_deficit_kcal` — factor bieżący (`CalibrationState`), nie
-   historyczny; to przybliżenie, napisz to w podpisie liczby. Plus mediana
-   `kcal_in − e_target`. Jedna linia KPI, bez wykresu.
-5. **Testy** `tests/test_usage.py`: (a) strona admina renderuje nowe sekcje
-   i nadal nie zawiera e-maila (rozszerz istniejący test 106-116);
-   (b) `calibration_step` bumpuje się raz per ważny dzień (syntetyczny
-   `catch_up` na 3 dniach → 3 wpisy `UsageDaily`); (c) `calibration_reset`
-   bumpuje się przy resecie strażnika; (d) rozkład factor liczy clampy z
-   stałych; (e) `model_total_kcal` zapisuje się tylko dla `complete` i tylko
-   raz. Uruchamiaj `tests/test_usage.py` i `tests/test_calibration.py`;
-   pełna suita po zgodzie.
-6. **Wersja:** 22.0.0 → **22.1.0** (nowe sekcje w istniejącej stronie `/usage`
-   + kolumny = Y). Commit lokalny, bez pusha (zasada z nagłówka). DONE.md:
-   wpis + zdanie o nocie prywatności (bez zmian, agregaty) + **wynik pytania 1**
-   po pierwszym tygodniu produkcji dopisuje właściciel.
 
 ## Skrypt na serwerze do resetu hasła (1/10)
 

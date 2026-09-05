@@ -76,6 +76,15 @@ class DailySummary(Base):
     steps: Mapped[int | None] = mapped_column(Integer)
     sync_ts: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     complete: Mapped[bool] = mapped_column(default=False)
+    # Migawka modelu teoretycznego dla dnia domkniętego — zapisywana raz przez
+    # day.day_report (patrz TODO.md „Statystyki: obserwowalność…"), do
+    # porównania z kcal_total_garmin na /usage. Bez backfillu dla dni sprzed
+    # wdrożenia tej kolumny.
+    model_total_kcal: Mapped[int | None] = mapped_column(Integer)
+    # `date` w tym punkcie odnosi się już do kolumny `date` wyżej (nazwa
+    # przesłonięta w przestrzeni nazw klasy), nie do `datetime.date` —
+    # `nullable=True` jawnie, żeby nie polegać na wykryciu Optional z adnotacji.
+    model_checked_on: Mapped["date | None"] = mapped_column(Date, nullable=True)
 
 
 class Activity(Base):

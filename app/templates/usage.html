@@ -41,6 +41,7 @@
   .funnel div { display: flex; justify-content: space-between; padding: 4px 0; }
   code { font-size: 12px; }
   a.nav.active { color: #fff; text-decoration: underline; }
+  .warn { color: var(--danger); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -105,6 +106,55 @@ bez e-maili, treści posiłków, zdjęć, wag ani kalorii.
   </div>
   <p class="muted" style="margin-top:8px">Liczby bezwzględne — przy garstce testerów procenty
   byłyby mylące.</p>
+</section>
+
+<section class="card">
+  <h2>Wydatek: model vs pomiar (30 dni)</h2>
+  <div class="kpis">
+    <div class="kpi"><b>{{ model_vs_measurement.activities_30d }}</b><span class="muted">aktywności zegarkowych</span></div>
+    <div class="kpi"><b>{{ model_vs_measurement.pct_with_bmr if model_vs_measurement.pct_with_bmr is not none else "—" }}%</b><span class="muted">z BMR aktywności</span></div>
+    <div class="kpi"><b>{{ model_vs_measurement.pct_with_steps if model_vs_measurement.pct_with_steps is not none else "—" }}%</b><span class="muted">z krokami</span></div>
+  </div>
+  <p class="muted" style="margin-top:10px">Rozjazd model / pomiar (model_total_kcal ÷ kcal_total_garmin,
+    {{ model_vs_measurement.model_ratio.n }} dni domkniętych z obiema wartościami):
+    mediana <b>{{ model_vs_measurement.model_ratio.median if model_vs_measurement.model_ratio.median is not none else "—" }}</b>,
+    p10 <b>{{ model_vs_measurement.model_ratio.p10 if model_vs_measurement.model_ratio.p10 is not none else "—" }}</b>,
+    p90 <b>{{ model_vs_measurement.model_ratio.p90 if model_vs_measurement.model_ratio.p90 is not none else "—" }}</b>,
+    poza ±15%: <b>{{ model_vs_measurement.model_ratio.outside_15pct if model_vs_measurement.model_ratio.outside_15pct is not none else "—" }}%</b>.</p>
+  <p class="muted">Domkniętych dni z posiłkiem: {{ model_vs_measurement.source_share.closed_with_meal }},
+    z nich bez danych Garmina (bilans z modelu):
+    <b>{{ model_vs_measurement.source_share.without_garmin_pct if model_vs_measurement.source_share.without_garmin_pct is not none else "—" }}%</b>.</p>
+</section>
+
+<section class="card">
+  <h2>Kalibracja</h2>
+  <div class="kpis">
+    <div class="kpi"><b>{{ calibration_stats.adoption.with_state }}</b><span class="muted">użytkowników z kalibracją</span></div>
+    <div class="kpi"><b>{{ calibration_stats.adoption.days_used_1 }}</b><span class="muted">≥1 dzień</span></div>
+    <div class="kpi"><b>{{ calibration_stats.adoption.days_used_10 }}</b><span class="muted">≥10 dni (po rozruchu)</span></div>
+    <div class="kpi"><b>{{ calibration_stats.adoption.factor_changed }}</b><span class="muted">factor już zmieniony</span></div>
+  </div>
+  <p class="muted" style="margin-top:10px">Rozkład factor: min <b>{{ calibration_stats.factor_dist.min if calibration_stats.factor_dist.min is not none else "—" }}</b>,
+    mediana <b>{{ calibration_stats.factor_dist.median if calibration_stats.factor_dist.median is not none else "—" }}</b>,
+    max <b>{{ calibration_stats.factor_dist.max if calibration_stats.factor_dist.max is not none else "—" }}</b>;
+    na clampie: <b>{{ calibration_stats.factor_dist.on_clamp }}</b>.</p>
+  <p class="muted">Współczynnik uczenia (30 dni): dni kwalifikujących się (posiłek + domknięty Garmin)
+    <b>{{ calibration_stats.learning.eligible_days }}</b>, weszło do filtru
+    <b>{{ calibration_stats.learning.entered_days }}</b>
+    (<b>{{ calibration_stats.learning.pct_entered if calibration_stats.learning.pct_entered is not none else "—" }}%</b>).</p>
+  <p class="{{ 'warn' if calibration_stats.reset_7 > 0 or calibration_stats.error_7 > 0 else 'muted' }}">
+    Resety strażnika: {{ calibration_stats.reset_7 }} (7 dni) / {{ calibration_stats.reset_30 }} (30 dni).
+    Błędy catch_up: {{ calibration_stats.error_7 }} (7 dni) / {{ calibration_stats.error_30 }} (30 dni).</p>
+  <p class="muted" style="margin-top:6px">Szum wagi w populacji — mediana tygodniowa |innov_kg|:</p>
+  {{ calibration_stats.chart_innov | safe }}
+</section>
+
+<section class="card">
+  <h2>Bilans konserwatywny (30 dni)</h2>
+  <p class="muted">Dni domknięte z posiłkiem i danymi Garmina: {{ conservative_balance.n_days }}.
+    Kończą się nad celem (kcal_in &gt; e_target, factor bieżący — przybliżenie):
+    <b>{{ conservative_balance.over_target_pct if conservative_balance.over_target_pct is not none else "—" }}%</b>.
+    Mediana (kcal_in − e_target): <b>{{ conservative_balance.median_diff if conservative_balance.median_diff is not none else "—" }}</b> kcal.</p>
 </section>
 
 <section class="card">

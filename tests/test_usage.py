@@ -1,6 +1,6 @@
 """Statystyki użycia (TODO.md „Statystyki użycia — adopcja i najczęściej
 klikane opcje"). Wzorzec `client` jak w test_consent.py."""
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app import auth
 from app.db import Base, db_session
-from app.models import UsageDaily, User
+from app.models import CalibrationState, DailySummary, UsageDaily, User
 from app.services import usage
 
 INVITE = "test-invite-code"
@@ -157,6 +157,49 @@ def test_usage_scope_invalid_is_422(client):
     _register(client, email=ADMIN_EMAIL)
     r = client.get("/usage?scope=xyz")
     assert r.status_code == 422
+
+
+def test_usage_page_renders_observability_sections(client, monkeypatch):
+    monkeypatch.setattr("app.services.usage.ADMIN_EMAIL", ADMIN_EMAIL)
+    _register(client, email=ADMIN_EMAIL)
+
+    r = client.get("/usage?scope=all")
+    assert r.status_code == 200
+    assert "Wydatek: model vs pomiar" in r.text
+    assert "Kalibracja" in r.text
+    assert "Bilans konserwatywny" in r.text
+
+
+def test_dashboard_stats_model_ratio_and_clamp_counts_use_constants(tmp_path, monkeypatch):
+    """Rozjazd modelu (>±15%) i policzenie na clampie muszą iść z tych samych
+    danych/stałych co reszta kodu (`CLAMP_LOW`/`CLAMP_HIGH` z calibration.py),
+    nie z przepisanych na nowo liczb."""
+    from app.services.calibration import CLAMP_HIGH
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'usage_stats.db'}")
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine)
+    db = SessionLocal()
+    db.add(User(id=1, email="alice@example.com"))
+    db.commit()
+
+    today = date.today()
+    d0 = today - timedelta(days=1)
+    d1 = today - timedelta(days=2)
+    # d0: rozjazd modelu > 15% (model 3000 vs garmin 2000 -> ratio 1.5)
+    db.add(DailySummary(user_id=1, date=d0, kcal_total_garmin=2000, model_total_kcal=3000,
+                        model_checked_on=d0, complete=True))
+    # d1: w granicach (model 2100 vs garmin 2000 -> ratio 1.05)
+    db.add(DailySummary(user_id=1, date=d1, kcal_total_garmin=2000, model_total_kcal=2100,
+                        model_checked_on=d1, complete=True))
+    db.add(CalibrationState(user_id=1, factor=CLAMP_HIGH, days_used=15))
+    db.commit()
+
+    stats = usage.dashboard_stats(db, scope="all")
+    assert stats["model_vs_measurement"]["model_ratio"]["n"] == 2
+    assert stats["model_vs_measurement"]["model_ratio"]["outside_15pct"] == 50.0
+    assert stats["calibration_stats"]["factor_dist"]["on_clamp"] == 1
+    db.close()
 
 
 def test_meal_text_bumps_meal_text_counter(client, monkeypatch):

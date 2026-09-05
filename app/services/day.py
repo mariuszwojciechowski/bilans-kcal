@@ -230,6 +230,11 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
             "tef": round(e.tdee.tef),
             "total": round(e.kcal_out),
         }
+    if summary and summary.complete and summary.model_checked_on != day:
+        summary.model_total_kcal = round(e.tdee.total)
+        summary.model_checked_on = day
+        db.commit()
+
     calibration_factor = calibration.current_factor(db, user_id)
     calibration_state = calibration.state_view(db, user_id)
     e_target = e.kcal_out * calibration_factor - profile.target_deficit_kcal

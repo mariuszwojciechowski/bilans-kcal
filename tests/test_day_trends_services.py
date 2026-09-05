@@ -136,6 +136,43 @@ def test_api_day_returns_exactly_what_service_computes(client):
         assert api[key] == report[key], key
 
 
+def test_day_report_saves_model_total_kcal_once_for_closed_day(client):
+    """TODO.md „Statystyki: obserwowalność…" — `model_total_kcal`/`model_checked_on`
+    zapisują się tylko gdy dzień jest domknięty, i tylko raz (kolejne wejścia
+    na ten sam dzień nie nadpisują)."""
+    _seed(client)
+    closed_day = TODAY - timedelta(days=1)
+
+    db = client.session_factory()
+    day_service.day_report(db, 1, closed_day)
+    summary = db.scalar(
+        select(DailySummary).where(DailySummary.user_id == 1, DailySummary.date == closed_day))
+    assert summary.model_total_kcal is not None
+    assert summary.model_checked_on == closed_day
+    summary.model_total_kcal = -1  # sentinel — drugie wejście nie ma prawa go zmienić
+    db.commit()
+    db.close()
+
+    db = client.session_factory()
+    day_service.day_report(db, 1, closed_day)
+    summary2 = db.scalar(
+        select(DailySummary).where(DailySummary.user_id == 1, DailySummary.date == closed_day))
+    assert summary2.model_total_kcal == -1
+    db.close()
+
+
+def test_day_report_does_not_save_model_total_kcal_for_open_day(client):
+    _seed(client)  # dzień TODAY (i=0) ma complete=False
+
+    db = client.session_factory()
+    day_service.day_report(db, 1, TODAY)
+    summary = db.scalar(
+        select(DailySummary).where(DailySummary.user_id == 1, DailySummary.date == TODAY))
+    assert summary.model_total_kcal is None
+    assert summary.model_checked_on is None
+    db.close()
+
+
 def test_missing_profile_and_weight_give_409_not_500(client):
     """Serwis zgłasza DayReportUnavailable, router zamienia to na 409."""
     assert client.get(f"/api/day/{TODAY.isoformat()}").status_code == 409   # brak profilu

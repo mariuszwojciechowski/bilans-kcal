@@ -122,6 +122,14 @@ def _migrate(engine) -> None:
             conn.execute(text("ALTER TABLE activity ADD COLUMN steps INTEGER"))
             conn.commit()
 
+        summary_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(daily_summary)"))]
+        if summary_cols and "model_total_kcal" not in summary_cols:
+            conn.execute(text("ALTER TABLE daily_summary ADD COLUMN model_total_kcal INTEGER"))
+            conn.commit()
+        if summary_cols and "model_checked_on" not in summary_cols:
+            conn.execute(text("ALTER TABLE daily_summary ADD COLUMN model_checked_on DATE"))
+            conn.commit()
+
 
 def get_session() -> Session:
     get_engine()

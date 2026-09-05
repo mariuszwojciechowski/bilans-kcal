@@ -16,7 +16,10 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from ..config import ADMIN_EMAIL, DEBUG, SECRET_KEY, USAGE_SALT
-from ..models import Activity, AppSetting, DailySummary, Meal, User, UsageDaily, UserProfile
+from ..models import (
+    Activity, AppSetting, CalibrationLog, CalibrationState, DailySummary, Meal, User, UsageDaily,
+    UserProfile,
+)
 from ..providers.garmin import GARMIN_TOKENS_KEY
 
 logger = logging.getLogger(__name__)
@@ -43,6 +46,7 @@ EVENTS: set[str] = {
     "day_view",
     "tab_today", "tab_add", "tab_activities", "tab_trends", "tab_settings",
     "manual_open", "saved_meals_open", "photo_pick",
+    "calibration_step", "calibration_reset", "calibration_error",
 }
 
 MEAL_SAVE_EVENTS = {"meal_save_photo", "meal_save_text", "meal_save_manual", "meal_save_saved"}
@@ -240,6 +244,10 @@ def dashboard_stats(db: Session, weeks: int = 12, scope: str = "others") -> dict
 
     my_days = _my_days(db, admin.id) if scope == "me" and admin else []
 
+    model_vs_measurement = _stats_model_vs_measurement(db, allowed_ids, today)
+    calibration_stats = _stats_calibration(db, allowed_ids, allowed_refs, today, weeks, chart_start)
+    conservative_balance = _stats_conservative_balance(db, allowed_ids, today)
+
     return {
         "scope": scope,
         "total_accounts": total_accounts,
@@ -254,14 +262,223 @@ def dashboard_stats(db: Session, weeks: int = 12, scope: str = "others") -> dict
         "chart_meals_per_day": chart_meals_per_day,
         "last_activity": last_activity,
         "my_days": my_days,
+        "model_vs_measurement": model_vs_measurement,
+        "calibration_stats": calibration_stats,
+        "conservative_balance": conservative_balance,
+    }
+
+
+def _percentile(sorted_values: list[float], pct: float) -> float:
+    """Percentyl metodą najbliższej rangi — wystarcza przy garstce testerów,
+    nie potrzeba interpolacji."""
+    if not sorted_values:
+        return 0.0
+    idx = min(len(sorted_values) - 1, max(0, round(pct / 100 * (len(sorted_values) - 1))))
+    return sorted_values[idx]
+
+
+def _event_sum(db: Session, allowed_refs: set[str], event: str, since: date, today: date) -> int:
+    return db.scalar(
+        select(func.sum(UsageDaily.count)).where(
+            UsageDaily.event == event, UsageDaily.date >= since, UsageDaily.date <= today,
+            UsageDaily.user_ref.in_(allowed_refs),
+        )
+    ) or 0
+
+
+def _stats_model_vs_measurement(db: Session, allowed_ids: set[int], today: date) -> dict:
+    """Pytania 1-2 z TODO.md: czy `Activity.kcal_bmr_garmin`/`steps` w ogóle
+    się wypełniają, i czy model teoretyczny trafia w pomiar Garmina. Ostatnie
+    30 dni, jedno zapytanie per tabela."""
+    since = today - timedelta(days=30)
+
+    activities = db.execute(
+        select(Activity.kcal_bmr_garmin, Activity.steps)
+        .where(Activity.user_id.in_(allowed_ids), Activity.source == "garmin",
+               Activity.date >= since)
+    ).all()
+    n_activities = len(activities)
+    pct_with_bmr = (
+        round(100 * sum(1 for kb, _ in activities if kb is not None) / n_activities, 1)
+        if n_activities else None
+    )
+    pct_with_steps = (
+        round(100 * sum(1 for _, st in activities if st is not None) / n_activities, 1)
+        if n_activities else None
+    )
+
+    summaries = db.execute(
+        select(DailySummary.user_id, DailySummary.date, DailySummary.kcal_total_garmin,
+               DailySummary.model_total_kcal, DailySummary.complete)
+        .where(DailySummary.user_id.in_(allowed_ids), DailySummary.date >= since)
+    ).all()
+    ratios = sorted(
+        m / g for _, _, g, m, _ in summaries if g is not None and g > 0 and m is not None
+    )
+    model_ratio = {
+        "n": len(ratios),
+        "median": round(_percentile(ratios, 50), 3) if ratios else None,
+        "p10": round(_percentile(ratios, 10), 3) if ratios else None,
+        "p90": round(_percentile(ratios, 90), 3) if ratios else None,
+        "outside_15pct": (
+            round(100 * sum(1 for r in ratios if abs(r - 1) > 0.15) / len(ratios), 1)
+            if ratios else None
+        ),
+    }
+
+    meal_days = set(
+        db.execute(
+            select(Meal.user_id, Meal.date)
+            .where(Meal.user_id.in_(allowed_ids), Meal.date >= since)
+        ).all()
+    )
+    closed_with_meal = [
+        (uid, g) for uid, d, g, _, complete in summaries if complete and (uid, d) in meal_days
+    ]
+    without_garmin = sum(1 for _, g in closed_with_meal if g is None)
+    source_share = {
+        "closed_with_meal": len(closed_with_meal),
+        "without_garmin_pct": (
+            round(100 * without_garmin / len(closed_with_meal), 1) if closed_with_meal else None
+        ),
+    }
+
+    return {
+        "activities_30d": n_activities, "pct_with_bmr": pct_with_bmr,
+        "pct_with_steps": pct_with_steps, "model_ratio": model_ratio,
+        "source_share": source_share,
+    }
+
+
+def _stats_calibration(db: Session, allowed_ids: set[int], allowed_refs: set[str], today: date,
+                       weeks: int, chart_start: date) -> dict:
+    """Pytania 3-4 z TODO.md: czy kalibracja się uczy i czy jest zdrowa."""
+    from .calibration import CLAMP_HIGH, CLAMP_LOW, PRIOR_FACTOR
+    from .charts import bar_chart
+
+    states = db.scalars(
+        select(CalibrationState).where(CalibrationState.user_id.in_(allowed_ids))
+    ).all()
+    factors = [s.factor for s in states]
+    factor_dist = {
+        "min": round(min(factors), 4) if factors else None,
+        "median": round(statistics.median(factors), 4) if factors else None,
+        "max": round(max(factors), 4) if factors else None,
+        "on_clamp": sum(1 for f in factors if f <= CLAMP_LOW + 0.001 or f >= CLAMP_HIGH - 0.001),
+    }
+    adoption = {
+        "with_state": len(states),
+        "days_used_1": sum(1 for s in states if s.days_used >= 1),
+        "days_used_10": sum(1 for s in states if s.days_used >= 10),
+        "factor_changed": sum(1 for s in states if s.factor != PRIOR_FACTOR),
+    }
+
+    since_30 = today - timedelta(days=30)
+    valid_days = set(
+        db.execute(
+            select(DailySummary.user_id, DailySummary.date)
+            .where(DailySummary.user_id.in_(allowed_ids), DailySummary.date >= since_30,
+                   DailySummary.complete.is_(True), DailySummary.kcal_total_garmin.is_not(None))
+        ).all()
+    )
+    meal_days = set(
+        db.execute(
+            select(Meal.user_id, Meal.date)
+            .where(Meal.user_id.in_(allowed_ids), Meal.date >= since_30)
+        ).all()
+    )
+    eligible_days = valid_days & meal_days
+    entered_days = set(
+        db.execute(
+            select(CalibrationLog.user_id, CalibrationLog.day)
+            .where(CalibrationLog.user_id.in_(allowed_ids), CalibrationLog.day >= since_30)
+        ).all()
+    )
+    learning = {
+        "eligible_days": len(eligible_days),
+        "entered_days": len(entered_days & eligible_days) if eligible_days else 0,
+        "pct_entered": (
+            round(100 * len(entered_days & eligible_days) / len(eligible_days), 1)
+            if eligible_days else None
+        ),
+    }
+
+    logs = db.execute(
+        select(CalibrationLog.day, CalibrationLog.innov_kg)
+        .where(CalibrationLog.user_id.in_(allowed_ids), CalibrationLog.day >= chart_start)
+    ).all()
+    week_start = today - timedelta(days=today.weekday())
+    innov_points = []
+    for i in range(weeks - 1, -1, -1):
+        w0 = week_start - timedelta(weeks=i)
+        w1 = w0 + timedelta(days=6)
+        week_vals = [abs(innov) for d, innov in logs if w0 <= d <= w1]
+        innov_points.append((w0, round(statistics.median(week_vals), 3) if week_vals else 0.0))
+    chart_innov = bar_chart(innov_points, chart_start, today,
+                            color_pos="#3A7A5C", color_neg="#3A7A5C")
+
+    return {
+        "adoption": adoption,
+        "factor_dist": factor_dist,
+        "learning": learning,
+        "chart_innov": chart_innov,
+        "reset_7": _event_sum(db, allowed_refs, "calibration_reset", today - timedelta(days=6), today),
+        "reset_30": _event_sum(db, allowed_refs, "calibration_reset", today - timedelta(days=29), today),
+        "error_7": _event_sum(db, allowed_refs, "calibration_error", today - timedelta(days=6), today),
+        "error_30": _event_sum(db, allowed_refs, "calibration_error", today - timedelta(days=29), today),
+    }
+
+
+def _stats_conservative_balance(db: Session, allowed_ids: set[int], today: date) -> dict:
+    """Pytanie 5 z TODO.md: czy bilans „konserwatywny" produktowo działa —
+    jak często domknięty dzień z posiłkami kończy się nad celem."""
+    from .calibration import PRIOR_FACTOR
+
+    since = today - timedelta(days=30)
+    summaries = db.execute(
+        select(DailySummary.user_id, DailySummary.date, DailySummary.kcal_total_garmin)
+        .where(DailySummary.user_id.in_(allowed_ids), DailySummary.date >= since,
+               DailySummary.complete.is_(True))
+    ).all()
+
+    meal_kcal_by_day: dict[tuple[int, date], float] = {}
+    for uid, d, kcal in db.execute(
+        select(Meal.user_id, Meal.date, Meal.kcal)
+        .where(Meal.user_id.in_(allowed_ids), Meal.date >= since)
+    ).all():
+        meal_kcal_by_day[(uid, d)] = meal_kcal_by_day.get((uid, d), 0) + kcal
+
+    deficits = {
+        p.user_id: p.target_deficit_kcal
+        for p in db.scalars(select(UserProfile).where(UserProfile.user_id.in_(allowed_ids))).all()
+    }
+    factors = {
+        s.user_id: s.factor
+        for s in db.scalars(select(CalibrationState).where(CalibrationState.user_id.in_(allowed_ids))).all()
+    }
+
+    diffs = []
+    for uid, d, kcal_total_garmin in summaries:
+        kcal_in = meal_kcal_by_day.get((uid, d))
+        deficit = deficits.get(uid)
+        if kcal_in is None or kcal_total_garmin is None or deficit is None:
+            continue
+        factor = factors.get(uid, PRIOR_FACTOR)
+        e_target = kcal_total_garmin * factor - deficit
+        diffs.append(kcal_in - e_target)
+
+    over_target = sum(1 for x in diffs if x > 0)
+    return {
+        "n_days": len(diffs),
+        "over_target_pct": round(100 * over_target / len(diffs), 1) if diffs else None,
+        "median_diff": round(statistics.median(diffs)) if diffs else None,
     }
 
 
 def _my_days(db: Session, admin_id: int, limit: int = 14) -> list[dict]:
     """Sekcja „Moje dni: model vs pomiar" (tylko `scope == 'me'`) — dane
     właściciela samemu właścicielowi, per dzień; dla innych zakresów ta
-    funkcja nigdy nie jest wołana. `model_total_kcal` czeka na kolumnę
-    z TODO.md „Statystyki: obserwowalność…" — do tego czasu zawsze `None`."""
+    funkcja nigdy nie jest wołana."""
     summaries = db.scalars(
         select(DailySummary).where(DailySummary.user_id == admin_id)
         .order_by(DailySummary.date.desc()).limit(limit)
@@ -280,15 +497,13 @@ def _my_days(db: Session, admin_id: int, limit: int = 14) -> list[dict]:
         entry["count"] += 1
         if kcal_bmr is not None:
             entry["with_bmr"] += 1
-    # TODO(TODO.md „Statystyki: obserwowalność…"): kolumna DailySummary.model_total_kcal
-    # jeszcze nie istnieje — dopóki nie powstanie, ta kolumna tabeli to zawsze „—".
     return [
         {
             "date": s.date,
             "kcal_total_garmin": s.kcal_total_garmin,
             "kcal_active_garmin": s.kcal_active_garmin,
             "kcal_bmr_garmin": s.kcal_bmr_garmin,
-            "model_total_kcal": getattr(s, "model_total_kcal", None),
+            "model_total_kcal": s.model_total_kcal,
             "activities": acts_by_day.get(s.date, {}).get("count", 0),
             "activities_with_bmr": acts_by_day.get(s.date, {}).get("with_bmr", 0),
         }

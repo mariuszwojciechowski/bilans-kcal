@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from app.db import Base
-from app.models import CalibrationLog, CalibrationState, DailySummary, Meal, User
+from app.models import CalibrationLog, CalibrationState, DailySummary, Meal, User, UsageDaily
 from app.models import WeightLog
 from app.services import calibration
 
@@ -185,3 +185,44 @@ def test_guard_resets_filter_to_batch_on_divergence(tmp_path, monkeypatch):
     factor = calibration.current_factor(db, 1)
     assert abs(factor - batch.factor) < 1e-6
     assert factor < 1.0          # rozjechał się w dół, nie zostaje na 1.05
+
+
+def test_calibration_step_bumps_once_per_valid_day(tmp_path, monkeypatch):
+    """TODO.md „Statystyki: obserwowalność…" — telemetria `calibration_step`
+    bumpuje się raz per ważny dzień przetworzony przez `catch_up`."""
+    db = _make_db(tmp_path, "calib_telemetry_step")
+    n_days = 3
+    _seed_history(db, calibration.CALIBRATION_EPOCH, n_days)
+    _freeze_today(monkeypatch, calibration.CALIBRATION_EPOCH + timedelta(days=n_days + 1))
+
+    calibration.catch_up(db, 1)
+
+    rows = db.scalars(
+        select(UsageDaily).where(UsageDaily.event == "calibration_step")
+    ).all()
+    # Pierwszy dzień historii tylko inicjuje trend wagi (brak log_entry) —
+    # kroków filtru jest o jeden mniej niż dni historii.
+    assert len(rows) == n_days - 1
+    assert all(r.count == 1 for r in rows)
+
+
+def test_calibration_reset_bumps_on_guard_divergence(tmp_path, monkeypatch):
+    """Reset strażnika (filtr rozjechany z wsadem) bumpuje `calibration_reset`."""
+    db = _make_db(tmp_path, "calib_telemetry_reset")
+    n_days = 14
+    history_start = calibration.CALIBRATION_EPOCH
+    _seed_history(db, history_start, n_days)
+    yesterday = history_start + timedelta(days=n_days)
+    _freeze_today(monkeypatch, yesterday + timedelta(days=1))
+
+    db.add(CalibrationState(user_id=1, factor=1.05, trend_kg=START_WEIGHT, days_used=20,
+                            updated_on=yesterday - timedelta(days=1)))
+    db.commit()
+
+    calibration.catch_up(db, 1)
+
+    rows = db.scalars(
+        select(UsageDaily).where(UsageDaily.event == "calibration_reset")
+    ).all()
+    assert len(rows) == 1
+    assert rows[0].count == 1

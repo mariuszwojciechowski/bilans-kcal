@@ -247,6 +247,7 @@ def catch_up(db: Session, user_id: int) -> CalibrationState:
         last_valid_day=row.last_valid_day, updated_on=row.updated_on,
     )
 
+    stepped_days: list[date] = []
     d = start_day
     while d <= end_day:
         if state.last_valid_day is not None and (d - state.last_valid_day).days > GAP_RESET_DAYS:
@@ -263,6 +264,7 @@ def catch_up(db: Session, user_id: int) -> CalibrationState:
                 innov, gain, factor_after = result.log_entry
                 db.add(CalibrationLog(user_id=user_id, day=d, innov_kg=round(innov, 4),
                                       gain=round(gain, 4), factor_after=round(factor_after, 4)))
+                stepped_days.append(d)
         else:
             state.updated_on = d
         d += timedelta(days=1)
@@ -273,6 +275,13 @@ def catch_up(db: Session, user_id: int) -> CalibrationState:
     row.last_valid_day = state.last_valid_day
     row.updated_on = state.updated_on
     db.commit()
+
+    # Telemetria dopiero po commicie stanu (patrz TODO.md „Statystyki:
+    # obserwowalność…") — `bump` otwiera własny commit na tej samej sesji.
+    from . import usage
+
+    for stepped_day in stepped_days:
+        usage.bump(db, user_id, "calibration_step", day=stepped_day)
 
     _guard_against_batch_divergence(db, user_id, row)
     db.commit()
@@ -311,6 +320,10 @@ def _guard_against_batch_divergence(db: Session, user_id: int, row: CalibrationS
                               factor_after=batch.factor))
         row.factor = batch.factor
 
+        from . import usage
+
+        usage.bump(db, user_id, "calibration_reset")
+
 
 def run_catch_up(user_id: int) -> None:
     """Wariant z własną sesją DB — do `background.add_task` przy wejściu na
@@ -325,6 +338,11 @@ def run_catch_up(user_id: int) -> None:
         catch_up(db, user_id)
     except Exception:
         logger.exception("Kalibracja: catch_up nieudany dla user_id=%s", user_id)
+        db.rollback()
+
+        from . import usage
+
+        usage.bump(db, user_id, "calibration_error")
     finally:
         db.close()
 
