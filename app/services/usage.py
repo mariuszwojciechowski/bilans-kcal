@@ -16,7 +16,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from ..config import ADMIN_EMAIL, DEBUG, SECRET_KEY, USAGE_SALT
-from ..models import AppSetting, Meal, User, UsageDaily, UserProfile
+from ..models import Activity, AppSetting, DailySummary, Meal, User, UsageDaily, UserProfile
 from ..providers.garmin import GARMIN_TOKENS_KEY
 
 logger = logging.getLogger(__name__)
@@ -98,11 +98,29 @@ def purge_old(db: Session, keep_days: int = 180) -> int:
     return result.rowcount or 0
 
 
-def dashboard_stats(db: Session, weeks: int = 12) -> dict:
+def _allowed_ids_and_refs(db: Session, scope: str, admin: User | None) -> tuple[set[int], set[str]]:
+    """Buduje jeden zbiór `user_id` i jeden zbiór pseudonimów dozwolonych w
+    danym zakresie — jedyne miejsce, które zna semantykę `others`/`all`/`me`;
+    wszystkie filtry niżej mają iść przez te dwa zbiory, nie przez osobne
+    porównania z `ADMIN_EMAIL`."""
+    if scope == "me":
+        allowed_ids = {admin.id} if admin else set()
+    else:
+        all_ids = set(db.scalars(select(User.id)).all())
+        if scope == "all":
+            allowed_ids = all_ids
+        else:  # "others" (domyślny)
+            allowed_ids = all_ids - ({admin.id} if admin else set())
+    allowed_refs = {user_ref(uid) for uid in allowed_ids}
+    return allowed_ids, allowed_refs
+
+
+def dashboard_stats(db: Session, weeks: int = 12, scope: str = "others") -> dict:
     """Agregaty dla widoku /usage. Operuje wyłącznie na pseudonimach — konta
     (User) są dotykane tylko po to, żeby policzyć ich pseudonim i sprawdzić,
     czy dane zdarzenie dla niego wystąpiło (lejek wejścia); e-mail nigdy nie
-    trafia do wyniku."""
+    trafia do wyniku. `scope` wybiera, kto wchodzi do agregatów — patrz
+    TODO.md „Zakres statystyk /usage"."""
     from .charts import bar_chart
 
     today = date.today()
@@ -111,12 +129,13 @@ def dashboard_stats(db: Session, weeks: int = 12) -> dict:
 
     admin = db.scalar(select(User).where(User.email == ADMIN_EMAIL))
     admin_ref = user_ref(admin.id) if admin else None
+    allowed_ids, allowed_refs = _allowed_ids_and_refs(db, scope, admin)
 
     rows = [
         r for r in db.execute(
             select(UsageDaily.user_ref, UsageDaily.date, UsageDaily.event, UsageDaily.count)
         ).all()
-        if r[0] != admin_ref
+        if r[0] in allowed_refs
     ]
 
     by_ref: dict[str, list[tuple[date, str, int]]] = {}
@@ -135,33 +154,32 @@ def dashboard_stats(db: Session, weeks: int = 12) -> dict:
     ]
     adopted_7d = sum(1 for n in meal_days_per_user if n >= 7)
 
-    total_accounts = (db.scalar(select(func.count(User.id))) or 0) - (1 if admin else 0)
+    total_accounts = len(allowed_ids)
 
     # Lejek liczony z realnych danych (profil/klucz LLM/Garmin/posiłki), nie z
     # telemetrii — telemetria działa tylko od dnia wdrożenia i zaniżałaby
     # konta założone wcześniej.
-    other_users = select(User.id).where(User.email != ADMIN_EMAIL).subquery()
     with_profile = db.scalar(
         select(func.count()).select_from(UserProfile)
-        .where(UserProfile.user_id.in_(select(other_users.c.id)))
+        .where(UserProfile.user_id.in_(allowed_ids))
     ) or 0
     with_llm_key = db.scalar(
         select(func.count(func.distinct(AppSetting.user_id)))
         .where(AppSetting.key.in_(("gemini_api_key", "anthropic_api_key")),
-               AppSetting.user_id.in_(select(other_users.c.id)))
+               AppSetting.user_id.in_(allowed_ids))
     ) or 0
     with_garmin = db.scalar(
         select(func.count(func.distinct(AppSetting.user_id)))
         .where(AppSetting.key == GARMIN_TOKENS_KEY,
-               AppSetting.user_id.in_(select(other_users.c.id)))
+               AppSetting.user_id.in_(allowed_ids))
     ) or 0
     with_meal = db.scalar(
         select(func.count(func.distinct(Meal.user_id)))
-        .where(Meal.user_id.in_(select(other_users.c.id)))
+        .where(Meal.user_id.in_(allowed_ids))
     ) or 0
     meal_span = db.execute(
         select(Meal.user_id, func.min(Meal.date), func.max(Meal.date))
-        .where(Meal.user_id.in_(select(other_users.c.id)))
+        .where(Meal.user_id.in_(allowed_ids))
         .group_by(Meal.user_id)
     ).all()
     returned_week2 = sum(1 for _, d0, d1 in meal_span if (d1 - d0).days >= 7)
@@ -199,7 +217,7 @@ def dashboard_stats(db: Session, weeks: int = 12) -> dict:
     meal_counts = db.execute(
         select(Meal.date, func.count(Meal.id))
         .where(Meal.date >= meals_since,
-               Meal.user_id.in_(select(other_users.c.id)))
+               Meal.user_id.in_(allowed_ids))
         .group_by(Meal.date)
     ).all()
     meal_by_day = dict(meal_counts)
@@ -213,13 +231,17 @@ def dashboard_stats(db: Session, weeks: int = 12) -> dict:
     last_activity = sorted(
         (
             {"ref": ref, "last_date": max(d for d, _, _ in items),
-             "days": len({d for d, _, _ in items})}
+             "days": len({d for d, _, _ in items}),
+             "is_admin": scope == "all" and ref == admin_ref}
             for ref, items in by_ref.items()
         ),
         key=lambda x: x["last_date"], reverse=True,
     )
 
+    my_days = _my_days(db, admin.id) if scope == "me" and admin else []
+
     return {
+        "scope": scope,
         "total_accounts": total_accounts,
         "active_7": active_7,
         "active_30": active_30,
@@ -231,4 +253,44 @@ def dashboard_stats(db: Session, weeks: int = 12) -> dict:
         "chart_weekly_events": chart_weekly_events,
         "chart_meals_per_day": chart_meals_per_day,
         "last_activity": last_activity,
+        "my_days": my_days,
     }
+
+
+def _my_days(db: Session, admin_id: int, limit: int = 14) -> list[dict]:
+    """Sekcja „Moje dni: model vs pomiar" (tylko `scope == 'me'`) — dane
+    właściciela samemu właścicielowi, per dzień; dla innych zakresów ta
+    funkcja nigdy nie jest wołana. `model_total_kcal` czeka na kolumnę
+    z TODO.md „Statystyki: obserwowalność…" — do tego czasu zawsze `None`."""
+    summaries = db.scalars(
+        select(DailySummary).where(DailySummary.user_id == admin_id)
+        .order_by(DailySummary.date.desc()).limit(limit)
+    ).all()
+    if not summaries:
+        return []
+    dates = [s.date for s in summaries]
+    activities = db.execute(
+        select(Activity.date, Activity.kcal_bmr_garmin)
+        .where(Activity.user_id == admin_id, Activity.source == "garmin",
+               Activity.date.in_(dates))
+    ).all()
+    acts_by_day: dict = {}
+    for d, kcal_bmr in activities:
+        entry = acts_by_day.setdefault(d, {"count": 0, "with_bmr": 0})
+        entry["count"] += 1
+        if kcal_bmr is not None:
+            entry["with_bmr"] += 1
+    # TODO(TODO.md „Statystyki: obserwowalność…"): kolumna DailySummary.model_total_kcal
+    # jeszcze nie istnieje — dopóki nie powstanie, ta kolumna tabeli to zawsze „—".
+    return [
+        {
+            "date": s.date,
+            "kcal_total_garmin": s.kcal_total_garmin,
+            "kcal_active_garmin": s.kcal_active_garmin,
+            "kcal_bmr_garmin": s.kcal_bmr_garmin,
+            "model_total_kcal": getattr(s, "model_total_kcal", None),
+            "activities": acts_by_day.get(s.date, {}).get("count", 0),
+            "activities_with_bmr": acts_by_day.get(s.date, {}).get("with_bmr", 0),
+        }
+        for s in summaries
+    ]

@@ -1,4 +1,6 @@
 """Statystyki użycia i rozliczalność RODO (tylko admin)."""
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
@@ -16,9 +18,9 @@ router = APIRouter()
 
 
 @router.get("/usage", response_class=HTMLResponse)
-def usage_page(request: Request, db: Session = Depends(db_session),
-              user: User = Depends(require_admin)):
-    stats = usage_service.dashboard_stats(db)
+def usage_page(request: Request, scope: Literal["others", "all", "me"] = "others",
+              db: Session = Depends(db_session), user: User = Depends(require_admin)):
+    stats = usage_service.dashboard_stats(db, scope=scope)
     return templates.TemplateResponse(
         request,
         "usage.html",

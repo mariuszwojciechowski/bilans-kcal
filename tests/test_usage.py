@@ -103,15 +103,60 @@ def test_usage_page_for_non_admin_is_404(client):
     assert r.status_code == 404
 
 
-def test_usage_page_for_admin_ok_without_email_leak(client):
-    _register(client, email=ADMIN_EMAIL)
+def test_usage_page_for_admin_ok_without_email_leak(client, monkeypatch):
+    monkeypatch.setattr("app.services.usage.ADMIN_EMAIL", ADMIN_EMAIL)
+    _register(client, email="alice@example.com")
+    r = client.post("/api/usage", json={"event": "tab_today"})
+    assert r.status_code == 204
+    _register(client, email=ADMIN_EMAIL)  # ostatnia rejestracja = bieżąca sesja
     r = client.post("/api/usage", json={"event": "tab_today"})  # generuje trochę danych
     assert r.status_code == 204
 
     r = client.get("/usage")
     assert r.status_code == 200
     assert ADMIN_EMAIL not in r.text
-    assert usage.user_ref(1) in r.text  # pierwsze zarejestrowane konto ma id 1
+    # domyślny scope="others" — pseudonim admina nie wchodzi, alice tak
+    assert usage.user_ref(2) not in r.text
+    assert usage.user_ref(1) in r.text
+
+
+def test_usage_scope_switch_others_all_me(client, monkeypatch):
+    monkeypatch.setattr("app.services.usage.ADMIN_EMAIL", ADMIN_EMAIL)
+    _register(client, email="alice@example.com")
+    r = client.post("/api/usage", json={"event": "tab_today"})
+    assert r.status_code == 204
+    _register(client, email=ADMIN_EMAIL)
+    r = client.post("/api/usage", json={"event": "tab_today"})
+    assert r.status_code == 204
+
+    admin_ref = usage.user_ref(2)
+    alice_ref = usage.user_ref(1)
+
+    r = client.get("/usage?scope=others")
+    assert r.status_code == 200
+    assert admin_ref not in r.text
+    assert alice_ref in r.text
+    assert "Moje dni" not in r.text
+
+    r = client.get("/usage?scope=all")
+    assert r.status_code == 200
+    assert admin_ref in r.text
+    assert alice_ref in r.text
+    assert "(ja)" in r.text
+    assert "Moje dni" not in r.text
+
+    r = client.get("/usage?scope=me")
+    assert r.status_code == 200
+    assert admin_ref in r.text
+    assert alice_ref not in r.text
+    assert "Moje dni" in r.text
+    assert ADMIN_EMAIL not in r.text
+
+
+def test_usage_scope_invalid_is_422(client):
+    _register(client, email=ADMIN_EMAIL)
+    r = client.get("/usage?scope=xyz")
+    assert r.status_code == 422
 
 
 def test_meal_text_bumps_meal_text_counter(client, monkeypatch):

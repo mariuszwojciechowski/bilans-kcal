@@ -40,19 +40,47 @@
   th { color: var(--stone); font-weight: 500; font-size: 12px; text-transform: uppercase; }
   .funnel div { display: flex; justify-content: space-between; padding: 4px 0; }
   code { font-size: 12px; }
+  a.nav.active { color: #fff; text-decoration: underline; }
 </style>
 </head>
 <body>
 <header><a class="brand" href="/" title="Dziś">{% if has_logo %}<img class="logo" src="/static/logo-bw.png" alt="">{% endif %}<h1>Statystyki użycia</h1></a>
   <span style="margin-left:auto"></span>
+  <a class="nav{% if scope == 'others' %} active{% endif %}" href="/usage?scope=others">testerzy</a>
+  <a class="nav{% if scope == 'all' %} active{% endif %}" href="/usage?scope=all">wszyscy</a>
+  <a class="nav{% if scope == 'me' %} active{% endif %}" href="/usage?scope=me">ja</a>
   <a class="nav" href="/admin/consents">Zgody RODO →</a>
   <a class="nav" href="/settings">← Ustawienia</a>
 </header>
 <main>
 
 <p class="muted">Widok operuje wyłącznie na pseudonimach (skrót z konta) i agregatach —
-bez e-maili, treści posiłków, zdjęć, wag ani kalorii. Więcej w
-<a href="/prywatnosc">nocie o prywatności</a>.</p>
+bez e-maili, treści posiłków, zdjęć, wag ani kalorii.
+{% if scope == 'all' %}Zakres: wszyscy, łącznie z kontem admina.
+{% elif scope == 'me' %}Tylko Twoje konto — poniżej także szczegóły per dzień.
+{% else %}Zakres: testerzy (bez konta admina).
+{% endif %}Więcej w <a href="/prywatnosc">nocie o prywatności</a>.</p>
+
+{% if scope == 'me' %}
+<section class="card">
+  <h2>Moje dni: model vs pomiar</h2>
+  <table>
+    <thead><tr><th>Data</th><th>Total (Garmin)</th><th>Aktywne (Garmin)</th><th>BMR (Garmin)</th>
+      <th>Model</th><th>Aktywności</th><th>z BMR</th></tr></thead>
+    <tbody>
+      {% for d in my_days %}
+      <tr><td>{{ d.date }}</td><td>{{ d.kcal_total_garmin if d.kcal_total_garmin is not none else "—" }}</td>
+        <td>{{ d.kcal_active_garmin if d.kcal_active_garmin is not none else "—" }}</td>
+        <td>{{ d.kcal_bmr_garmin if d.kcal_bmr_garmin is not none else "—" }}</td>
+        <td>{{ d.model_total_kcal if d.model_total_kcal is not none else "—" }}</td>
+        <td>{{ d.activities }}</td><td>{{ d.activities_with_bmr }}</td></tr>
+      {% else %}
+      <tr><td colspan="7" class="muted">Brak danych.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
 
 <section class="card">
   <h2>Adopcja</h2>
@@ -114,7 +142,7 @@ bez e-maili, treści posiłków, zdjęć, wag ani kalorii. Więcej w
     <thead><tr><th>Pseudonim</th><th>Ostatnie zdarzenie</th><th>Dni z aktywnością</th></tr></thead>
     <tbody>
       {% for u in last_activity %}
-      <tr><td><code>{{ u.ref }}</code></td><td>{{ u.last_date }}</td><td>{{ u.days }}</td></tr>
+      <tr><td><code>{{ u.ref }}</code>{% if u.is_admin %} (ja){% endif %}</td><td>{{ u.last_date }}</td><td>{{ u.days }}</td></tr>
       {% else %}
       <tr><td colspan="3" class="muted">Brak danych.</td></tr>
       {% endfor %}

@@ -10,6 +10,35 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Zakres statystyk `/usage`: testerzy / wszyscy / tylko ja~~ ✓ zrobione (22.1.0)
+
+Problem: konto admina było wycięte ze wszystkich agregatów `/usage`, mimo że
+jest jedynym kontem z realnym wolumenem danych do złapania problemów w
+modelu (np. rozjazd 4213 vs 2889 kcal).
+
+**Zmiana:** przełącznik `scope` (`others` domyślny / `all` / `me`) w
+`app/services/usage.py:dashboard_stats` — jeden zbiór `allowed_ids`/
+`allowed_refs` (`_allowed_ids_and_refs`) zastąpił rozsiane filtry
+`r[0] != admin_ref` i podzapytanie `other_users`. `app/routers/usage.py`
+waliduje `scope` przez `Literal["others", "all", "me"]` (nieznana wartość →
+422 automatycznie z FastAPI/pydantic). Szablon `usage.html` dostał trzy
+zakładki `testerzy · wszyscy · ja`, wiersz admina w tabeli „Ostatnia
+aktywność" ma dopisek „(ja)" tylko przy `all`. Tylko `scope == "me"` renderuje
+nową sekcję „Moje dni: model vs pomiar" (14 dni, `DailySummary` + liczba
+aktywności zegarkowych z `kcal_bmr_garmin` — kolumna „Model" na razie zawsze
+„—", bo `DailySummary.model_total_kcal` jeszcze nie istnieje — patrz punkt
+„Statystyki: obserwowalność…" niżej).
+
+Nota `/prywatnosc`: bez zmian — dane innych użytkowników nadal wyłącznie w
+agregatach; sekcja „Moje dni" pokazuje dane właściciela wyłącznie jemu.
+
+Testy `tests/test_usage.py`: `others`/`all`/`me` filtrują poprawnie pseudonim
+admina, `all` ma „(ja)", `me` ma sekcję „Moje dni" i nadal nie ujawnia
+e-maila, `scope=xyz` → 422. Uwaga zachowana dla przyszłych zmian: `usage.py`
+importuje `ADMIN_EMAIL` bezpośrednio z `config`, osobno od `app.deps` — testy
+scope'u muszą monkeypatchować `app.services.usage.ADMIN_EMAIL`, samo
+`app.deps.ADMIN_EMAIL` (patch dla `require_admin`) nie wystarczy.
+
 ## ~~Kalibracja adaptacyjna~~ ✓ zrobione (22.0.0, commit 30d4e71)
 
 WYMAGANIA.md 6.2 — model uczy się na danych użytkownika (jak MacroFactor).
