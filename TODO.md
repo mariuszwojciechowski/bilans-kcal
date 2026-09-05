@@ -66,13 +66,13 @@ Moduły M1-M11 są zrobione (patrz [DONE.md](DONE.md)); poniżej wyłącznie to,
 czego nie ma. Kolumna „gdzie plan" wskazuje punkt tej listy — **jeśli punkt
 istnieje, nie dopisuj drugiego planu na to samo**, bo się rozjadą.
 
+Zrobione punkty z tej tabeli **usuwamy** (ostatnie porządki 2026-09-05:
+6.2 kalibracja, 6.4 karta kalibracji, 8.3 strefa czasowa, §4 tabela MET —
+wszystkie opisane w [DONE.md](DONE.md)); tabela ma pokazywać wyłącznie braki.
+
 | Wymóg | Stan | Gdzie plan |
 |---|---|---|
-| 6.2 Kalibracja adaptacyjna | ✓ zrobione (22.0.0) — patrz DONE.md „Kalibracja adaptacyjna" | — |
-| 6.4 Karta kalibracji w tygodniówce | ✓ zrobione razem z 6.2 (22.0.0) — karta w `/trends` | — |
-| 8.3 Strefa czasowa jako granica dnia | ✓ zrobione (23.0.0) — patrz DONE.md „Strefa czasowa użytkownika…" | — |
 | 8.3 Prawo do usunięcia (samoobsługowe) | realizowane mailem; nota `/prywatnosc` mówi o tym wprost, więc nie jest to kłamstwo — tylko brak | „«Usuń moje dane i konto»…" (6/10) |
-| §4 Tabela MET konfigurowalna | ✓ zrobione (24.0.0) — patrz DONE.md „Tabela MET jako dane, nie kod" | — |
 | §10.2 Cel redukcyjny białka | `protein_cut_g_per_kg` leży w `who_norms.json`, ale nic go nie czyta | „Cel białka zależny od bilansu…" (3/10) |
 | §10.3 Nazwa pakietu / domena mobilna | nie zarezerwowane | „Nazwa pakietu i domena…" (1/10) |
 | Etap 2 — aplikacja mobilna | poza MVP, nie rozpoczęta | „Aplikacja mobilna (Etap 2)…" (10/10) |
