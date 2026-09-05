@@ -10,7 +10,7 @@ listy, po tym akapicie.
 
 ---
 
-## ~~Kalibracja adaptacyjna~~ ✓ zrobione (22.0.0, sha: do uzupełnienia po commicie)
+## ~~Kalibracja adaptacyjna~~ ✓ zrobione (22.0.0, commit 30d4e71)
 
 WYMAGANIA.md 6.2 — model uczy się na danych użytkownika (jak MacroFactor).
 Zaimplementowany mechanizm to **filtr dzienny** (uproszczony Kalman,
@@ -60,7 +60,7 @@ Garmin, waga), bez nowej kategorii ani nowego odbiorcy.
 
 ---
 
-## ~~Poprawa wyliczania kcal na dzień w toku~~ ✓ zrobione (21.5.0, sha: do uzupełnienia po commicie)
+## ~~Poprawa wyliczania kcal na dzień w toku~~ ✓ zrobione (21.5.0, commit 30d4e71)
 
 Objaw z 2026-09-05 (konto właściciela): Krasnal pokazał wydatek 4213 kcal,
 Garmin za ten sam dzień 2889 kcal — model teoretyczny (który dzień w toku
