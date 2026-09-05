@@ -10,6 +10,49 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Podmiana ikony krasnala z prawdziwej grafiki 24×24~~ ✓ zrobione (24.3.5, CSS/HTML wjechało wcześniej przypadkiem w 82492c4)
+
+„Ikona krasnala przy komunikatach" (24.3.0, patrz niżej) trzymała fallback na
+`icon-192.png` (ikona PWA z rowerem). Zastąpiona głową krasnala wyciętą z
+`data/krasnal-icon-source.png` (plik poza repo, `.gitignore`).
+
+**Decyzje:**
+- Bitmapa **72×72 px**, mimo że w CSS ikona ma 20/24 px — na Retinie (DPR 2–3)
+  24 px fizyczne rozmywałyby cienką kreskę brody w szarą plamę; przeglądarka
+  skaluje 72→20/24 sama i lepiej.
+- Plik to **czysta maska alfa** (RGB czarne, informacja tylko w kanale A),
+  kolorowana przez CSS (`background: currentColor` + `mask-image` /
+  `-webkit-mask-image`) — jeden plik zamiast osobnych wersji jasny/ciemny,
+  bo komunikaty siedzą w `.muted` (`var(--stone)`) i w obu motywach mają być
+  tego samego szarego co tekst.
+- Grubość kreski (`MaxFilter`) dobrana wizualnie na `--stroke 11` (skala
+  źródło→72px ~17×; przy tej wartości czapka z pomponem i broda są czytelne
+  jako zwarte kształty, oczy jako plamy — cieńsze kreski brody i tak są
+  nie do zachowania przy 20 px).
+- `scripts/make_krasnal_icon.py` (wzorzec: `scripts/extract_logo.py`) jest
+  jedynym zapisem, jak `app/static/krasnal-24.png` powstał z pliku źródłowego.
+
+Rozszerzony `tests/test_krasnal_icon.py`: serwowanie 200/`image/png`, rozmiar
+72×72 z alfą, przezroczyste narożniki + tusz w środkowej kolumnie, oraz
+sprawdzenie, że każda ścieżka `/static/krasnal-*.png` znaleziona w
+`mobile.html` faktycznie odpowiada 200 (zamiast sztywnej ścieżki na
+`icon-192.png` jak wcześniej).
+
+Statystyki: świadomie brak (zmiana czysto wizualna, bez opt-in; sygnał
+funkcjonowania to brak 404 na `/static/krasnal-24.png` w logach uvicorn po
+deployu — sprawdza właściciel ręcznie).
+
+`/prywatnosc` bez zmian (nic nowego nie zbieramy). Weryfikacja ręczna na
+dev serwerze (jasny/ciemny motyw) **pominięta na tym etapie** na wyraźną
+prośbę właściciela — do zrobienia przy najbliższym wejściu na dev serwer.
+
+Uwaga do historii: CSS/HTML tej zmiany (`.krasnal-ico` z maską,
+`krasnalSays()` bez `<img>`) trafiło do repo wcześniej, przypadkiem, w
+commicie 82492c4 (o zakresie białka) — równoległa sesja pracowała na tym
+samym pliku wg tego samego planu z TODO.md i oba zestawy edycji się scaliły
+na dysku przed jej commitem. Ten wpis domyka resztę (skrypt, wygenerowany
+plik, test, VERSION, TODO→DONE).
+
 ## ~~Testy: „dziś" ze strefy użytkownika, nie zegara runnera — naprawa czerwonego CI~~ ✓ zrobione (24.3.1)
 
 **Objaw:** push b70803e/4189a74 o 00:11–00:23 CEST 2026-09-06 (= 22:11–22:23
