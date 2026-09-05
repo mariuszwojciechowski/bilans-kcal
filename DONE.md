@@ -10,6 +10,35 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Ikona krasnala przy komunikatach~~ ✓ zrobione (b70803e, 24.3.0)
+
+**Zgłoszenie właściciela 2026-09-05:** zniknęła ikonka krasnala przed
+tekstem motywacyjnym; miała wrócić i pojawiać się przed różnymi komunikatami
+stanu.
+
+**Rozwiązanie:** jedna funkcja `krasnalSays(el, text)` w `mobile.html`
+(`innerHTML` z `<img class="krasnal-ico">` + `esc(text)` — escape
+obowiązkowy, quipy i błędy to tekst, nie HTML) i słownik `KRASNAL_STATUS`
+w jednym miejscu (sync/synced/estimating/queue/nodata) — podmienił
+rozrzucone dotąd komunikaty stanu w `doSync`, `playPending`, `estimate`
+i fallback `renderToday`. Quip motywacyjny (`rep.quip`) przez tę samą
+funkcję.
+
+Grafika `app/static/krasnal-24.png` (24×24, wycięta z
+`data/krasnal-icon-source.png`) jeszcze nie istnieje — użyto fallbacku
+`icon-192.png` (`width:20px`) do czasu, aż właściciel dostarczy plik —
+patrz TODO.md „Podmiana ikony krasnala z prawdziwej grafiki 24×24".
+
+Zweryfikowane ręcznie w przeglądarce (lokalne konto testowe, usunięte po
+sprawdzeniu): ikonka renderuje się przy quipie i przy „Krasnal nie ma
+danych…", żadnych błędów JS w konsoli. Test `tests/test_krasnal_icon.py`
+pilnuje, żeby `/static/icon-192.png` (ścieżka użyta w JS) było serwowane.
+
+Bez statystyk (zmiana czysto wizualna, świadomie bez kroku „Statystyki").
+Nota `/prywatnosc` bez zmian.
+
+---
+
 ## ~~Cel białka zależny od bilansu (redukcja / masa)~~ ✓ zrobione (572314c, 24.2.0) — WYMAGANIA.md §10.2
 
 `who_norms.json` miał per grupę martwe pole `protein_cut_g_per_kg: [1.2, 1.6]`

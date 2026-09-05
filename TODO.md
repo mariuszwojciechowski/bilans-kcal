@@ -133,55 +133,16 @@ tabeli tokenów resetu w bazie, szablonu maila, konfiguracji wysyłki
 w większości spoza samego kodu appki.
 
 
-## Ikona krasnala przy komunikatach (2/10)
+## Podmiana ikony krasnala z prawdziwej grafiki 24×24 (1/10)
 
-**Zgłoszenie właściciela 2026-09-05:** zniknęła ikonka krasnala przed
-tekstem motywacyjnym; ma wrócić i pojawiać się przed różnymi komunikatami
-stanu („Krasnal synchronizuje…", „Krasnal przygląda się talerzowi…",
-„Krasnal stoi w kolejce…").
-
-**Stan:** w `mobile.html` tekst krasnala to `<p id="quip">` (linia 141),
-wypełniany `textContent` (588 i 598) — bez obrazka. W historii `mobile.html`
-nie ma śladu ikony przy quipie (ikona była w usuniętym starym kliencie
-`docs/` / `dashboard.html`). Dostępne grafiki: `app/static/icon-192.png`
-(ikona PWA krasnala) i źródło `data/krasnal-icon-source.png` (poza repo
-statycznym — właściciel ma plik). Komunikaty stanu są dziś rozrzucone:
-„Synchronizuję…"/„Zsynchronizowano ✓" (695-698), „Przetwarzam kolejkę…"
-(714), tekst przy szacowaniu posiłku (szukaj `estimate()` ~187 i jego
-statusu), fallback „Brak danych…" (598-599).
-
-**Decyzje:**
-
-- Jedna mała grafika `app/static/krasnal-24.png` (24×24, przezroczyste tło,
-  wycięta z `data/krasnal-icon-source.png` — **właściciel dostarcza plik**,
-  jeśli LLM nie ma narzędzia do obróbki; do tego czasu użyj `icon-192.png`
-  z `width:20px`).
-- Jedna funkcja `krasnalSays(el, text)` w `mobile.html`: ustawia
-  `innerHTML = '<img class="krasnal-ico" src="/static/krasnal-24.png"
-  alt=""> ' + escape(text)` — **escape obowiązkowy**, quipy i błędy to
-  tekst, nie HTML. CSS `.krasnal-ico { width:20px; height:20px;
-  vertical-align:-4px; margin-right:6px }`.
-- Słownik `KRASNAL_STATUS` w jednym miejscu, ton jak w `quips.json`:
-  `sync: "Krasnal synchronizuje z Garminem…"`, `synced: "Krasnal wrócił
-  z Garmina ✓"`, `estimating: "Krasnal przygląda się talerzowi…"`,
-  `queue: "Krasnal stoi w kolejce…"`, `nodata: "Krasnal nie ma danych —
-  uzupełnij profil i wagę w Ustawieniach."`. Nowe teksty stanu **tylko** tu.
-- Quip motywacyjny (`rep.quip`) przez tę samą funkcję.
-
-**Instrukcja dla implementującego LLM — co czytać:** `mobile.html` 138-142,
-586-600, 690-720 oraz wynik `grep -n "textContent = \"" app/templates/mobile.html`
-(wszystkie komunikaty stanu — zamień te, które są „głosem krasnala",
-zostaw techniczne jak „Zapisano"). **Nie czytaj:** nic w `app/services`,
-`quips.json` (teksty motywacyjne bez zmian), `pwa.py` (nowy plik statyczny
-nie wymaga wpisu w manifeście; **dopisz go do listy cache w `sw.js`**, jeśli
-lista jest jawna — sprawdź `grep -n "static/" app/static/sw.js`).
-
-**Statystyki: brak** — zmiana czysto wizualna, nie ma adopcji do mierzenia
-(zasada „krok Statystyki, jeśli ma sens" zastosowana świadomie: tu nie ma).
-
-Wersja **Y** (UX w kilku sekcjach naraz). Test: `tests/test_pwa*.py` lub
-istniejący test statyki — plik `krasnal-24.png` serwowany 200. Nota
-`/prywatnosc` bez zmian.
+„Ikona krasnala przy komunikatach" (patrz DONE.md) jest zaimplementowana
+z fallbackiem `icon-192.png` (`width:20px`), bo `app/static/krasnal-24.png`
+jeszcze nie istnieje. Gdy właściciel dostarczy wyciętą grafikę 24×24
+(przezroczyste tło, z `data/krasnal-icon-source.png`): wrzuć ją jako
+`app/static/krasnal-24.png`, w `mobile.html` w funkcji `krasnalSays()`
+zamień `src="/static/icon-192.png"` na `src="/static/krasnal-24.png"`,
+zaktualizuj `tests/test_krasnal_icon.py` (sprawdza dziś `icon-192.png`)
+na nowy plik.
 
 ## Nazwa pakietu i domena pod wydanie mobilne — WYMAGANIA.md §10.3 (1/10)
 
