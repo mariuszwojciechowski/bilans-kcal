@@ -145,12 +145,15 @@
   <section class="card">
     <h2>Bilans — <span id="t-day"></span></h2>
     <p class="muted" id="quip" style="font-style:italic"></p>
+    <!-- Układ 2 kolumn (właściciel 2026-09-06): górne 5 pól to kcal, z pustym
+         miejscem po prawej od „cel dnia"; dolny wiersz to waga. -->
     <div class="stats">
       <div class="stat"><b id="t-in">—</b><span>kcal spożyte</span></div>
+      <div class="stat"><b id="t-left">—</b><span>zostało dziś</span></div>
       <div class="stat"><b id="t-out">—</b><span>kcal spalone</span></div>
       <div class="stat"><b id="t-bal">—</b><span>bilans</span></div>
       <div class="stat"><b id="t-target">—</b><span>cel dnia</span></div>
-      <div class="stat"><b id="t-left">—</b><span>zostało dziś</span></div>
+      <div class="stat" aria-hidden="true"></div>
       <div class="stat"><b id="t-weight">—</b><span>ostatnia waga [kg]</span></div>
       <div class="stat"><b id="t-goal">—</b><span>do celu wagi</span></div>
     </div>
