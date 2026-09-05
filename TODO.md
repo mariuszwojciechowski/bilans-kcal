@@ -73,7 +73,7 @@ istnieje, nie dopisuj drugiego planu na to samo**, bo się rozjadą.
 | 8.3 Strefa czasowa jako granica dnia | ✓ zrobione (23.0.0) — patrz DONE.md „Strefa czasowa użytkownika…" | — |
 | 8.3 Prawo do usunięcia (samoobsługowe) | realizowane mailem; nota `/prywatnosc` mówi o tym wprost, więc nie jest to kłamstwo — tylko brak | „«Usuń moje dane i konto»…" (6/10) |
 | §4 Tabela MET konfigurowalna | ✓ zrobione (24.0.0) — patrz DONE.md „Tabela MET jako dane, nie kod" | — |
-| §10.2 Cel redukcyjny białka | `protein_cut_g_per_kg` leży w `who_norms.json`, ale nic go nie czyta | „Cel redukcyjny białka…" (2/10) |
+| §10.2 Cel redukcyjny białka | `protein_cut_g_per_kg` leży w `who_norms.json`, ale nic go nie czyta | „Cel białka zależny od bilansu…" (3/10) |
 | §10.3 Nazwa pakietu / domena mobilna | nie zarezerwowane | „Nazwa pakietu i domena…" (1/10) |
 | Etap 2 — aplikacja mobilna | poza MVP, nie rozpoczęta | „Aplikacja mobilna (Etap 2)…" (10/10) |
 
@@ -134,28 +134,232 @@ tabeli tokenów resetu w bazie, szablonu maila, konfiguracji wysyłki
 w większości spoza samego kodu appki.
 
 
-## Cel redukcyjny białka — domyślnie czy opt-in? — WYMAGANIA.md §10.2 (2/10)
+## Cel białka zależny od bilansu (redukcja / masa) — trzeci znacznik na pasku — WYMAGANIA.md §10.2 (3/10)
 
-Pytanie otwarte §10.2: czy „cel redukcyjny" białka 1.2-1.6 g/kg pokazywać
-domyślnie obok normy WHO, czy jako opcję. Stan faktyczny: `who_norms.json` ma
-per grupę pole `protein_cut_g_per_kg: [1.2, 1.6]`, ale **nic go nie czyta** —
-`app/services/macros.py` bierze zakres białka wyłącznie ze stylu życia
-(`protein_range_g_per_kg`), a `protein_who_min_g` pokazuje obok jako punkt
-odniesienia. Dla stylu „rekreacyjnie trenujący" zakres 1.2-1.6 i tak wychodzi,
-tylko z innego powodu — a pole w JSON jest martwe.
+**Decyzja właściciela 2026-09-05: wariant (b)**, rozszerzony: znacznik zależy
+od **znaku docelowego bilansu** z profilu (punkt „Bilans zamiast deficytu"
+niżej — **zrób go pierwszy**, ten punkt czyta jego wynik).
 
-**Do decyzji właściciela (bez tego nie implementuj) — jeden z dwóch:**
+Stan faktyczny: `who_norms.json` ma per grupę martwe pole
+`protein_cut_g_per_kg: [1.2, 1.6]` — nic go nie czyta; pasek białka bierze
+zakres wyłącznie ze stylu życia (`protein_range_g_per_kg`), obok minimum WHO.
+Dla „mało aktywnego" na deficycie zakres 0.8-1.0 g/kg jest za niski (ochrona
+mięśni w deficycie: 1.2-1.6 g/kg), dla budującego masę — również (ISSN:
+1.6-2.2 g/kg).
 
-- **(a) zamknąć przez styl życia**: usunąć martwe `protein_cut_g_per_kg`
-  z `app/resources/who_norms.json` (dwie grupy) i z fixture
-  `tests/test_macros.py:62`. Pół godziny, mniej martwego kodu.
-- **(b) trzeci znacznik na pasku białka**: `who_targets` zwraca dodatkowo
-  `protein_cut_g` z tego pola, `coverage()["protein"]` dostaje klucz
-  `cut_range_g`, a `app/templates/mobile.html` (pasek białka, ~595) rysuje go
-  inną kreską niż zakres normy. Sens ma tylko, jeśli uznasz, że zakres ze
-  stylu życia jest przy deficycie mylący.
+**Reguły:**
 
-Nota `/prywatnosc` niezmieniona w obu wariantach.
+- Bilans docelowy **< 0** (deficyt) → cel „redukcyjny" `protein_cut_g_per_kg`
+  (1.2-1.6). Bilans **> 0** (masa) → cel „budowy masy" — nowe pole
+  `protein_bulk_g_per_kg: [1.6, 2.2]` w obu grupach `who_norms.json`.
+  Bilans **= 0** (utrzymanie) → **brak** znacznika.
+- Znacznik i wyjaśnienie pokazują się **tylko, gdy cel różni się od zakresu
+  ze stylu życia** (którakolwiek granica różni się o > 0.05 g/kg). Dla
+  „rekreacyjnie trenującego" na deficycie (1.2-1.6 = 1.2-1.6) nic się nie
+  pojawia — nie dublujemy informacji.
+- Wyjaśnienie w **dwóch miejscach**, ten sam tekst z jednego słownika:
+  (1) pod paskiem białka na „Dziś" (gdy znacznik widoczny), (2) w Ustawieniach
+  pod polem bilansu, **na żywo** przy zmianie wartości (znak ujemny/dodatni/
+  zero → inny tekst, zero → tekst „bez dodatkowego celu białka"). Wzór:
+  „Przy ujemnym bilansie zobaczysz na pasku białka dodatkowy znacznik —
+  cel redukcyjny 1,2–1,6 g/kg (dla Ciebie 94–125 g): w deficycie wyższe
+  białko chroni mięśnie i syci. Norma z Twojego stylu życia (62–78 g) jest
+  niżej." Wariant masy: „…cel przy budowie masy 1,6–2,2 g/kg (…): nadwyżka
+  bez białka to głównie tłuszcz." Liczby w gramach z wagi wygładzonej, jak
+  reszta makro.
+
+**Instrukcja dla implementującego LLM — co czytać:**
+
+| Plik | Zakres | Po co |
+|---|---|---|
+| `app/services/macros.py` | 29-60 (`resolve_norms`), 80-120 (`MacroTargets`, `who_targets`), 142-160 (`coverage` — gałąź `protein`) | dodajesz `protein_goal` (zakres + rodzaj) i próg „różni się od stylu" |
+| `app/resources/who_norms.json` | 20-36 (dwie grupy) | pole `protein_bulk_g_per_kg` obok `protein_cut_g_per_kg` |
+| `app/services/day.py` | wywołanie `who_targets(...)` (~245) | przekaż znak bilansu z profilu |
+| `app/templates/mobile.html` | 655-672 (`renderMacros`), 349-353 (pole bilansu w Ustawieniach — po punkcie „Bilans zamiast deficytu" numery się zmienią, szukaj `s-deficit`/`s-balance`) | znacznik + tekst pod paskiem; tekst na żywo w Ustawieniach |
+| `tests/test_macros.py` | 55-70 (fixture z `protein_cut_g_per_kg`) | rozszerz fixture o `bulk`, dopisz testy |
+| `tests/test_day_trends_services.py` | 124-136 | kontrakt „serwis == /api/day" — nowe klucze w obu |
+
+**Nie czytaj:** `quips.py`/`quips.json` (kategoria `protein_low` liczy się
+ze `status` zakresu stylu życia — **zostaje** tak; znacznik nie zmienia
+statusu), `energy.py`, `balance.py`, `trends.py`, `transfer.py`, `privacy.html`
+(bez zmian — nic nowego nie zbieramy).
+
+**Kroki:**
+
+1. `who_norms.json`: `protein_bulk_g_per_kg: [1.6, 2.2]` w obu grupach.
+   `resolve_norms` przepuszcza oba pola (`protein_cut_g_per_kg`,
+   `protein_bulk_g_per_kg`) do wyniku.
+2. `who_targets(..., target_balance_kcal: int = 0)`: wybiera cel po znaku;
+   `MacroTargets.protein_goal: MacroRange | None` i `protein_goal_kind:
+   str | None` (`"cut"` / `"bulk"`). `None`, gdy bilans 0 **lub** zakres
+   pokrywa się ze stylem (próg 0.05 g/kg na obu granicach).
+3. `coverage()["protein"]` dostaje `goal_range_g: [lo, hi] | null`,
+   `goal_kind`, `goal_pct: [pct_lo, pct_hi] | null` — pozycje znacznika
+   liczone tą samą `bar_pct(...)`, którą liczy się wypełnienie paska (te same
+   `b1,b2,b3`), żeby kreski trafiały w tę samą skalę. Bez tego znacznik
+   będzie w złym miejscu.
+4. `renderMacros`: dla białka, gdy `goal_range_g` — dwie pionowe kreski na
+   `.bar` (absolutnie pozycjonowane `<i>` przy `left: goal_pct[i]%`, szerokość
+   2px, kolor inny niż wypełnienie), w nawiasie po zakresie „· cel
+   redukcyjny 94–125 g" / „· cel masy …", pod wierszem `<p class="muted">`
+   z tekstem ze słownika `PROTEIN_GOAL_TEXT[kind]`. Słownik w **jednym**
+   miejscu w `mobile.html`, używany też przez Ustawienia (krok 5).
+5. Ustawienia: `<p class="muted" id="s-balance-protein-note">` pod polem
+   bilansu; `oninput` pola → tekst wg znaku (ujemny → `cut`, dodatni →
+   `bulk`, zero → „Bilans 0: utrzymanie wagi, bez dodatkowego celu białka.").
+   Gramy w tym tekście: z `profile.weight_smoothed_kg` jeśli API profilu je
+   daje, inaczej bez gramów (tylko g/kg) — **nie** dorabiaj nowego endpointu
+   dla jednego zdania.
+6. Testy `test_macros.py`: deficyt + „mało aktywny" → `cut` 1.2-1.6 i
+   `goal_pct` rosnące; deficyt + „rekreacyjny" → `None` (pokrywa się);
+   nadwyżka + „siłowy" (1.6-2.0 vs bulk 1.6-2.2) → `bulk` (górna granica różni
+   się o 0.2); bilans 0 → `None`. `test_day_trends_services.py`: klucze
+   w `macros.protein` zgodne serwis vs API.
+7. **Statystyki** (`/usage`, honorując `scope` z punktu „Zakres statystyk"):
+   KPI „cel białka widoczny" = liczba profili, dla których `protein_goal`
+   jest nie-`None` (adopcja: ilu w ogóle to zobaczy — jeśli 0, funkcja jest
+   martwa jak poprzednie pole); KPI „białko w celu" = % domkniętych dni
+   z posiłkami, gdzie `protein_g ≥ goal_lo`, tylko dla tych profili
+   (funkcjonowanie: czy znacznik cokolwiek zmienia). Liczone z `Meal` +
+   `UserProfile` + `WeightLog` w `dashboard_stats`, agregat, bez per-user.
+8. Wersja **Y**. Commit lokalny bez pusha. DONE.md: wpis + „nota `/prywatnosc`
+   bez zmian".
+
+## Bilans zamiast deficytu w Ustawieniach + jawny „cel dnia" (3/10)
+
+**Zgłoszenie właściciela 2026-09-05:** „Ustawienie deficytu na 0 wydaje się
+nie działać; nie rozumiem wartości «zostało do celu dnia» — co jest celem
+dnia? ani spalone, ani spożyte."
+
+**Diagnoza (zweryfikowana w kodzie):** cel dnia to `e_target = kcal_out ×
+factor_kalibracji − target_deficit_kcal` (`app/services/day.py:241`), a
+„zostało" to `floor50(e_target − kcal_in)` (linia 267). **Sama liczba `e_target`
+nie jest nigdzie pokazana** — użytkownik widzi bilans i „zostało", ale nie
+liczbę, do której to „zostało" się odnosi. Przy deficycie 0 spodziewa się
+`zostało == −bilans`, a dostaje `0.97 × spalone − spożyte` zaokrąglone w dół
+do 50 (współczynnik startowy 0.97 + zaokrąglenie konserwatywne) — różnica
+~100-150 kcal, która wygląda jak błąd, bo nic jej nie tłumaczy. To **nie**
+jest bug liczenia, tylko brak jawnego celu na ekranie. Dodatkowo pole
+w Ustawieniach ma `min="0"` (`mobile.html:352`) — nadwyżka (budowa masy) jest
+dziś niemożliwa do ustawienia.
+
+**Decyzje:**
+
+- **UI mówi „bilans", backend zostaje przy `target_deficit_kcal`.** Kolumna,
+  pole API (`ProfileIn`), eksport/import (`transfer.py:56,122`), statystyki
+  (`usage.py:452`) i `deficit_warning` **nie zmieniają nazwy** — rename to
+  przebudowa tabeli SQLite + zgodność plików transferu, za drogo za jedno
+  słowo. Konwersja **tylko w `mobile.html`**: `bilans_ui = −target_deficit_kcal`.
+  Komentarz przy polu w `models.py:32` i przy konwersji w JS: „UI pokazuje
+  bilans (znak odwrotny), patrz TODO/DONE «Bilans zamiast deficytu»".
+- Pole „Docelowy bilans dnia [kcal]", `step=50`, `min=-1500`, `max=+1000`.
+  Obok wartości **podpis na żywo**: `< 0` → „deficyt (redukcja)", `= 0` →
+  „utrzymanie", `> 0` → „nadwyżka (budowa masy)" — „tycie" z zgłoszenia
+  zastąpione „nadwyżką", bo neutralne i zgodne z resztą słownictwa apki
+  (właściciel: możesz wrócić do „tycie", jeśli wolisz — jedna linia).
+- **Jawny cel dnia na „Dziś":** nowy kafelek `cel dnia` = `round(e_target)`
+  między „bilans" i „zostało"; etykieta „zostało do celu dnia" → „zostało
+  dziś". Pod kafelkami jedna linia `muted`: „cel dnia = spalone 2889 ×
+  kalibracja 0,97 + bilans −500 = 2302; zostało zaokrąglone w dół do 50"
+  — składana z pól, które `/api/day` już zwraca (`kcal_out`,
+  `calibration_factor`, `target_deficit_kcal`) + nowe `target_kcal`.
+  Linia kalibracji (`renderCalibrationLine`, 618-626) zostaje, ale gdy
+  `pct === 0` **nie** znika — pokazuje „kalibracja: 0%" (dziś pusta linia
+  myli: nie wiadomo, czy działa).
+- `deficit_warning` (`balance.py:52-58`) dostaje lustrzany warunek dla
+  nadwyżki: `> 0.20 × tdee` → „Nadwyżka X kcal to > 20% wydatku — przyrost
+  będzie głównie tłuszczem." Zwracany tym samym polem `deficit_warning`
+  (nazwa pola zostaje).
+- Kolor kafelka bilansu (`mobile.html:583`) liczy się względem
+  `−target_deficit_kcal` — sprawdź, że dla nadwyżki (`target_deficit < 0`)
+  klasy `pos/mid/neg` nadal znaczą „dobrze/średnio/źle"; jeśli nie, odwróć
+  porównania gałęzią po znaku, nie nową funkcją.
+
+**Instrukcja dla implementującego LLM — co czytać:**
+
+| Plik | Zakres | Po co |
+|---|---|---|
+| `app/services/day.py` | 236-275 (`e_target`, `remaining_kcal`, słownik odpowiedzi) | nowe pole `target_kcal`; nic więcej |
+| `app/services/balance.py` | 52-58 (`deficit_warning`) | gałąź nadwyżki |
+| `app/templates/mobile.html` | 140-150 (kafelki), 349-353 (pole Ustawień), 580-590 (`setColored` bilansu/zostało), 618-626 (`renderCalibrationLine`), 1031 i 1115 (odczyt/zapis `s-deficit`) | całe UI zmiany |
+| `app/routers/profile.py` | 24-34 (`ProfileIn`), 105 (`Form(500)`) | zdejmij ewentualne `ge=0`; formularz HTML (`/profile-form`) — sprawdź, czy ma osobne pole do przemianowania |
+| `tests/test_balance.py` | 30-36 (`deficit_warning`) | dopisz test nadwyżki |
+| `tests/test_activities_api.py` | 105-113 (wzorzec odczytu `/api/day`) | test `target_kcal == kcal_out×factor − deficit` |
+
+**Nie czytaj:** `transfer.py`, `usage.py`, `models.py` poza jedną linią
+komentarza, `quips.py` (kategoria liczona z `kcal_in / e_target` — działa
+dla nadwyżki bez zmian), `trends.py`.
+
+**Kroki:**
+
+1. `day_report`: dodaj `"target_kcal": round(e_target)`; `deficit_warning`
+   z gałęzią nadwyżki. Testy.
+2. `mobile.html` Ustawienia: pole `s-balance` (zamiast `s-deficit`),
+   konwersja znaku przy odczycie (1031) i zapisie (1115), podpis na żywo,
+   `min/max` jak wyżej. Zachowaj `id` starych elementów tylko, jeśli coś
+   innego je czyta (grep `s-deficit` — dziś dwa miejsca).
+3. `mobile.html` „Dziś": kafelek `cel dnia`, etykieta „zostało dziś", linia
+   z formułą, `renderCalibrationLine` pokazuje 0%.
+4. `profile-form` (server-rendered fallback w `profile.py:105`): etykieta
+   i konwersja znaku tak samo — jeden test, że `-300` z formularza zapisuje
+   `target_deficit_kcal = 300`.
+5. **Statystyki** (`/usage`, `scope`): rozkład znaku bilansu docelowego
+   wśród profili — ilu na deficycie / utrzymaniu / nadwyżce (adopcja nowej
+   możliwości; dziś wszyscy ≥ 0 z definicji pola); mediana wartości
+   bezwzględnej. Jedna linia KPI z trzech liczb. Zdarzenie telemetrii
+   `goal_save` już istnieje — nie dodawaj drugiego.
+6. Wersja **Y**. Commit lokalny bez pusha. DONE.md: wpis + „nota
+   `/prywatnosc` bez zmian" (to samo pole, inna prezentacja).
+
+## Ikona krasnala przy komunikatach (2/10)
+
+**Zgłoszenie właściciela 2026-09-05:** zniknęła ikonka krasnala przed
+tekstem motywacyjnym; ma wrócić i pojawiać się przed różnymi komunikatami
+stanu („Krasnal synchronizuje…", „Krasnal przygląda się talerzowi…",
+„Krasnal stoi w kolejce…").
+
+**Stan:** w `mobile.html` tekst krasnala to `<p id="quip">` (linia 141),
+wypełniany `textContent` (588 i 598) — bez obrazka. W historii `mobile.html`
+nie ma śladu ikony przy quipie (ikona była w usuniętym starym kliencie
+`docs/` / `dashboard.html`). Dostępne grafiki: `app/static/icon-192.png`
+(ikona PWA krasnala) i źródło `data/krasnal-icon-source.png` (poza repo
+statycznym — właściciel ma plik). Komunikaty stanu są dziś rozrzucone:
+„Synchronizuję…"/„Zsynchronizowano ✓" (695-698), „Przetwarzam kolejkę…"
+(714), tekst przy szacowaniu posiłku (szukaj `estimate()` ~187 i jego
+statusu), fallback „Brak danych…" (598-599).
+
+**Decyzje:**
+
+- Jedna mała grafika `app/static/krasnal-24.png` (24×24, przezroczyste tło,
+  wycięta z `data/krasnal-icon-source.png` — **właściciel dostarcza plik**,
+  jeśli LLM nie ma narzędzia do obróbki; do tego czasu użyj `icon-192.png`
+  z `width:20px`).
+- Jedna funkcja `krasnalSays(el, text)` w `mobile.html`: ustawia
+  `innerHTML = '<img class="krasnal-ico" src="/static/krasnal-24.png"
+  alt=""> ' + escape(text)` — **escape obowiązkowy**, quipy i błędy to
+  tekst, nie HTML. CSS `.krasnal-ico { width:20px; height:20px;
+  vertical-align:-4px; margin-right:6px }`.
+- Słownik `KRASNAL_STATUS` w jednym miejscu, ton jak w `quips.json`:
+  `sync: "Krasnal synchronizuje z Garminem…"`, `synced: "Krasnal wrócił
+  z Garmina ✓"`, `estimating: "Krasnal przygląda się talerzowi…"`,
+  `queue: "Krasnal stoi w kolejce…"`, `nodata: "Krasnal nie ma danych —
+  uzupełnij profil i wagę w Ustawieniach."`. Nowe teksty stanu **tylko** tu.
+- Quip motywacyjny (`rep.quip`) przez tę samą funkcję.
+
+**Instrukcja dla implementującego LLM — co czytać:** `mobile.html` 138-142,
+586-600, 690-720 oraz wynik `grep -n "textContent = \"" app/templates/mobile.html`
+(wszystkie komunikaty stanu — zamień te, które są „głosem krasnala",
+zostaw techniczne jak „Zapisano"). **Nie czytaj:** nic w `app/services`,
+`quips.json` (teksty motywacyjne bez zmian), `pwa.py` (nowy plik statyczny
+nie wymaga wpisu w manifeście; **dopisz go do listy cache w `sw.js`**, jeśli
+lista jest jawna — sprawdź `grep -n "static/" app/static/sw.js`).
+
+**Statystyki: brak** — zmiana czysto wizualna, nie ma adopcji do mierzenia
+(zasada „krok Statystyki, jeśli ma sens" zastosowana świadomie: tu nie ma).
+
+Wersja **Y** (UX w kilku sekcjach naraz). Test: `tests/test_pwa*.py` lub
+istniejący test statyki — plik `krasnal-24.png` serwowany 200. Nota
+`/prywatnosc` bez zmian.
 
 ## Nazwa pakietu i domena pod wydanie mobilne — WYMAGANIA.md §10.3 (1/10)
 
