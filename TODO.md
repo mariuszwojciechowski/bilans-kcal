@@ -137,8 +137,9 @@ w większości spoza samego kodu appki.
 ## Cel białka zależny od bilansu (redukcja / masa) — trzeci znacznik na pasku — WYMAGANIA.md §10.2 (3/10)
 
 **Decyzja właściciela 2026-09-05: wariant (b)**, rozszerzony: znacznik zależy
-od **znaku docelowego bilansu** z profilu (punkt „Bilans zamiast deficytu"
-niżej — **zrób go pierwszy**, ten punkt czyta jego wynik).
+od **znaku docelowego bilansu** z profilu (`profile.target_deficit_kcal`,
+UI „Docelowy bilans dnia" — patrz DONE.md „Bilans zamiast deficytu w
+Ustawieniach + jawny «cel dnia»", zrobione, ten punkt czyta jego wynik).
 
 Stan faktyczny: `who_norms.json` ma per grupę martwe pole
 `protein_cut_g_per_kg: [1.2, 1.6]` — nic go nie czyta; pasek białka bierze
@@ -224,92 +225,6 @@ statusu), `energy.py`, `balance.py`, `trends.py`, `transfer.py`, `privacy.html`
    `UserProfile` + `WeightLog` w `dashboard_stats`, agregat, bez per-user.
 8. Wersja **Y**. Commit lokalny bez pusha. DONE.md: wpis + „nota `/prywatnosc`
    bez zmian".
-
-## Bilans zamiast deficytu w Ustawieniach + jawny „cel dnia" (3/10)
-
-**Zgłoszenie właściciela 2026-09-05:** „Ustawienie deficytu na 0 wydaje się
-nie działać; nie rozumiem wartości «zostało do celu dnia» — co jest celem
-dnia? ani spalone, ani spożyte."
-
-**Diagnoza (zweryfikowana w kodzie):** cel dnia to `e_target = kcal_out ×
-factor_kalibracji − target_deficit_kcal` (`app/services/day.py:241`), a
-„zostało" to `floor50(e_target − kcal_in)` (linia 267). **Sama liczba `e_target`
-nie jest nigdzie pokazana** — użytkownik widzi bilans i „zostało", ale nie
-liczbę, do której to „zostało" się odnosi. Przy deficycie 0 spodziewa się
-`zostało == −bilans`, a dostaje `0.97 × spalone − spożyte` zaokrąglone w dół
-do 50 (współczynnik startowy 0.97 + zaokrąglenie konserwatywne) — różnica
-~100-150 kcal, która wygląda jak błąd, bo nic jej nie tłumaczy. To **nie**
-jest bug liczenia, tylko brak jawnego celu na ekranie. Dodatkowo pole
-w Ustawieniach ma `min="0"` (`mobile.html:352`) — nadwyżka (budowa masy) jest
-dziś niemożliwa do ustawienia.
-
-**Decyzje:**
-
-- **UI mówi „bilans", backend zostaje przy `target_deficit_kcal`.** Kolumna,
-  pole API (`ProfileIn`), eksport/import (`transfer.py:56,122`), statystyki
-  (`usage.py:452`) i `deficit_warning` **nie zmieniają nazwy** — rename to
-  przebudowa tabeli SQLite + zgodność plików transferu, za drogo za jedno
-  słowo. Konwersja **tylko w `mobile.html`**: `bilans_ui = −target_deficit_kcal`.
-  Komentarz przy polu w `models.py:32` i przy konwersji w JS: „UI pokazuje
-  bilans (znak odwrotny), patrz TODO/DONE «Bilans zamiast deficytu»".
-- Pole „Docelowy bilans dnia [kcal]", `step=50`, `min=-1500`, `max=+1000`.
-  Obok wartości **podpis na żywo**: `< 0` → „deficyt (redukcja)", `= 0` →
-  „utrzymanie", `> 0` → „nadwyżka (budowa masy)" — „tycie" z zgłoszenia
-  zastąpione „nadwyżką", bo neutralne i zgodne z resztą słownictwa apki
-  (właściciel: możesz wrócić do „tycie", jeśli wolisz — jedna linia).
-- **Jawny cel dnia na „Dziś":** nowy kafelek `cel dnia` = `round(e_target)`
-  między „bilans" i „zostało"; etykieta „zostało do celu dnia" → „zostało
-  dziś". Pod kafelkami jedna linia `muted`: „cel dnia = spalone 2889 ×
-  kalibracja 0,97 + bilans −500 = 2302; zostało zaokrąglone w dół do 50"
-  — składana z pól, które `/api/day` już zwraca (`kcal_out`,
-  `calibration_factor`, `target_deficit_kcal`) + nowe `target_kcal`.
-  Linia kalibracji (`renderCalibrationLine`, 618-626) zostaje, ale gdy
-  `pct === 0` **nie** znika — pokazuje „kalibracja: 0%" (dziś pusta linia
-  myli: nie wiadomo, czy działa).
-- `deficit_warning` (`balance.py:52-58`) dostaje lustrzany warunek dla
-  nadwyżki: `> 0.20 × tdee` → „Nadwyżka X kcal to > 20% wydatku — przyrost
-  będzie głównie tłuszczem." Zwracany tym samym polem `deficit_warning`
-  (nazwa pola zostaje).
-- Kolor kafelka bilansu (`mobile.html:583`) liczy się względem
-  `−target_deficit_kcal` — sprawdź, że dla nadwyżki (`target_deficit < 0`)
-  klasy `pos/mid/neg` nadal znaczą „dobrze/średnio/źle"; jeśli nie, odwróć
-  porównania gałęzią po znaku, nie nową funkcją.
-
-**Instrukcja dla implementującego LLM — co czytać:**
-
-| Plik | Zakres | Po co |
-|---|---|---|
-| `app/services/day.py` | 236-275 (`e_target`, `remaining_kcal`, słownik odpowiedzi) | nowe pole `target_kcal`; nic więcej |
-| `app/services/balance.py` | 52-58 (`deficit_warning`) | gałąź nadwyżki |
-| `app/templates/mobile.html` | 140-150 (kafelki), 349-353 (pole Ustawień), 580-590 (`setColored` bilansu/zostało), 618-626 (`renderCalibrationLine`), 1031 i 1115 (odczyt/zapis `s-deficit`) | całe UI zmiany |
-| `app/routers/profile.py` | 24-34 (`ProfileIn`), 105 (`Form(500)`) | zdejmij ewentualne `ge=0`; formularz HTML (`/profile-form`) — sprawdź, czy ma osobne pole do przemianowania |
-| `tests/test_balance.py` | 30-36 (`deficit_warning`) | dopisz test nadwyżki |
-| `tests/test_activities_api.py` | 105-113 (wzorzec odczytu `/api/day`) | test `target_kcal == kcal_out×factor − deficit` |
-
-**Nie czytaj:** `transfer.py`, `usage.py`, `models.py` poza jedną linią
-komentarza, `quips.py` (kategoria liczona z `kcal_in / e_target` — działa
-dla nadwyżki bez zmian), `trends.py`.
-
-**Kroki:**
-
-1. `day_report`: dodaj `"target_kcal": round(e_target)`; `deficit_warning`
-   z gałęzią nadwyżki. Testy.
-2. `mobile.html` Ustawienia: pole `s-balance` (zamiast `s-deficit`),
-   konwersja znaku przy odczycie (1031) i zapisie (1115), podpis na żywo,
-   `min/max` jak wyżej. Zachowaj `id` starych elementów tylko, jeśli coś
-   innego je czyta (grep `s-deficit` — dziś dwa miejsca).
-3. `mobile.html` „Dziś": kafelek `cel dnia`, etykieta „zostało dziś", linia
-   z formułą, `renderCalibrationLine` pokazuje 0%.
-4. `profile-form` (server-rendered fallback w `profile.py:105`): etykieta
-   i konwersja znaku tak samo — jeden test, że `-300` z formularza zapisuje
-   `target_deficit_kcal = 300`.
-5. **Statystyki** (`/usage`, `scope`): rozkład znaku bilansu docelowego
-   wśród profili — ilu na deficycie / utrzymaniu / nadwyżce (adopcja nowej
-   możliwości; dziś wszyscy ≥ 0 z definicji pola); mediana wartości
-   bezwzględnej. Jedna linia KPI z trzech liczb. Zdarzenie telemetrii
-   `goal_save` już istnieje — nie dodawaj drugiego.
-6. Wersja **Y**. Commit lokalny bez pusha. DONE.md: wpis + „nota
-   `/prywatnosc` bez zmian" (to samo pole, inna prezentacja).
 
 ## Ikona krasnala przy komunikatach (2/10)
 

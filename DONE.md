@@ -10,6 +10,39 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Bilans zamiast deficytu w Ustawieniach + jawny „cel dnia"~~ ✓ zrobione (6096340, 24.1.0)
+
+**Zgłoszenie właściciela 2026-09-05:** „Ustawienie deficytu na 0 wydaje się
+nie działać; nie rozumiem wartości «zostało do celu dnia» — co jest celem
+dnia? ani spalone, ani spożyte."
+
+**Diagnoza:** cel dnia to `e_target = kcal_out × factor_kalibracji −
+target_deficit_kcal`, a „zostało" to `floor50(e_target − kcal_in)` — sama
+liczba `e_target` nie była nigdzie pokazana. Dodatkowo pole w Ustawieniach
+miało `min="0"` — nadwyżka (budowa masy) była niemożliwa do ustawienia.
+
+**Rozwiązanie:** UI mówi „bilans" (`s-balance`, `min=-1500/max=+1000/step=50`,
+podpis na żywo deficyt/utrzymanie/nadwyżka), backend zostaje przy
+`target_deficit_kcal` (konwersja znaku tylko w `mobile.html` i w
+`/profile-form`) — rename kolumny byłby przebudową tabeli SQLite i plików
+transferu, za drogo za jedno słowo. Nowy kafelek „cel dnia" na ekranie Dziś
+(`target_kcal` z `/api/day`), etykieta „zostało dziś", jawna linia z formułą
+pod kafelkami, `renderCalibrationLine` pokazuje też „kalibracja: 0%" zamiast
+znikać. `deficit_warning` dostał lustrzaną gałąź dla nadwyżki (>20% wydatku).
+Kolor kafelka bilansu rozgałęziony po znaku `target_deficit_kcal`, żeby
+klasy pos/mid/neg znaczyły „dobrze/średnio/źle" także przy nadwyżce.
+
+Statystyki na `/usage`: rozkład znaku bilansu docelowego wśród profili
+(deficyt/utrzymanie/nadwyżka) + mediana wartości bezwzględnej
+(`_stats_balance_goal`).
+
+Testy: `test_balance.py` (gałąź nadwyżki), `test_activities_api.py`
+(`target_kcal`), `test_birth_year.py` (konwersja znaku w `/profile-form`).
+
+Nota `/prywatnosc` bez zmian (to samo pole, inna prezentacja).
+
+---
+
 ## ~~Tabela MET jako dane, nie kod~~ ✓ zrobione (24.0.0) — WYMAGANIA.md §4
 
 §4 wymaga „Tabela MET konfigurowalna (Compendium of Physical Activities)".
