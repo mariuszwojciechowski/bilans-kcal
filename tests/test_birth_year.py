@@ -10,6 +10,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 
+from tests.conftest import app_today
+
 from app import auth
 from app.db import Base, _migrate, db_session
 from app.models import UserProfile
@@ -104,8 +106,8 @@ def test_put_profile_birth_year_out_of_range_422(client):
 
 def test_day_report_uses_birth_year_for_age(client):
     client.put("/api/profile", json={"birth_year": 1990, "sex": "M", "height_cm": 180})
-    client.post("/api/weight", json={"date": date.today().isoformat(), "weight_kg": 80})
-    r = client.get(f"/api/day/{date.today().isoformat()}")
+    client.post("/api/weight", json={"date": app_today().isoformat(), "weight_kg": 80})
+    r = client.get(f"/api/day/{app_today().isoformat()}")
     assert r.status_code == 200, r.text  # nie wywala się na profilu bez birth_date w JSON-ie
 
 

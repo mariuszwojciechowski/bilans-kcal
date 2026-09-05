@@ -10,6 +10,54 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Testy: „dziś" ze strefy użytkownika, nie zegara runnera — naprawa czerwonego CI~~ ✓ zrobione (24.3.1)
+
+**Objaw:** push b70803e/4189a74 o 00:11–00:23 CEST 2026-09-06 (= 22:11–22:23
+UTC 2026-09-05) → GitHub Actions 4 failed / 188 passed, deploy zablokowany:
+trzy testy w `tests/test_activities_api.py` (aktywność dodana przez API
+„znika" z `/api/day/{today}`, `kcal_out` bez ręcznego biegu, `StopIteration`)
+i `test_html_and_json_trends_come_from_one_source` (oś wykresu 05.09 vs 06.09).
+
+**Przyczyna (potwierdzona reprodukcją, nie hipoteza):** od 23.0.0 routery
+liczą „dziś" przez `clock.user_today(profile)` — bez `tz` w profilu to
+**Europe/Warsaw**. Testy brały `date.today()` = strefa **procesu**, czyli UTC
+na runnerze. Między 22:00 a 24:00 UTC (lato) obie daty się różnią:
+`POST /api/activities` bez daty ląduje na dniu warszawskim, test czyta dzień
+UTC; `trends_service.payload(db, 1, 30)` bez `today` bierze `date.today()`
+(`app/services/trends.py:59`), router podaje `user_today`. Na Macu właściciela
+(strefa warszawska) obie wartości są równe, więc lokalnie suita była zielona
+o każdej porze — błąd widoczny tylko w CI i tylko w 2-godzinnym oknie przed
+północą UTC. Kod aplikacji zachował się poprawnie; stare były testy.
+
+**Naprawa:** pomocnik `app_today()` w `tests/conftest.py`
+(`clock.user_today(None)`, z docstringiem „dlaczego nie `date.today()`"),
+użyty zamiast `date.today()` w `test_activities_api.py` (13 miejsc),
+`test_birth_year.py` (`/api/weight` + `/api/day`) i jako `TODAY` w
+`test_day_trends_services.py`; tam też wszystkie cztery wywołania
+`trends_service.payload(...)` dostały jawne `today=TODAY` — test ma dowodzić,
+że HTML i JSON liczą z jednego źródła, a nie że serwis zgaduje „dziś" tak samo
+jak router. Import przez `from tests.conftest import app_today` (`tests/` jest
+pakietem). Nietknięte celowo: `test_usage.py` (dzień serwera po obu
+stronach), `test_consent.py`, `test_queue_settings.py` (podają datę do
+serwisu, nie porównują z API), `test_timezone.py` (własne zamrażanie).
+
+**Decyzje:** naprawa w testach, nie `TZ=Europe/Warsaw` w workflow — to by
+zamaskowało klasę błędu, a suita ma być zielona w dowolnej strefie procesu.
+Bez globalnego zamrażania czasu (`sync/calibration/usage` wołają
+`date.today()` poza `clock` — osobny punkt w TODO.md „Pochodne naprawy…").
+
+**Weryfikacja:** cztery zmienione/powiązane pliki
+(`test_activities_api`, `test_day_trends_services`, `test_birth_year`,
+`test_timezone`) — 41 passed pod `TZ=Etc/GMT+12`, `TZ=UTC`
+(reprodukcja awarii z CI: przed naprawą 4 failed), `TZ=Pacific/Kiritimati`
+(data „z przodu") i bez `TZ`; cała suita kolekcjonuje się (199 testów).
+Pełna suita nie była uruchamiana lokalnie (zasada z TODO.md) — sprawdzi ją
+CI po pushu właściciela.
+
+Bez statystyk (zmiana w testach). Nota `/prywatnosc` bez zmian.
+
+---
+
 ## ~~Ikona krasnala przy komunikatach~~ ✓ zrobione (b70803e, 24.3.0)
 
 **Zgłoszenie właściciela 2026-09-05:** zniknęła ikonka krasnala przed

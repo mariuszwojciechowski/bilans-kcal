@@ -11,6 +11,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 
+from tests.conftest import app_today
+
 from app import auth
 from app.db import Base, _migrate, db_session
 from app.models import Activity, DailySummary, WeightLog
@@ -48,7 +50,7 @@ def clients(tmp_path, monkeypatch):
             })
             assert r.status_code == 200, r.text
             r = c.post("/api/weight", json={
-                "date": date.today().isoformat(), "weight_kg": WEIGHT_KG,
+                "date": app_today().isoformat(), "weight_kg": WEIGHT_KG,
             })
             assert r.status_code == 200, r.text
         yield a, b, SessionLocal
@@ -104,7 +106,7 @@ def test_duration_s_takes_precedence_over_duration_min(clients):
 
 def test_steps_default_when_no_entry(clients):
     alice, _, _ = clients
-    today = date.today().isoformat()
+    today = app_today().isoformat()
     resp = alice.get(f"/api/day/{today}")
     assert resp.status_code == 200
     body = resp.json()
@@ -123,7 +125,7 @@ def test_delete_manual_activity_only(clients):
     # cudza aktywność (garminowa, wstawiona bezpośrednio do bazy) — 404
     db = SessionLocal()
     garmin_activity = Activity(
-        user_id=1, date=date.today(), type="running", duration_s=1800,
+        user_id=1, date=app_today(), type="running", duration_s=1800,
         distance_m=5000, kcal_garmin=420, garmin_id="garmin-12345", source="garmin",
     )
     db.add(garmin_activity)
@@ -145,7 +147,7 @@ def test_activity_isolation_between_users(clients):
         "type": "running", "intensity": "umiarkowana", "duration_min": 30,
     })
 
-    today = date.today().isoformat()
+    today = app_today().isoformat()
     a_activities = alice.get(f"/api/day/{today}").json()["activities"]
     b_activities = bob.get(f"/api/day/{today}").json()["activities"]
 
@@ -173,7 +175,7 @@ def _seed_summary(SessionLocal, user_id, day, **kwargs):
 
 def test_closed_garmin_day_plus_manual_activity_sums_to_kcal_out(clients):
     alice, _, SessionLocal = clients
-    today = date.today()
+    today = app_today()
 
     resp = alice.post("/api/activities", json={
         "type": "running", "intensity": "umiarkowana", "duration_min": 30,
@@ -190,7 +192,7 @@ def test_closed_garmin_day_plus_manual_activity_sums_to_kcal_out(clients):
 
 def test_steps_kcal_floors_at_zero_when_measured_below_bmr(clients):
     alice, _, SessionLocal = clients
-    today = date.today()
+    today = app_today()
 
     _seed_summary(SessionLocal, _user_id(SessionLocal, "alice@example.com"), today,
                   kcal_total_garmin=1000, steps=8000, complete=True)  # < BMR sam w sobie
@@ -203,7 +205,7 @@ def test_steps_kcal_floors_at_zero_when_measured_below_bmr(clients):
 
 def test_steps_kcal_matches_model_neat_without_garmin(clients):
     alice, _, _ = clients
-    today = date.today()
+    today = app_today()
 
     age = age_years(date(1990, 1, 1), today)
     tdee = tdee_theoretical(
@@ -218,7 +220,7 @@ def test_steps_kcal_matches_model_neat_without_garmin(clients):
 
 def test_est_steps_present_for_manual_run_absent_for_strength(clients):
     alice, _, _ = clients
-    today = date.today()
+    today = app_today()
 
     alice.post("/api/activities", json={
         "type": "running", "intensity": "lekka", "duration_min": 40, "distance_km": 5,
@@ -258,7 +260,7 @@ def test_migration_backfills_garmin_source(tmp_path):
             INSERT INTO activity (user_id, garmin_id, date, type, duration_s,
                                    distance_m, kcal_garmin, avg_hr)
             VALUES (1, 'garmin-old-1', :today, 'running', 1800, 5000, 420, 150)
-        """), {"today": date.today().isoformat()})
+        """), {"today": app_today().isoformat()})
         conn.commit()
 
     _migrate(engine)
@@ -270,7 +272,7 @@ def test_migration_backfills_garmin_source(tmp_path):
     assert existing.source == "garmin"          # backfill
 
     new_activity = Activity(
-        user_id=1, date=date.today(), type="cycling", duration_s=3600,
+        user_id=1, date=app_today(), type="cycling", duration_s=3600,
         kcal_garmin=500, garmin_id="garmin-old-2",
     )
     db.add(new_activity)
@@ -303,7 +305,7 @@ def test_migration_adds_activity_watch_columns(tmp_path):
             INSERT INTO activity (user_id, garmin_id, date, type, duration_s,
                                    distance_m, kcal_garmin, avg_hr, source)
             VALUES (1, 'garmin-old-3', :today, 'running', 1800, 5000, 420, 150, 'garmin')
-        """), {"today": date.today().isoformat()})
+        """), {"today": app_today().isoformat()})
         conn.commit()
 
     _migrate(engine)
@@ -316,7 +318,7 @@ def test_migration_adds_activity_watch_columns(tmp_path):
     assert existing.steps is None
 
     new_activity = Activity(
-        user_id=1, date=date.today(), type="walking", duration_s=1800,
+        user_id=1, date=app_today(), type="walking", duration_s=1800,
         kcal_garmin=200, kcal_bmr_garmin=80, steps=2000, garmin_id="garmin-old-4",
     )
     db.add(new_activity)
@@ -333,7 +335,7 @@ def test_day_in_progress_walk_reproduces_symptom_and_uses_garmin_net(clients):
     zawyżał model o >1000 kcal. Dzień w toku ma teraz brać pomiar Garmina
     netto z aktywności, bez `max` z modelem teoretycznym."""
     alice, _, SessionLocal = clients
-    today = date.today()
+    today = app_today()
     user_id = _user_id(SessionLocal, "alice@example.com")
 
     _seed_summary(SessionLocal, user_id, today,

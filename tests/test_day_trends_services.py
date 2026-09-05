@@ -21,6 +21,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
+from tests.conftest import app_today
+
 from app import auth
 from app.db import Base, db_session
 from app.models import Activity, DailySummary, Meal, WeightLog
@@ -28,7 +30,7 @@ from app.services import day as day_service
 from app.services import trends as trends_service
 
 INVITE = "test-invite-code"
-TODAY = date.today()
+TODAY = app_today()
 
 # Kształt odpowiedzi /api/trends — kontrakt z mobile.html. Zmiana tej listy
 # oznacza zmianę API, nie poprawkę testu.
@@ -102,7 +104,10 @@ def test_html_and_json_trends_come_from_one_source(client):
     api = client.get("/api/trends?days=30").json()
 
     db = client.session_factory()
-    view = trends_service.payload(db, 1, 30)
+    # `today` jawnie, jak robi to router (`clock.user_today`) — test dowodzi,
+    # że HTML i JSON liczą to samo z jednego źródła, a nie że serwis zgaduje
+    # „dziś" tak samo jak router (bez parametru brałby `date.today()` procesu).
+    view = trends_service.payload(db, 1, 30, today=TODAY)
     db.close()
 
     for key in API_TRENDS_KEYS - {"ranges"}:
@@ -229,7 +234,7 @@ def test_trends_in_progress_day_matches_day_report_and_is_estimated(client):
                                                     DailySummary.date == TODAY))
     meals = db.scalars(select(Meal).where(Meal.user_id == 1, Meal.date == TODAY)).all()
     e = day_service.day_energy(profile, weight, TODAY, summary, [], meals, TODAY)
-    view = trends_service.payload(db, 1, 7)
+    view = trends_service.payload(db, 1, 7, today=TODAY)
     db.close()
 
     assert report["estimated"] is True
@@ -279,7 +284,7 @@ def test_trends_day_without_garmin_entry_uses_model_and_is_estimated(client):
 
     db = client.session_factory()
     report = day_service.day_report(db, 1, day)
-    view = trends_service.payload(db, 1, 7)
+    view = trends_service.payload(db, 1, 7, today=TODAY)
     db.close()
 
     assert report["out_source"] == "model"
@@ -304,7 +309,7 @@ def test_trends_avg_balance_excludes_estimated_days(client):
     db.close()
 
     db = client.session_factory()
-    view = trends_service.payload(db, 1, 7)
+    view = trends_service.payload(db, 1, 7, today=TODAY)
     db.close()
 
     assert view["balance_days"] == 2
