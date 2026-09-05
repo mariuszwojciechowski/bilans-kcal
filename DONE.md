@@ -10,6 +10,39 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Cel białka zależny od bilansu (redukcja / masa)~~ ✓ zrobione (572314c, 24.2.0) — WYMAGANIA.md §10.2
+
+`who_norms.json` miał per grupę martwe pole `protein_cut_g_per_kg: [1.2, 1.6]`
+— nic go nie czytało; pasek białka brał zakres wyłącznie ze stylu życia.
+
+**Rozwiązanie:** `who_targets(..., target_balance_kcal=0)` wybiera cel po
+znaku bilansu docelowego z profilu — deficyt → „redukcyjny" (1.2-1.6 g/kg),
+nadwyżka → „budowy masy" (1.6-2.2 g/kg, nowe pole `protein_bulk_g_per_kg`),
+utrzymanie → brak celu. `MacroTargets.protein_goal`/`protein_goal_kind` są
+`None`, gdy zakres celu pokrywa się z zakresem ze stylu życia (próg 0.05 g/kg
+na obu granicach) — nie dublujemy informacji. `coverage()["protein"]` dostaje
+`goal_range_g`/`goal_kind`/`goal_pct` liczone tą samą `bar_pct(...)`, którą
+liczy się wypełnienie paska.
+
+`mobile.html`: dwie pionowe kreski (`.goal-mark`) na pasku białka + wyjaśnienie
+pod paskiem na „Dziś" (tylko gdy znacznik widoczny), i na żywo w Ustawieniach
+pod polem bilansu — jeden słownik `PROTEIN_GOAL_TEXT` (g/kg zwierciadlą
+`who_norms.json`, więc nie jest to źródło prawdy, tylko tekst — jeśli
+`who_norms.json` się zmieni, słownik trzeba zaktualizować ręcznie).
+
+Statystyki na `/usage` (`_stats_protein_goal`): `n_visible` = ilu profilom
+znacznik się pokazuje (adopcja), `in_goal_pct` = % domkniętych dni z posiłkiem
+w ostatnich 30 dniach, gdzie spożycie białka trafiło w dolną granicę celu
+(funkcjonowanie), liczone tylko wśród profili z widocznym znacznikiem.
+
+Testy: `tests/test_macros.py` (cut dla „mało aktywny" na deficycie, `None`
+gdy pokrywa się ze stylem — „rekreacyjny", bulk dla „siłowy" na nadwyżce,
+`None` przy bilansie 0).
+
+Nota `/prywatnosc` bez zmian (nic nowego nie zbieramy).
+
+---
+
 ## ~~Bilans zamiast deficytu w Ustawieniach + jawny „cel dnia"~~ ✓ zrobione (6096340, 24.1.0)
 
 **Zgłoszenie właściciela 2026-09-05:** „Ustawienie deficytu na 0 wydaje się

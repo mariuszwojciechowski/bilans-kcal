@@ -73,7 +73,6 @@ wszystkie opisane w [DONE.md](DONE.md)); tabela ma pokazywać wyłącznie braki.
 | Wymóg | Stan | Gdzie plan |
 |---|---|---|
 | 8.3 Prawo do usunięcia (samoobsługowe) | realizowane mailem; nota `/prywatnosc` mówi o tym wprost, więc nie jest to kłamstwo — tylko brak | „«Usuń moje dane i konto»…" (6/10) |
-| §10.2 Cel redukcyjny białka | `protein_cut_g_per_kg` leży w `who_norms.json`, ale nic go nie czyta | „Cel białka zależny od bilansu…" (3/10) |
 | §10.3 Nazwa pakietu / domena mobilna | nie zarezerwowane | „Nazwa pakietu i domena…" (1/10) |
 | Etap 2 — aplikacja mobilna | poza MVP, nie rozpoczęta | „Aplikacja mobilna (Etap 2)…" (10/10) |
 
@@ -133,98 +132,6 @@ tabeli tokenów resetu w bazie, szablonu maila, konfiguracji wysyłki
 `krasnal.cc`, testowania że maile nie lądują w spamie. Kilka dni pracy,
 w większości spoza samego kodu appki.
 
-
-## Cel białka zależny od bilansu (redukcja / masa) — trzeci znacznik na pasku — WYMAGANIA.md §10.2 (3/10)
-
-**Decyzja właściciela 2026-09-05: wariant (b)**, rozszerzony: znacznik zależy
-od **znaku docelowego bilansu** z profilu (`profile.target_deficit_kcal`,
-UI „Docelowy bilans dnia" — patrz DONE.md „Bilans zamiast deficytu w
-Ustawieniach + jawny «cel dnia»", zrobione, ten punkt czyta jego wynik).
-
-Stan faktyczny: `who_norms.json` ma per grupę martwe pole
-`protein_cut_g_per_kg: [1.2, 1.6]` — nic go nie czyta; pasek białka bierze
-zakres wyłącznie ze stylu życia (`protein_range_g_per_kg`), obok minimum WHO.
-Dla „mało aktywnego" na deficycie zakres 0.8-1.0 g/kg jest za niski (ochrona
-mięśni w deficycie: 1.2-1.6 g/kg), dla budującego masę — również (ISSN:
-1.6-2.2 g/kg).
-
-**Reguły:**
-
-- Bilans docelowy **< 0** (deficyt) → cel „redukcyjny" `protein_cut_g_per_kg`
-  (1.2-1.6). Bilans **> 0** (masa) → cel „budowy masy" — nowe pole
-  `protein_bulk_g_per_kg: [1.6, 2.2]` w obu grupach `who_norms.json`.
-  Bilans **= 0** (utrzymanie) → **brak** znacznika.
-- Znacznik i wyjaśnienie pokazują się **tylko, gdy cel różni się od zakresu
-  ze stylu życia** (którakolwiek granica różni się o > 0.05 g/kg). Dla
-  „rekreacyjnie trenującego" na deficycie (1.2-1.6 = 1.2-1.6) nic się nie
-  pojawia — nie dublujemy informacji.
-- Wyjaśnienie w **dwóch miejscach**, ten sam tekst z jednego słownika:
-  (1) pod paskiem białka na „Dziś" (gdy znacznik widoczny), (2) w Ustawieniach
-  pod polem bilansu, **na żywo** przy zmianie wartości (znak ujemny/dodatni/
-  zero → inny tekst, zero → tekst „bez dodatkowego celu białka"). Wzór:
-  „Przy ujemnym bilansie zobaczysz na pasku białka dodatkowy znacznik —
-  cel redukcyjny 1,2–1,6 g/kg (dla Ciebie 94–125 g): w deficycie wyższe
-  białko chroni mięśnie i syci. Norma z Twojego stylu życia (62–78 g) jest
-  niżej." Wariant masy: „…cel przy budowie masy 1,6–2,2 g/kg (…): nadwyżka
-  bez białka to głównie tłuszcz." Liczby w gramach z wagi wygładzonej, jak
-  reszta makro.
-
-**Instrukcja dla implementującego LLM — co czytać:**
-
-| Plik | Zakres | Po co |
-|---|---|---|
-| `app/services/macros.py` | 29-60 (`resolve_norms`), 80-120 (`MacroTargets`, `who_targets`), 142-160 (`coverage` — gałąź `protein`) | dodajesz `protein_goal` (zakres + rodzaj) i próg „różni się od stylu" |
-| `app/resources/who_norms.json` | 20-36 (dwie grupy) | pole `protein_bulk_g_per_kg` obok `protein_cut_g_per_kg` |
-| `app/services/day.py` | wywołanie `who_targets(...)` (~245) | przekaż znak bilansu z profilu |
-| `app/templates/mobile.html` | 655-672 (`renderMacros`), 349-353 (pole bilansu w Ustawieniach — po punkcie „Bilans zamiast deficytu" numery się zmienią, szukaj `s-deficit`/`s-balance`) | znacznik + tekst pod paskiem; tekst na żywo w Ustawieniach |
-| `tests/test_macros.py` | 55-70 (fixture z `protein_cut_g_per_kg`) | rozszerz fixture o `bulk`, dopisz testy |
-| `tests/test_day_trends_services.py` | 124-136 | kontrakt „serwis == /api/day" — nowe klucze w obu |
-
-**Nie czytaj:** `quips.py`/`quips.json` (kategoria `protein_low` liczy się
-ze `status` zakresu stylu życia — **zostaje** tak; znacznik nie zmienia
-statusu), `energy.py`, `balance.py`, `trends.py`, `transfer.py`, `privacy.html`
-(bez zmian — nic nowego nie zbieramy).
-
-**Kroki:**
-
-1. `who_norms.json`: `protein_bulk_g_per_kg: [1.6, 2.2]` w obu grupach.
-   `resolve_norms` przepuszcza oba pola (`protein_cut_g_per_kg`,
-   `protein_bulk_g_per_kg`) do wyniku.
-2. `who_targets(..., target_balance_kcal: int = 0)`: wybiera cel po znaku;
-   `MacroTargets.protein_goal: MacroRange | None` i `protein_goal_kind:
-   str | None` (`"cut"` / `"bulk"`). `None`, gdy bilans 0 **lub** zakres
-   pokrywa się ze stylem (próg 0.05 g/kg na obu granicach).
-3. `coverage()["protein"]` dostaje `goal_range_g: [lo, hi] | null`,
-   `goal_kind`, `goal_pct: [pct_lo, pct_hi] | null` — pozycje znacznika
-   liczone tą samą `bar_pct(...)`, którą liczy się wypełnienie paska (te same
-   `b1,b2,b3`), żeby kreski trafiały w tę samą skalę. Bez tego znacznik
-   będzie w złym miejscu.
-4. `renderMacros`: dla białka, gdy `goal_range_g` — dwie pionowe kreski na
-   `.bar` (absolutnie pozycjonowane `<i>` przy `left: goal_pct[i]%`, szerokość
-   2px, kolor inny niż wypełnienie), w nawiasie po zakresie „· cel
-   redukcyjny 94–125 g" / „· cel masy …", pod wierszem `<p class="muted">`
-   z tekstem ze słownika `PROTEIN_GOAL_TEXT[kind]`. Słownik w **jednym**
-   miejscu w `mobile.html`, używany też przez Ustawienia (krok 5).
-5. Ustawienia: `<p class="muted" id="s-balance-protein-note">` pod polem
-   bilansu; `oninput` pola → tekst wg znaku (ujemny → `cut`, dodatni →
-   `bulk`, zero → „Bilans 0: utrzymanie wagi, bez dodatkowego celu białka.").
-   Gramy w tym tekście: z `profile.weight_smoothed_kg` jeśli API profilu je
-   daje, inaczej bez gramów (tylko g/kg) — **nie** dorabiaj nowego endpointu
-   dla jednego zdania.
-6. Testy `test_macros.py`: deficyt + „mało aktywny" → `cut` 1.2-1.6 i
-   `goal_pct` rosnące; deficyt + „rekreacyjny" → `None` (pokrywa się);
-   nadwyżka + „siłowy" (1.6-2.0 vs bulk 1.6-2.2) → `bulk` (górna granica różni
-   się o 0.2); bilans 0 → `None`. `test_day_trends_services.py`: klucze
-   w `macros.protein` zgodne serwis vs API.
-7. **Statystyki** (`/usage`, honorując `scope` z punktu „Zakres statystyk"):
-   KPI „cel białka widoczny" = liczba profili, dla których `protein_goal`
-   jest nie-`None` (adopcja: ilu w ogóle to zobaczy — jeśli 0, funkcja jest
-   martwa jak poprzednie pole); KPI „białko w celu" = % domkniętych dni
-   z posiłkami, gdzie `protein_g ≥ goal_lo`, tylko dla tych profili
-   (funkcjonowanie: czy znacznik cokolwiek zmienia). Liczone z `Meal` +
-   `UserProfile` + `WeightLog` w `dashboard_stats`, agregat, bez per-user.
-8. Wersja **Y**. Commit lokalny bez pusha. DONE.md: wpis + „nota `/prywatnosc`
-   bez zmian".
 
 ## Ikona krasnala przy komunikatach (2/10)
 
