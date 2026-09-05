@@ -66,6 +66,7 @@
   .bar::after { left: 66.667%; }
   .bar .goal-mark { position: absolute; top: 0; bottom: 0; width: 2px;
                      background: #0d6efd; z-index: 1; }
+  .krasnal-ico { width: 20px; height: 20px; vertical-align: -4px; margin-right: 6px; }
   .entry { display: flex; gap: 10px; align-items: center; padding: 8px 0;
            border-bottom: 1px solid rgba(108,117,125,.25); }
   .entry .x { width: auto; padding: 6px 10px; margin: 0; }
@@ -471,6 +472,23 @@ function downscale(file) {
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const r0 = (v) => Math.round(v || 0);
+
+// Ikonka krasnala przed komunikatami stanu (TODO/DONE „Ikona krasnala przy
+// komunikatach") — dopóki właściciel nie dostarczy wyciętej `krasnal-24.png`,
+// używamy istniejącej ikony PWA. Nowe teksty „głosu krasnala" tylko tutaj.
+const KRASNAL_STATUS = {
+  sync: "Krasnal synchronizuje z Garminem…",
+  synced: "Krasnal wrócił z Garmina ✓",
+  estimating: "Krasnal przygląda się talerzowi…",
+  queue: "Krasnal stoi w kolejce…",
+  nodata: "Krasnal nie ma danych — uzupełnij profil i wagę w Ustawieniach.",
+};
+
+function krasnalSays(el, text) {
+  if (!el) return;
+  if (!text) { el.innerHTML = ""; return; }
+  el.innerHTML = '<img class="krasnal-ico" src="/static/icon-192.png" alt="">' + esc(text);
+}
 const todayIso = () => SERVER_TODAY;
 const localTime = () => {
   const d = new Date();
@@ -595,7 +613,7 @@ async function renderToday() {
     document.getElementById("t-weight").textContent = rep.weight_last_kg;
     document.getElementById("t-goal").textContent =
       rep.to_goal_kg === null ? "—" : rep.to_goal_kg + " kg";
-    document.getElementById("quip").textContent = rep.quip || "";
+    krasnalSays(document.getElementById("quip"), rep.quip || "");
     renderCalibrationLine(rep);
     renderTargetFormula(rep);
     document.getElementById("a-steps").value = rep.steps ?? "";
@@ -606,8 +624,7 @@ async function renderToday() {
     renderEnergyBreakdown(rep, "a-tdee-breakdown");
     loadActivityList(day);
   } catch (e) {
-    document.getElementById("quip").textContent =
-      "Brak danych. Uzupełnij profil i wagę w Ustawieniach.";
+    krasnalSays(document.getElementById("quip"), KRASNAL_STATUS.nodata);
     document.getElementById("macros").innerHTML =
       '<p class="muted">Brak profilu / pomiaru wagi.</p>';
     document.getElementById("t-meals").innerHTML = "";
@@ -747,10 +764,10 @@ function renderMeals(meals, pending) {
 
 async function doSync() {
   const el = document.getElementById("sync-status");
-  el.textContent = "Synchronizuję…";
+  krasnalSays(el, KRASNAL_STATUS.sync);
   try {
     await api("/api/sync?days=7", {method: "POST"});
-    el.textContent = "Zsynchronizowano ✓";
+    krasnalSays(el, KRASNAL_STATUS.synced);
     renderToday();
   } catch(e) {
     el.textContent = "Błąd: " + e.message;
@@ -766,7 +783,7 @@ async function delPending(id) {
 async function playPending(id) {
   const el = document.getElementById("queue-status");
   el.style.display = "";
-  el.textContent = "Przetwarzam kolejkę…";
+  krasnalSays(el, KRASNAL_STATUS.queue);
   try {
     await api("/api/queue/process", {method: "POST"});
     el.textContent = "Zlecono przetworzenie — odśwież za chwilę, jeśli wpis nadal tu jest.";
@@ -799,7 +816,7 @@ async function estimate() {
   const file = document.getElementById("f-photo").files[0];
   const desc = document.getElementById("f-desc").value.trim();
   if (!file && !desc) { msg.textContent = "Dodaj zdjęcie albo opis."; return; }
-  msg.textContent = "Krasnal ogląda talerz…";
+  krasnalSays(msg, KRASNAL_STATUS.estimating);
   try {
     let est;
     if (file) {
