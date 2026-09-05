@@ -247,6 +247,7 @@ def dashboard_stats(db: Session, weeks: int = 12, scope: str = "others") -> dict
     model_vs_measurement = _stats_model_vs_measurement(db, allowed_ids, today)
     calibration_stats = _stats_calibration(db, allowed_ids, allowed_refs, today, weeks, chart_start)
     conservative_balance = _stats_conservative_balance(db, allowed_ids, today)
+    balance_goal = _stats_balance_goal(db, allowed_ids)
 
     return {
         "scope": scope,
@@ -265,6 +266,7 @@ def dashboard_stats(db: Session, weeks: int = 12, scope: str = "others") -> dict
         "model_vs_measurement": model_vs_measurement,
         "calibration_stats": calibration_stats,
         "conservative_balance": conservative_balance,
+        "balance_goal": balance_goal,
     }
 
 
@@ -472,6 +474,27 @@ def _stats_conservative_balance(db: Session, allowed_ids: set[int], today: date)
         "n_days": len(diffs),
         "over_target_pct": round(100 * over_target / len(diffs), 1) if diffs else None,
         "median_diff": round(statistics.median(diffs)) if diffs else None,
+    }
+
+
+def _stats_balance_goal(db: Session, allowed_ids: set[int]) -> dict:
+    """Adopcja pola „Docelowy bilans dnia" (TODO.md „Bilans zamiast deficytu"):
+    rozkład znaku wśród profili — ilu na deficycie / utrzymaniu / nadwyżce
+    (`target_deficit_kcal` dodatni/zero/ujemny) i mediana wartości bezwzględnej
+    ustawienia. Przed tą zmianą pole miało `min=0` — więc "nadwyżka" > 0
+    powinna zacząć się pojawiać dopiero po wdrożeniu."""
+    deficits = [
+        p.target_deficit_kcal
+        for p in db.scalars(select(UserProfile).where(UserProfile.user_id.in_(allowed_ids))).all()
+    ]
+    deficit_n = sum(1 for d in deficits if d > 0)
+    maintenance_n = sum(1 for d in deficits if d == 0)
+    surplus_n = sum(1 for d in deficits if d < 0)
+    return {
+        "deficit": deficit_n,
+        "maintenance": maintenance_n,
+        "surplus": surplus_n,
+        "median_abs_kcal": round(statistics.median([abs(d) for d in deficits])) if deficits else None,
     }
 
 

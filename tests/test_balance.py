@@ -40,3 +40,10 @@ def test_weekly_projection():
 def test_deficit_warning_threshold():
     assert deficit_warning(500, 2600) is None            # 500 < 25% * 2600 = 650
     assert deficit_warning(700, 2600) is not None
+
+
+def test_deficit_warning_surplus_threshold():
+    # bilans dodatni (nadwyżka) to ujemny target_deficit_kcal
+    assert deficit_warning(-400, 2600) is None            # 400 < 20% * 2600 = 520
+    assert deficit_warning(-600, 2600) is not None
+    assert "Nadwyżka" in deficit_warning(-600, 2600)

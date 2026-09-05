@@ -109,6 +109,19 @@ def test_day_report_uses_birth_year_for_age(client):
     assert r.status_code == 200, r.text  # nie wywala się na profilu bez birth_date w JSON-ie
 
 
+def test_profile_form_converts_balance_sign_to_deficit(client):
+    """/profile-form (fallback bez JS) pokazuje bilans, tak jak mobile.html —
+    patrz TODO/DONE „Bilans zamiast deficytu". -300 (nadwyżka 300) na formularzu
+    ma zapisać się jako target_deficit_kcal = 300 (ujemny)? Nie — deficyt dodatni
+    to bilans ujemny: balance_kcal=-300 (deficyt 300) -> target_deficit_kcal=300."""
+    r = client.post("/profile-form", data={
+        "birth_year": 1990, "sex": "M", "height_cm": 180, "balance_kcal": -300,
+    })
+    assert r.status_code == 303
+    got = client.get("/api/profile").json()
+    assert got["target_deficit_kcal"] == 300
+
+
 def test_transfer_roundtrip_exports_birth_year_not_birth_date(client):
     client.put("/api/profile", json={"birth_year": 1990, "sex": "M", "height_cm": 180})
     payload = client.get("/api/transfer/export").json()

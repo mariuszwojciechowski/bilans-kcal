@@ -143,11 +143,13 @@
       <div class="stat"><b id="t-in">—</b><span>kcal spożyte</span></div>
       <div class="stat"><b id="t-out">—</b><span>kcal spalone</span></div>
       <div class="stat"><b id="t-bal">—</b><span>bilans</span></div>
-      <div class="stat"><b id="t-left">—</b><span>zostało do celu dnia</span></div>
+      <div class="stat"><b id="t-target">—</b><span>cel dnia</span></div>
+      <div class="stat"><b id="t-left">—</b><span>zostało dziś</span></div>
       <div class="stat"><b id="t-weight">—</b><span>ostatnia waga [kg]</span></div>
       <div class="stat"><b id="t-goal">—</b><span>do celu wagi</span></div>
     </div>
     <p class="muted" id="t-calibration" style="font-size:12px"></p>
+    <p class="muted" id="t-target-formula" style="font-size:12px"></p>
     <div style="display:flex;gap:6px;align-items:center;margin:4px 0">
       <button class="ghost" style="flex:none;padding:8px 14px;margin:0;width:auto" onclick="changeDay(-1)">◀</button>
       <input type="date" id="t-date" onchange="renderToday()" style="flex:1;margin:0">
@@ -348,8 +350,9 @@
     </div>
     <div class="row2">
       <span style="flex:1">
-        <label>Deficyt [kcal]</label>
-        <input type="number" id="s-deficit" step="50" min="0" max="1500">
+        <label>Docelowy bilans dnia [kcal]</label>
+        <input type="number" id="s-balance" step="50" min="-1500" max="1000" oninput="renderBalanceCaption()">
+        <p class="muted" id="s-balance-caption" style="margin:2px 0 0"></p>
       </span>
       <span style="flex:1">
         <label>Cel wagi [kg]</label>
@@ -579,14 +582,19 @@ async function renderToday() {
     const rep = await api(`/api/day/${day}`);
     document.getElementById("t-in").textContent = rep.kcal_in;
     document.getElementById("t-out").textContent = rep.kcal_out;
-    setColored("t-bal", rep.balance,
-      rep.balance <= -rep.target_deficit_kcal ? "pos" : (rep.balance <= 0 ? "mid" : "neg"));
+    const desiredBalance = -rep.target_deficit_kcal;
+    const balCls = rep.target_deficit_kcal >= 0
+      ? (rep.balance <= desiredBalance ? "pos" : (rep.balance <= 0 ? "mid" : "neg"))
+      : (rep.balance >= desiredBalance ? "pos" : (rep.balance >= 0 ? "mid" : "neg"));
+    setColored("t-bal", rep.balance, balCls);
+    document.getElementById("t-target").textContent = rep.target_kcal;
     setColored("t-left", rep.remaining_kcal, rep.remaining_kcal >= 0 ? "pos" : "neg");
     document.getElementById("t-weight").textContent = rep.weight_last_kg;
     document.getElementById("t-goal").textContent =
       rep.to_goal_kg === null ? "—" : rep.to_goal_kg + " kg";
     document.getElementById("quip").textContent = rep.quip || "";
     renderCalibrationLine(rep);
+    renderTargetFormula(rep);
     document.getElementById("a-steps").value = rep.steps ?? "";
     document.getElementById("a-steps-note").style.display = rep.steps_default ? "" : "none";
     renderMacros(rep.macros);
@@ -619,10 +627,19 @@ function renderCalibrationLine(rep) {
   const el = document.getElementById("t-calibration");
   if (!el) return;
   const pct = Math.round((rep.calibration_factor - 1) * 100);
-  if (pct === 0) { el.textContent = ""; return; }
   const sign = pct > 0 ? "+" : "";
   const startowy = rep.calibration_days_used < 10 ? ", współczynnik startowy" : "";
   el.textContent = `zapotrzebowanie skorygowane o ${sign}${pct}% (kalibracja: ${rep.calibration_days_used} dni${startowy})`;
+}
+
+function renderTargetFormula(rep) {
+  const el = document.getElementById("t-target-formula");
+  if (!el) return;
+  const calStr = rep.calibration_factor.toFixed(2).replace(".", ",");
+  const balUi = -rep.target_deficit_kcal;
+  const balSigned = balUi >= 0 ? `+${balUi}` : `−${Math.abs(balUi)}`;
+  el.textContent = `cel dnia = spalone ${rep.kcal_out} × kalibracja ${calStr} + bilans ${balSigned} `
+    + `= ${rep.target_kcal}; zostało zaokrąglone w dół do 50`;
 }
 
 function renderEnergyBreakdown(rep, elId) {
@@ -1028,7 +1045,8 @@ async function renderSettings() {
       document.getElementById("s-birth-year").value = profile.birth_year || "";
       document.getElementById("s-sex").value = profile.sex || "M";
       document.getElementById("s-height").value = profile.height_cm || "";
-      document.getElementById("s-deficit").value = profile.target_deficit_kcal ?? 500;
+      document.getElementById("s-balance").value = -(profile.target_deficit_kcal ?? 500);
+      renderBalanceCaption();
       sel.value = profile.lifestyle || "active";
       document.getElementById("s-goalweight").value = profile.target_weight_kg || "";
       document.getElementById("s-tz").value = profile.tz || "Europe/Warsaw";
@@ -1103,6 +1121,13 @@ async function toggleConsent() {
   }
 }
 
+function renderBalanceCaption() {
+  const el = document.getElementById("s-balance-caption");
+  if (!el) return;
+  const v = +document.getElementById("s-balance").value;
+  el.textContent = v < 0 ? "deficyt (redukcja)" : (v > 0 ? "nadwyżka (budowa masy)" : "utrzymanie");
+}
+
 async function saveProfile() {
   const btn = document.getElementById("s-profile-btn");
   btn.disabled = true; btn.textContent = "Zapisuję…";
@@ -1112,7 +1137,8 @@ async function saveProfile() {
       birth_year: +document.getElementById("s-birth-year").value,
       sex: document.getElementById("s-sex").value,
       height_cm: +document.getElementById("s-height").value,
-      target_deficit_kcal: +document.getElementById("s-deficit").value,
+      // UI pokazuje bilans (znak odwrotny), patrz TODO/DONE „Bilans zamiast deficytu"
+      target_deficit_kcal: -(+document.getElementById("s-balance").value),
       lifestyle: document.getElementById("s-lifestyle").value,
       target_weight_kg: goalStr ? +goalStr : null,
       tz: document.getElementById("s-tz").value,

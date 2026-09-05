@@ -102,13 +102,15 @@ def profile_form(
     birth_year: int = Form(...),
     sex: str = Form(...),
     height_cm: float = Form(...),
-    target_deficit_kcal: int = Form(500),
+    # formularz pokazuje bilans (znak odwrotny), patrz TODO/DONE
+    # „Bilans zamiast deficytu" — backend zostaje przy target_deficit_kcal
+    balance_kcal: int = Form(-500),
     db: Session = Depends(db_session),
     user: User = Depends(auth.current_user),
 ):
     put_profile(
         ProfileIn(birth_year=birth_year, sex=sex, height_cm=height_cm,
-                  target_deficit_kcal=target_deficit_kcal),
+                  target_deficit_kcal=-balance_kcal),
         db,
         user,
     )

@@ -264,6 +264,7 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
         "estimated": e.estimated,
         "balance": round(balance),
         "target_deficit_kcal": profile.target_deficit_kcal,
+        "target_kcal": round(e_target),
         "remaining_kcal": _floor_to_50(e_target - e.kcal_in),
         "calibration_factor": round(calibration_factor, 4),
         "calibration_updated": calibration_state["updated_on"],

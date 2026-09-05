@@ -155,6 +155,10 @@ bez e-maili, treści posiłków, zdjęć, wag ani kalorii.
     Kończą się nad celem (kcal_in &gt; e_target, factor bieżący — przybliżenie):
     <b>{{ conservative_balance.over_target_pct if conservative_balance.over_target_pct is not none else "—" }}%</b>.
     Mediana (kcal_in − e_target): <b>{{ conservative_balance.median_diff if conservative_balance.median_diff is not none else "—" }}</b> kcal.</p>
+  <p class="muted">Docelowy bilans dnia — rozkład znaku wśród profili: deficyt
+    <b>{{ balance_goal.deficit }}</b> / utrzymanie <b>{{ balance_goal.maintenance }}</b> /
+    nadwyżka <b>{{ balance_goal.surplus }}</b>. Mediana |wartości bezwzględnej|:
+    <b>{{ balance_goal.median_abs_kcal if balance_goal.median_abs_kcal is not none else "—" }}</b> kcal.</p>
 </section>
 
 <section class="card">

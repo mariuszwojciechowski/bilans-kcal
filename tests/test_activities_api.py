@@ -366,6 +366,12 @@ def test_day_in_progress_walk_reproduces_symptom_and_uses_garmin_net(clients):
     assert body["remaining_kcal"] % 50 == 0
     assert body["remaining_kcal"] <= raw_diff
 
+    # cel dnia — jawna liczba, do której odnosi się "zostało dziś" (TODO.md
+    # „Bilans zamiast deficytu…")
+    assert body["target_kcal"] == round(
+        body["kcal_out"] * body["calibration_factor"] - body["target_deficit_kcal"]
+    )
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

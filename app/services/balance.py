@@ -50,10 +50,19 @@ def projected_weekly_change_kg(avg_daily_balance: float) -> float:
 
 
 def deficit_warning(target_deficit: int, tdee: float) -> str | None:
-    """Deficyt > ~25% TDEE jest zdrowotnie i behawioralnie niezrównoważony."""
+    """Deficyt > ~25% TDEE jest zdrowotnie i behawioralnie niezrównoważony.
+    Ujemny `target_deficit` oznacza nadwyżkę (budowa masy) — lustrzany warunek
+    na próg 20% (decyzja właściciela 2026-09-05, TODO.md „Bilans zamiast
+    deficytu"): nadwyżka > 20% wydatku to głównie przyrost tkanki tłuszczowej."""
     if tdee > 0 and target_deficit > 0.25 * tdee:
         return (
             f"Cel deficytu {target_deficit} kcal przekracza 25% dziennego wydatku "
             f"({tdee:.0f} kcal) — rozważ łagodniejsze tempo."
+        )
+    if tdee > 0 and target_deficit < 0 and -target_deficit > 0.20 * tdee:
+        surplus = -target_deficit
+        return (
+            f"Nadwyżka {surplus} kcal to > 20% wydatku — przyrost będzie głównie "
+            "tłuszczem."
         )
     return None
