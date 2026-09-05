@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from ..config import ADMIN_EMAIL, DEBUG, SECRET_KEY, USAGE_SALT
 from ..models import (
     Activity, AppSetting, CalibrationLog, CalibrationState, DailySummary, Meal, User, UsageDaily,
-    UserProfile,
+    UserProfile, WeightLog,
 )
 from ..providers.garmin import GARMIN_TOKENS_KEY
 
@@ -248,6 +248,7 @@ def dashboard_stats(db: Session, weeks: int = 12, scope: str = "others") -> dict
     calibration_stats = _stats_calibration(db, allowed_ids, allowed_refs, today, weeks, chart_start)
     conservative_balance = _stats_conservative_balance(db, allowed_ids, today)
     balance_goal = _stats_balance_goal(db, allowed_ids)
+    protein_goal = _stats_protein_goal(db, allowed_ids, today)
 
     return {
         "scope": scope,
@@ -267,6 +268,7 @@ def dashboard_stats(db: Session, weeks: int = 12, scope: str = "others") -> dict
         "calibration_stats": calibration_stats,
         "conservative_balance": conservative_balance,
         "balance_goal": balance_goal,
+        "protein_goal": protein_goal,
     }
 
 
@@ -495,6 +497,70 @@ def _stats_balance_goal(db: Session, allowed_ids: set[int]) -> dict:
         "maintenance": maintenance_n,
         "surplus": surplus_n,
         "median_abs_kcal": round(statistics.median([abs(d) for d in deficits])) if deficits else None,
+    }
+
+
+def _stats_protein_goal(db: Session, allowed_ids: set[int], today: date) -> dict:
+    """Adopcja i funkcjonowanie celu białka zależnego od bilansu (TODO.md
+    „Cel białka zależny od bilansu"): `n_visible` = ilu profilom w ogóle
+    pokazuje się znacznik (jeśli 0 — funkcja jest martwa jak martwe pole
+    `protein_cut_g_per_kg` przed tym wdrożeniem); `in_goal_pct` = odsetek
+    domkniętych dni z posiłkami, w których spożycie białka trafiło w dolną
+    granicę celu — tylko wśród profili, którym znacznik się pokazuje."""
+    from .energy import age_from_year, smoothed_weight
+    from .macros import who_targets
+
+    since = today - timedelta(days=30)
+    weights_by_user: dict[int, list[tuple[date, float]]] = {}
+    for uid, d, w in db.execute(
+        select(WeightLog.user_id, WeightLog.date, WeightLog.weight_kg)
+        .where(WeightLog.user_id.in_(allowed_ids))
+    ).all():
+        weights_by_user.setdefault(uid, []).append((d, w))
+
+    goal_lo_by_user: dict[int, float] = {}
+    for p in db.scalars(select(UserProfile).where(UserProfile.user_id.in_(allowed_ids))).all():
+        weight = smoothed_weight(weights_by_user.get(p.user_id, []))
+        if weight is None:
+            continue
+        targets = who_targets(
+            0, weight, sex=p.sex, age=age_from_year(p.birth_year, today),
+            lifestyle=p.lifestyle or "active", target_balance_kcal=-p.target_deficit_kcal,
+        )
+        if targets.protein_goal is not None:
+            goal_lo_by_user[p.user_id] = targets.protein_goal.min_g
+
+    n_visible = len(goal_lo_by_user)
+    if not goal_lo_by_user:
+        return {"n_visible": 0, "in_goal_pct": None}
+
+    meal_protein_by_day: dict[tuple[int, date], float] = {}
+    for uid, d, protein_g in db.execute(
+        select(Meal.user_id, Meal.date, Meal.protein_g)
+        .where(Meal.user_id.in_(goal_lo_by_user), Meal.date >= since)
+    ).all():
+        key = (uid, d)
+        meal_protein_by_day[key] = meal_protein_by_day.get(key, 0) + protein_g
+
+    complete_days = {
+        (uid, d) for uid, d in db.execute(
+            select(DailySummary.user_id, DailySummary.date)
+            .where(DailySummary.user_id.in_(goal_lo_by_user), DailySummary.date >= since,
+                   DailySummary.complete.is_(True))
+        ).all()
+    }
+
+    total = in_goal = 0
+    for (uid, d), protein_g in meal_protein_by_day.items():
+        if (uid, d) not in complete_days:
+            continue
+        total += 1
+        if protein_g >= goal_lo_by_user[uid]:
+            in_goal += 1
+
+    return {
+        "n_visible": n_visible,
+        "in_goal_pct": round(100 * in_goal / total, 1) if total else None,
     }
 
 

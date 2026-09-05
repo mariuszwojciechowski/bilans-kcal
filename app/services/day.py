@@ -241,7 +241,8 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
     e_target = e.kcal_out * calibration_factor - profile.target_deficit_kcal
     targets = who_targets(e_target, weight, sex=profile.sex,
                           age=age_from_year(profile.birth_year, day),
-                          lifestyle=profile.lifestyle or "active")
+                          lifestyle=profile.lifestyle or "active",
+                          target_balance_kcal=-profile.target_deficit_kcal)
     macros = coverage(
         targets,
         protein_g=sum(m.protein_g for m in meals),

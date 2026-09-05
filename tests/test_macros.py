@@ -59,7 +59,8 @@ def test_sex_override_mechanism(monkeypatch):
     import app.services.macros as m
     norms = {
         "groups": [{"id": "adult", "match": {"age_min": 18}, "protein_g_per_kg_min": 0.83,
-                    "protein_cut_g_per_kg": [1.2, 1.6], "fat_energy": [0.15, 0.30],
+                    "protein_cut_g_per_kg": [1.2, 1.6], "protein_bulk_g_per_kg": [1.6, 2.2],
+                    "fat_energy": [0.15, 0.30],
                     "carbs_energy": [0.55, 0.75], "free_sugars_energy_max": 0.10,
                     "fiber_g_min": 25.0}],
         "sex_overrides": {"M": {"fiber_g_min": 38.0}, "F": {}},
@@ -116,3 +117,40 @@ def test_coverage_includes_bar_pct_for_all_macros():
     cov = coverage(t, protein_g=100, fat_g=80, carbs_g=300, fiber_g=10, sugars_g=60)
     for key in ("protein", "fat", "carbs", "fiber", "sugars"):
         assert 0.0 <= cov[key]["bar_pct"] <= 100.0
+
+
+# ── Cel białka zależny od bilansu (TODO/DONE „Cel białka zależny od bilansu") ──
+
+def test_protein_goal_cut_for_sedentary_on_deficit():
+    t = who_targets(2000, weight_kg=100, lifestyle="sedentary", target_balance_kcal=-500)
+    assert t.protein_goal_kind == "cut"
+    assert (round(t.protein_goal.min_g), round(t.protein_goal.max_g)) == (120, 160)  # 1.2-1.6 g/kg
+    cov = coverage(t, protein_g=100, fat_g=80, carbs_g=300, fiber_g=10, sugars_g=60)
+    lo_pct, hi_pct = cov["protein"]["goal_pct"]
+    assert lo_pct < hi_pct
+    assert cov["protein"]["goal_kind"] == "cut"
+    assert cov["protein"]["goal_range_g"] == [120.0, 160.0]
+
+
+def test_protein_goal_none_when_lifestyle_already_matches_cut():
+    # "rekreacyjnie trenujący" (active) ma już zakres 1.2-1.6 = cel redukcyjny
+    t = who_targets(2000, weight_kg=90, lifestyle="active", target_balance_kcal=-500)
+    assert t.protein_goal is None
+    assert t.protein_goal_kind is None
+    cov = coverage(t, protein_g=100, fat_g=80, carbs_g=300, fiber_g=10, sugars_g=60)
+    assert cov["protein"]["goal_range_g"] is None
+    assert cov["protein"]["goal_kind"] is None
+    assert cov["protein"]["goal_pct"] is None
+
+
+def test_protein_goal_bulk_for_strength_on_surplus():
+    # "siłowy" (1.6-2.0) vs bulk (1.6-2.2) — górna granica różni się o 0.2 g/kg
+    t = who_targets(2000, weight_kg=80, lifestyle="strength", target_balance_kcal=300)
+    assert t.protein_goal_kind == "bulk"
+    assert (round(t.protein_goal.min_g), round(t.protein_goal.max_g)) == (128, 176)  # 1.6-2.2 g/kg
+
+
+def test_protein_goal_none_at_maintenance():
+    t = who_targets(2000, weight_kg=90, lifestyle="sedentary", target_balance_kcal=0)
+    assert t.protein_goal is None
+    assert t.protein_goal_kind is None

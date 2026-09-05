@@ -64,6 +64,8 @@
   }
   .bar::before { left: 33.333%; }
   .bar::after { left: 66.667%; }
+  .bar .goal-mark { position: absolute; top: 0; bottom: 0; width: 2px;
+                     background: #0d6efd; z-index: 1; }
   .entry { display: flex; gap: 10px; align-items: center; padding: 8px 0;
            border-bottom: 1px solid rgba(108,117,125,.25); }
   .entry .x { width: auto; padding: 6px 10px; margin: 0; }
@@ -353,6 +355,7 @@
         <label>Docelowy bilans dnia [kcal]</label>
         <input type="number" id="s-balance" step="50" min="-1500" max="1000" oninput="renderBalanceCaption()">
         <p class="muted" id="s-balance-caption" style="margin:2px 0 0"></p>
+        <p class="muted" id="s-balance-protein-note" style="margin:2px 0 0;font-size:12px"></p>
       </span>
       <span style="flex:1">
         <label>Cel wagi [kg]</label>
@@ -669,6 +672,29 @@ function setColored(id, value, cls) {
   el.className = cls;
 }
 
+// Cel białka zależny od bilansu (TODO/DONE „Cel białka zależny od bilansu") —
+// g/kg zwierciadlą app/resources/who_norms.json protein_cut/bulk_g_per_kg;
+// jeden słownik czytany zarówno na „Dziś", jak i w Ustawieniach.
+const PROTEIN_GOAL_TEXT = {
+  cut: {kg: [1.2, 1.6], sign: "ujemnym", label: "cel redukcyjny",
+        explain: "w deficycie wyższe białko chroni mięśnie i syci"},
+  bulk: {kg: [1.6, 2.2], sign: "dodatnim", label: "cel przy budowie masy",
+         explain: "nadwyżka bez białka to głównie tłuszcz"},
+};
+
+function proteinGoalText(kind, goalRangeG, lifestyleRangeG) {
+  const cfg = PROTEIN_GOAL_TEXT[kind];
+  if (!cfg) return "Bilans 0: utrzymanie wagi, bez dodatkowego celu białka.";
+  const kgStr = `${cfg.kg[0]}`.replace(".", ",") + "–" + `${cfg.kg[1]}`.replace(".", ",");
+  const goalStr = `${r0(goalRangeG[0])}–${r0(goalRangeG[1])}`;
+  const lifeStr = `${r0(lifestyleRangeG[0])}–${r0(lifestyleRangeG[1])}`;
+  const dir = (lifestyleRangeG[0] + lifestyleRangeG[1]) < (goalRangeG[0] + goalRangeG[1])
+    ? "niżej" : "wyżej";
+  return `Przy ${cfg.sign} bilansie zobaczysz na pasku białka dodatkowy znacznik — `
+    + `${cfg.label} ${kgStr} g/kg (dla Ciebie ${goalStr} g): ${cfg.explain}. `
+    + `Norma z Twojego stylu życia (${lifeStr} g) jest ${dir}.`;
+}
+
 function renderMacros(m) {
   if (!m) return;
   const rows = [
@@ -680,12 +706,24 @@ function renderMacros(m) {
   ];
   const statusText = {ok: "w normie", below: "poniżej", above: "powyżej"};
   const statusClass = {ok: "macro-ok", below: "macro-below", above: "macro-above"};
-  document.getElementById("macros").innerHTML = rows.map(([label, item, color, range]) => `
+  document.getElementById("macros").innerHTML = rows.map(([label, item, color, range]) => {
+    const hasGoal = item === m.protein && item.goal_range_g;
+    const goalMarks = hasGoal
+      ? item.goal_pct.map(p => `<i class="goal-mark" style="left:${p}%"></i>`).join("")
+      : "";
+    const goalSuffix = hasGoal
+      ? ` · ${item.goal_kind === "cut" ? "cel redukcyjny" : "cel masy"} ${r0(item.goal_range_g[0])}–${r0(item.goal_range_g[1])} g`
+      : "";
+    const goalCaption = hasGoal
+      ? `<p class="muted" style="font-size:12px;margin:2px 0 8px">${esc(proteinGoalText(item.goal_kind, item.goal_range_g, item.range_g))}</p>`
+      : "";
+    return `
     <div style="display:flex;justify-content:space-between">
-      <span>${label} — ${item.consumed_g.toFixed(1)} g <span class="muted">(${range})</span></span>
+      <span>${label} — ${item.consumed_g.toFixed(1)} g <span class="muted">(${range}${goalSuffix})</span></span>
       <span class="${statusClass[item.status]}">${statusText[item.status]}</span></div>
-    <div class="bar"><i style="width:${item.bar_pct}%;background:${color}"></i></div>
-  `).join("");
+    <div class="bar"><i style="width:${item.bar_pct}%;background:${color}"></i>${goalMarks}</div>
+    ${goalCaption}`;
+  }).join("");
 }
 
 function renderMeals(meals, pending) {
@@ -1123,9 +1161,20 @@ async function toggleConsent() {
 
 function renderBalanceCaption() {
   const el = document.getElementById("s-balance-caption");
-  if (!el) return;
   const v = +document.getElementById("s-balance").value;
-  el.textContent = v < 0 ? "deficyt (redukcja)" : (v > 0 ? "nadwyżka (budowa masy)" : "utrzymanie");
+  if (el) el.textContent = v < 0 ? "deficyt (redukcja)" : (v > 0 ? "nadwyżka (budowa masy)" : "utrzymanie");
+  renderBalanceProteinNote(v);
+}
+
+function renderBalanceProteinNote(v) {
+  const el = document.getElementById("s-balance-protein-note");
+  if (!el) return;
+  const kind = v < 0 ? "cut" : (v > 0 ? "bulk" : null);
+  if (!kind) { el.textContent = "Bilans 0: utrzymanie wagi, bez dodatkowego celu białka."; return; }
+  const cfg = PROTEIN_GOAL_TEXT[kind];
+  const kgStr = `${cfg.kg[0]}`.replace(".", ",") + "–" + `${cfg.kg[1]}`.replace(".", ",");
+  el.textContent = `Przy ${cfg.sign} bilansie zobaczysz na pasku białka dodatkowy znacznik — `
+    + `${cfg.label} ${kgStr} g/kg: ${cfg.explain}.`;
 }
 
 async function saveProfile() {

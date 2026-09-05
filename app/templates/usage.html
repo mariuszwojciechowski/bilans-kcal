@@ -159,6 +159,9 @@ bez e-maili, treści posiłków, zdjęć, wag ani kalorii.
     <b>{{ balance_goal.deficit }}</b> / utrzymanie <b>{{ balance_goal.maintenance }}</b> /
     nadwyżka <b>{{ balance_goal.surplus }}</b>. Mediana |wartości bezwzględnej|:
     <b>{{ balance_goal.median_abs_kcal if balance_goal.median_abs_kcal is not none else "—" }}</b> kcal.</p>
+  <p class="muted">Cel białka (znacznik na pasku) widoczny dla
+    <b>{{ protein_goal.n_visible }}</b> profili. Domknięte dni z posiłkiem w celu:
+    <b>{{ protein_goal.in_goal_pct if protein_goal.in_goal_pct is not none else "—" }}%</b>.</p>
 </section>
 
 <section class="card">

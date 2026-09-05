@@ -9,6 +9,7 @@
       "WHO/FAO/UNU (2007) TRS 935: białko — bezpieczne spożycie 0.83 g/kg m.c./d (dorośli, obie płcie)",
       "PROT-AGE/ESPEN (uzupełnienie, nie WHO): białko ≥1.0 g/kg/d dla 65+",
       "Zakresy białka wg stylu życia (uzupełnienie, nie WHO — normy żywienia sportowego ISSN/ACSM oraz zalecenia dla ciąży/laktacji): mało aktywni 0.8-1.0, rekreacyjnie trenujący 1.2-1.6, wytrzymałościowi 1.2-1.8, siłowi/sylwetkowi 1.6-2.0, ciąża/karmienie 1.2-1.4 g/kg/d",
+      "Cel białka zależny od bilansu (uzupełnienie, nie WHO): redukcja 1.2-1.6 g/kg/d (ochrona mięśni w deficycie), budowa masy 1.6-2.2 g/kg/d wg ISSN — pokazywany tylko, gdy różni się od zakresu ze stylu życia",
       "Węglowodany dla trenujących wg ACSM/ISSN liczone w g/kg m.c. (nie %E): rekreacyjnie 4-6, wytrzymałościowo 5-8 (przy dużych objętościach do 10), siłowo 4-7 g/kg/d; tłuszcze u trenujących 20-35%E (ACSM). Mało aktywni i ciąża: zakresy WHO %E"
     ],
     "notes": [
@@ -22,6 +23,7 @@
       "match": { "age_min": 18, "age_max": 64 },
       "protein_g_per_kg_min": 0.83,
       "protein_cut_g_per_kg": [1.2, 1.6],
+      "protein_bulk_g_per_kg": [1.6, 2.2],
       "fat_energy": [0.15, 0.30],
       "carbs_energy": [0.55, 0.75],
       "free_sugars_energy_max": 0.10,
@@ -32,6 +34,7 @@
       "match": { "age_min": 65 },
       "protein_g_per_kg_min": 1.0,
       "protein_cut_g_per_kg": [1.2, 1.6],
+      "protein_bulk_g_per_kg": [1.6, 2.2],
       "fat_energy": [0.15, 0.30],
       "carbs_energy": [0.55, 0.75],
       "free_sugars_energy_max": 0.10,

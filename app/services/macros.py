@@ -88,12 +88,38 @@ class MacroTargets:
     fiber_min_g: float
     group_id: str
     lifestyle_label: str
+    protein_goal: MacroRange | None = None       # cel zależny od bilansu (redukcja/masa)
+    protein_goal_kind: str | None = None         # "cut" | "bulk"
+
+
+# Próg, poniżej którego zakres celu (redukcja/masa) uznajemy za pokrywający się
+# z zakresem ze stylu życia — wtedy znacznik nie ma sensu (TODO.md „Cel białka
+# zależny od bilansu").
+PROTEIN_GOAL_THRESHOLD_G_PER_KG = 0.05
 
 
 def who_targets(e_target_kcal: float, weight_kg: float, sex: str = "M", age: int = 40,
-                lifestyle: str = DEFAULT_LIFESTYLE) -> MacroTargets:
+                lifestyle: str = DEFAULT_LIFESTYLE, target_balance_kcal: int = 0) -> MacroTargets:
     n = resolve_norms(sex, age, lifestyle)
     p_lo, p_hi = n["protein_range_g_per_kg"]
+
+    protein_goal = None
+    protein_goal_kind = None
+    if target_balance_kcal < 0:
+        goal_lo, goal_hi = n["protein_cut_g_per_kg"]
+        kind = "cut"
+    elif target_balance_kcal > 0:
+        goal_lo, goal_hi = n["protein_bulk_g_per_kg"]
+        kind = "bulk"
+    else:
+        goal_lo = goal_hi = kind = None
+    if kind is not None and (
+        abs(goal_lo - p_lo) > PROTEIN_GOAL_THRESHOLD_G_PER_KG
+        or abs(goal_hi - p_hi) > PROTEIN_GOAL_THRESHOLD_G_PER_KG
+    ):
+        protein_goal = MacroRange("protein_goal", goal_lo * weight_kg, goal_hi * weight_kg)
+        protein_goal_kind = kind
+
     return MacroTargets(
         protein_who_min_g=n["protein_g_per_kg_min"] * weight_kg,
         protein=MacroRange("protein", p_lo * weight_kg, p_hi * weight_kg),
@@ -116,6 +142,8 @@ def who_targets(e_target_kcal: float, weight_kg: float, sex: str = "M", age: int
         fiber_min_g=n["fiber_g_min"],
         group_id=n["group_id"],
         lifestyle_label=n["lifestyle_label"],
+        protein_goal=protein_goal,
+        protein_goal_kind=protein_goal_kind,
     )
 
 
@@ -151,6 +179,19 @@ def coverage(targets: MacroTargets, protein_g: float, fat_g: float, carbs_g: flo
             "status": targets.protein.status(protein_g),
             "bar_pct": bar_pct(protein_g, targets.protein.min_g, targets.protein.max_g,
                                 3 * targets.protein.max_g),
+            "goal_range_g": (
+                [round(targets.protein_goal.min_g, 1), round(targets.protein_goal.max_g, 1)]
+                if targets.protein_goal else None
+            ),
+            "goal_kind": targets.protein_goal_kind,
+            "goal_pct": (
+                [
+                    bar_pct(targets.protein_goal.min_g, targets.protein.min_g,
+                            targets.protein.max_g, 3 * targets.protein.max_g),
+                    bar_pct(targets.protein_goal.max_g, targets.protein.min_g,
+                            targets.protein.max_g, 3 * targets.protein.max_g),
+                ] if targets.protein_goal else None
+            ),
         },
         "fat": {
             "consumed_g": round(fat_g, 1),
