@@ -9,6 +9,7 @@ zgłaszamy `DayReportUnavailable`, a nie `HTTPException` — router zamienia to
 na 409 z tym samym komunikatem, jaki był wcześniej.
 """
 
+import math
 from dataclasses import dataclass
 from datetime import date
 
@@ -17,9 +18,16 @@ from sqlalchemy.orm import Session
 
 from ..models import Activity, DailySummary, Meal, PendingMeal, UserProfile, WeightLog
 from ..providers import garmin as garmin_provider
-from . import quips
+from . import calibration, quips
 from .balance import day_balance, deficit_warning, projected_weekly_change_kg
-from .energy import DEFAULT_STEPS, TheoreticalTdee, age_from_year, smoothed_weight, tdee_theoretical
+from .energy import (
+    DEFAULT_STEPS,
+    TheoreticalTdee,
+    age_from_year,
+    bmr_mifflin,
+    smoothed_weight,
+    tdee_theoretical,
+)
 from .macros import coverage, who_targets
 from .timeago import humanize_ago
 
@@ -33,12 +41,37 @@ class DayReportUnavailable(RuntimeError):
 
 
 def _est_steps(activity: Activity) -> int:
-    """Szacunek kroków biegu/marszu z dystansu, jak w `tdee_theoretical`."""
+    """Kroki aktywności: z zegarka, gdy są; inaczej szacunek z dystansu dla
+    biegu/marszu, jak w `tdee_theoretical`."""
+    if activity.steps:
+        return activity.steps
     if activity.distance_m and (
         "running" in activity.type.lower() or "walking" in activity.type.lower()
     ):
         return round(activity.distance_m / 1000.0 * STEPS_PER_KM)
     return 0
+
+
+def _activity_resting_kcal(activity: Activity, summary: DailySummary | None, bmr: float) -> float:
+    """Spoczynek zegarka za czas trwania aktywności — do odjęcia od `kcal_garmin`
+    (brutto) i uzyskania kcal netto. Kolejność fallbacków wg TODO.md („Poprawa
+    wyliczania kcal na dzień w toku", krok 0): per-aktywność → proporcja z
+    dobowego spoczynku Garmina → model Mifflin."""
+    if activity.kcal_bmr_garmin is not None:
+        return activity.kcal_bmr_garmin
+    if summary and summary.kcal_bmr_garmin is not None:
+        return summary.kcal_bmr_garmin / 86400 * activity.duration_s
+    return bmr / 86400 * activity.duration_s
+
+
+def _floor_to_50(value: float) -> int:
+    """Zaokrąglenie w dół do pełnych 50 kcal — jedyne miejsce z celowym,
+    konserwatywnym przesunięciem w `remaining_kcal` (decyzja właściciela
+    2026-09-05, zasada „Kierunek błędu w bilansie" w TODO.md): przy
+    niepewności pokazujemy raczej mniej pozostałych kcal, nigdy więcej.
+    `math.floor` działa poprawnie w obie strony znaku (np. -113 → -150, czyli
+    „jeszcze bardziej nad celem", nie „mniej")."""
+    return math.floor(value / 50) * 50
 
 
 @dataclass
@@ -56,7 +89,7 @@ class DayEnergy:
     estimated: bool
     tdee: TheoreticalTdee
     manual_kcal: float
-    activities_kcal: float
+    activities_net_kcal: float
     steps: int
     steps_effective: int
 
@@ -79,15 +112,28 @@ def day_energy(
     kcal_in = sum(m.kcal for m in meals)
 
     steps = summary.steps if summary and summary.steps else DEFAULT_STEPS
+    age = age_from_year(profile.birth_year, day)
+    bmr = bmr_mifflin(weight_kg, profile.height_cm, age, profile.sex)
+
     activities_for_tdee = []
+    activities_net_kcal = 0.0
     for a in activities:
         act_dict = {"type": a.type, "duration_s": a.duration_s, "distance_m": a.distance_m}
-        if a.source == "manual" and a.kcal_garmin:
-            act_dict["kcal"] = a.kcal_garmin
+        if a.steps is not None:
+            act_dict["steps"] = a.steps
+        if a.source == "manual":
+            # Ręczne MET są liczone brutto w `manual_activity_kcal` — zostają tak,
+            # różnica dla typowych 30-60 min wpisów jest <10% (patrz TODO.md).
+            if a.kcal_garmin:
+                act_dict["kcal_net"] = a.kcal_garmin
+        elif a.kcal_garmin is not None:
+            resting = _activity_resting_kcal(a, summary, bmr)
+            net = max(a.kcal_garmin - resting, 0)
+            act_dict["kcal_net"] = net
+            activities_net_kcal += net
         activities_for_tdee.append(act_dict)
 
     manual_kcal = sum(a.kcal_garmin or 0 for a in activities if a.source == "manual")
-    activities_kcal = sum(a.kcal_garmin or 0 for a in activities)
     # Kroki Garmina z biegów/marszów już policzone przez zegarek — nie dublujemy; kroki
     # ręcznych biegów/marszów Garmin nie widział, więc dopisujemy je do wyświetlanej liczby.
     garmin_activity_steps = sum(_est_steps(a) for a in activities if a.source != "manual")
@@ -97,7 +143,7 @@ def day_energy(
     tdee = tdee_theoretical(
         weight_kg=weight_kg,
         height_cm=profile.height_cm,
-        age=age_from_year(profile.birth_year, day),
+        age=age,
         sex=profile.sex,
         steps=steps,
         activities=activities_for_tdee,
@@ -117,7 +163,7 @@ def day_energy(
         estimated=bal.estimated,
         tdee=tdee,
         manual_kcal=manual_kcal,
-        activities_kcal=activities_kcal,
+        activities_net_kcal=activities_net_kcal,
         steps=steps,
         steps_effective=steps_effective,
     )
@@ -157,16 +203,36 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
 
     e = day_energy(profile, weight, day, summary, activities, meals, date.today())
 
-    steps_kcal = max(e.kcal_out - e.tdee.bmr - e.activities_kcal - e.tdee.tef, 0)
-    out_breakdown = {
-        "bmr": round(e.tdee.bmr),
-        "steps_kcal": round(steps_kcal),
-        "steps_count": e.steps_effective,
-        "activities_kcal": round(e.activities_kcal),
-        "tef": round(e.tdee.tef),
-        "total": round(e.kcal_out),
-    }
-    e_target = e.kcal_out - profile.target_deficit_kcal
+    if e.out_source in ("garmin", "mixed"):
+        if summary and summary.kcal_bmr_garmin is not None:
+            resting = summary.kcal_bmr_garmin
+        elif summary and summary.kcal_total_garmin is not None and summary.kcal_active_garmin is not None:
+            resting = summary.kcal_total_garmin - summary.kcal_active_garmin
+        else:
+            resting = e.tdee.bmr
+        steps_kcal = max((summary.kcal_active_garmin or 0 if summary else 0) - e.activities_net_kcal, 0)
+        out_breakdown = {
+            "kind": "garmin",
+            "resting": round(resting),
+            "activities_kcal": round(e.activities_net_kcal),
+            "steps_kcal": round(steps_kcal),
+            "steps_count": e.steps_effective,
+            "manual_kcal": round(e.manual_kcal),
+            "total": round(e.kcal_out),
+        }
+    else:
+        out_breakdown = {
+            "kind": "model",
+            "bmr": round(e.tdee.bmr),
+            "steps_kcal": round(e.tdee.neat),
+            "steps_count": e.steps_effective,
+            "activities_kcal": round(e.tdee.activities),
+            "tef": round(e.tdee.tef),
+            "total": round(e.kcal_out),
+        }
+    calibration_factor = calibration.current_factor(db, user_id)
+    calibration_state = calibration.state_view(db, user_id)
+    e_target = e.kcal_out * calibration_factor - profile.target_deficit_kcal
     targets = who_targets(e_target, weight, sex=profile.sex,
                           age=age_from_year(profile.birth_year, day),
                           lifestyle=profile.lifestyle or "active")
@@ -192,7 +258,10 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
         "estimated": e.estimated,
         "balance": round(balance),
         "target_deficit_kcal": profile.target_deficit_kcal,
-        "remaining_kcal": round(e_target - e.kcal_in),
+        "remaining_kcal": _floor_to_50(e_target - e.kcal_in),
+        "calibration_factor": round(calibration_factor, 4),
+        "calibration_updated": calibration_state["updated_on"],
+        "calibration_days_used": calibration_state["days_used"],
         "projected_weekly_change_kg": round(projected_weekly_change_kg(balance), 2),
         "deficit_warning": deficit_warning(profile.target_deficit_kcal, e.kcal_out),
         "tdee_model": {

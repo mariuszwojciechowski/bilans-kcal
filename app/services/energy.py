@@ -39,9 +39,13 @@ def smoothed_weight(weights: list[tuple[date, float]], window_days: int = 7) -> 
 # kcal na krok na kg masy ciała (chód ~0.57 kcal/kg na 1000 kroków)
 KCAL_PER_STEP_PER_KG = 0.00057
 
-# MET wg Compendium of Physical Activities (uproszczone)
+# MET wg Compendium of Physical Activities (uproszczone). Rower ≥ 20 km/h
+# obniżony z 10 do 8 (decyzja właściciela 2026-09-05 — 10 zawyżało zmierzony
+# wydatek Garmina o rząd 30%, patrz TODO.md „Poprawa wyliczania kcal…").
 MET_STRENGTH = 4.0
-MET_CYCLING_BY_SPEED_KMH = [(16.0, 6.0), (20.0, 8.0), (float("inf"), 10.0)]
+MET_WALKING = 3.5
+MET_HIKING = 6.0
+MET_CYCLING_BY_SPEED_KMH = [(16.0, 6.0), (20.0, 8.0), (float("inf"), 8.0)]
 MET_DEFAULT = 5.0
 
 
@@ -72,16 +76,21 @@ def activity_kcal_model(
     distance_m: float | None,
     weight_kg: float,
 ) -> float:
-    """Teoretyczne kcal aktywności. Typy wg typeKey Garmina."""
+    """Teoretyczne kcal aktywności, **netto** (bez spoczynku — BMR liczony
+    osobno, patrz `tdee_theoretical`). Typy wg typeKey Garmina."""
     t = activity_type.lower()
     hours = duration_s / 3600.0
     if "running" in t or t == "run":
         return running_kcal(weight_kg, distance_m or 0)
     if "cycling" in t or "biking" in t:
-        return cycling_met(distance_m, duration_s) * weight_kg * hours
+        return (cycling_met(distance_m, duration_s) - 1) * weight_kg * hours
+    if "hiking" in t:
+        return (MET_HIKING - 1) * weight_kg * hours
+    if "walking" in t:
+        return (MET_WALKING - 1) * weight_kg * hours
     if "strength" in t or "training" in t:
-        return MET_STRENGTH * weight_kg * hours
-    return MET_DEFAULT * weight_kg * hours
+        return (MET_STRENGTH - 1) * weight_kg * hours
+    return (MET_DEFAULT - 1) * weight_kg * hours
 
 
 @dataclass
@@ -105,19 +114,29 @@ def tdee_theoretical(
     activities: list[dict],
     kcal_in: float = 0,
 ) -> TheoreticalTdee:
-    """activities: [{"type", "duration_s", "distance_m"}].
+    """activities: [{"type", "duration_s", "distance_m", "kcal_net"?, "steps"?}].
+    Kcal aktywności są netto, BMR liczone osobno. `kcal_net`, gdy podany (np.
+    z pomiaru zegarka po odjęciu spoczynku), wygrywa nad modelem MET; `steps`,
+    gdy podany, wygrywa nad przybliżeniem z dystansu.
     TEF (termogeneza poposiłkowa) ~10% spożycia — 0, gdy brak wpisów posiłków."""
     bmr = bmr_mifflin(weight_kg, height_cm, age, sex)
     act_kcal = sum(
-        a.get("kcal", activity_kcal_model(a["type"], a["duration_s"], a.get("distance_m"), weight_kg))
+        a.get(
+            "kcal_net",
+            activity_kcal_model(a["type"], a["duration_s"], a.get("distance_m"), weight_kg),
+        )
         for a in activities
     )
-    # kroki wykonane w ramach aktywności: przybliżenie — bieg/chód ~1400 kroków/km
+    # kroki wykonane w ramach aktywności: z zegarka, gdy jest; inaczej przybliżenie
+    # z dystansu — bieg/chód ~1400 kroków/km
     activity_steps = int(
         sum(
-            (a.get("distance_m") or 0) / 1000.0 * 1400
+            a["steps"] if a.get("steps") is not None else (
+                (a.get("distance_m") or 0) / 1000.0 * 1400
+                if "running" in a["type"].lower() or "walking" in a["type"].lower()
+                else 0
+            )
             for a in activities
-            if "running" in a["type"].lower() or "walking" in a["type"].lower()
         )
     )
     neat = neat_from_steps(steps, weight_kg, activity_steps)

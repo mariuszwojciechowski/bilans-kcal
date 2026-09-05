@@ -92,6 +92,11 @@ class Activity(Base):
     kcal_garmin: Mapped[int | None] = mapped_column(Integer)
     avg_hr: Mapped[int | None] = mapped_column(Integer)
     source: Mapped[str] = mapped_column(String, default="garmin")  # garmin | manual
+    # spoczynek zegarka za czas trwania tej aktywności (Garmin: `bmrCalories`) —
+    # pozwala policzyć netto kcal aktywności (`kcal_garmin` jest brutto).
+    # Brak backfillu: stare wiersze NULL, day.py ma fallback (patrz TODO.md).
+    kcal_bmr_garmin: Mapped[int | None] = mapped_column(Integer)
+    steps: Mapped[int | None] = mapped_column(Integer)  # kroki zarejestrowane przez zegarek
 
 
 class AppSetting(Base):
@@ -180,3 +185,53 @@ class UsageDaily(Base):
     date: Mapped[date] = mapped_column(Date, index=True)
     event: Mapped[str] = mapped_column(String)
     count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class CalibrationState(Base):
+    """Kalibracja adaptacyjna (WYMAGANIA.md 6.2) — stan filtru dziennego,
+    jeden wiersz na użytkownika. Mechanizm opisany w TODO.md „Kalibracja
+    adaptacyjna" (Warstwa 2: filtr dzienny od pierwszego dnia). `trend_kg` to
+    wygładzona waga (EMA), NIE to samo co `energy.smoothed_weight` (średnia
+    okienkowa) używane gdzie indziej."""
+
+    __tablename__ = "calibration_state"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), primary_key=True)
+    factor: Mapped[float] = mapped_column(Float, default=0.97)
+    trend_kg: Mapped[float | None] = mapped_column(Float)
+    days_used: Mapped[int] = mapped_column(Integer, default=0)
+    last_valid_day: Mapped[date | None] = mapped_column(Date)
+    updated_on: Mapped[date | None] = mapped_column(Date)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class CalibrationLog(Base):
+    """Append-only historia kroków filtru — do wykresu 'kalibracja' w
+    tygodniówce (6.4) i diagnozy „dlaczego factor skoczył"."""
+
+    __tablename__ = "calibration_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), index=True)
+    day: Mapped[date] = mapped_column(Date, index=True)
+    innov_kg: Mapped[float] = mapped_column(Float)
+    gain: Mapped[float] = mapped_column(Float)
+    factor_after: Mapped[float] = mapped_column(Float)
+
+
+class Calibration(Base):
+    """Migawka wsadowa (14-dniowa) — wyłącznie do karty 6.4 (oczekiwana vs
+    rzeczywista zmiana wagi) i strażnika rozjazdu z filtrem. Mechanizmem
+    kalibracji na co dzień jest filtr (`CalibrationState`/`CalibrationLog`),
+    nie ta tabela — patrz TODO.md."""
+
+    __tablename__ = "calibration"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), index=True)
+    period_start: Mapped[date] = mapped_column(Date)
+    period_end: Mapped[date] = mapped_column(Date)
+    expected_delta_kg: Mapped[float] = mapped_column(Float)
+    actual_delta_kg: Mapped[float] = mapped_column(Float)
+    factor: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

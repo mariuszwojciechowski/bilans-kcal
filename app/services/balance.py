@@ -1,7 +1,10 @@
 """Moduł M5: dzienny bilans energetyczny.
 
-bilans = kcal spożyte − kcal spalone. Wydatek: pomiar Garmina (źródło prawdy);
-gdy dzień niedomknięty lub brak danych z zegarka — model teoretyczny (oznaczone)."""
+bilans = kcal spożyte − kcal spalone. Wydatek: pomiar Garmina (źródło prawdy),
+także dla dnia w toku — model teoretyczny zostaje wyłącznie fallbackiem, gdy
+zegarek nie dał żadnych danych (decyzja właściciela 2026-09-05, patrz TODO.md
+„Poprawa wyliczania kcal na dzień w toku"; wcześniej dzień w toku brał
+max(pomiar, model), co przy zawyżonym modelu dawało błąd rzędu 1000+ kcal)."""
 
 from dataclasses import dataclass
 
@@ -34,9 +37,12 @@ def day_balance(
     measured = garmin_total + manual_kcal
     if day_complete:
         return DayBalance(kcal_in, measured, "garmin", False)
-    # Dzień w toku: częściowy pomiar Garmina albo prognoza z modelu — bierzemy większe,
-    # żeby nie zaniżać wydatku przed końcem dnia (Garmin dosyła dane co kilka godzin).
-    return DayBalance(kcal_in, max(measured, model_tdee), "mixed", True)
+    # Dzień w toku: pomiar Garmina, choć częściowy — bez `max` z modelem teoretycznym.
+    # Total Garmina w ciągu dnia nie jest zaniżony o BMR (spoczynek jest liczony za
+    # całą dobę od rana), brakuje mu tylko przyszłych aktywności — model tylko je
+    # zgadywał i potrafił chybić o >1000 kcal (patrz TODO.md). `estimated=True`,
+    # bo wydatek jeszcze urośnie, gdy zegarek dośle dane.
+    return DayBalance(kcal_in, measured, "mixed", True)
 
 
 def projected_weekly_change_kg(avg_daily_balance: float) -> float:

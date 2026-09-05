@@ -280,5 +280,92 @@ def test_migration_backfills_garmin_source(tmp_path):
     db.close()
 
 
+def test_migration_adds_activity_watch_columns(tmp_path):
+    """Baza ze schematem sprzed `kcal_bmr_garmin`/`steps` na `activity` — po
+    `_migrate()` kolumny istnieją (NULL, bez backfillu), insert/select działa."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'old_schema2.db'}")
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE activity (
+                id INTEGER PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                garmin_id VARCHAR,
+                date DATE NOT NULL,
+                type VARCHAR NOT NULL,
+                duration_s INTEGER NOT NULL,
+                distance_m FLOAT,
+                kcal_garmin INTEGER,
+                avg_hr INTEGER,
+                source VARCHAR DEFAULT 'garmin'
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO activity (user_id, garmin_id, date, type, duration_s,
+                                   distance_m, kcal_garmin, avg_hr, source)
+            VALUES (1, 'garmin-old-3', :today, 'running', 1800, 5000, 420, 150, 'garmin')
+        """), {"today": date.today().isoformat()})
+        conn.commit()
+
+    _migrate(engine)
+
+    Session = sessionmaker(bind=engine)
+    db = Session()
+    existing = db.scalar(select(Activity).where(Activity.garmin_id == "garmin-old-3"))
+    assert existing is not None
+    assert existing.kcal_bmr_garmin is None
+    assert existing.steps is None
+
+    new_activity = Activity(
+        user_id=1, date=date.today(), type="walking", duration_s=1800,
+        kcal_garmin=200, kcal_bmr_garmin=80, steps=2000, garmin_id="garmin-old-4",
+    )
+    db.add(new_activity)
+    db.commit()                                  # wywaliłoby się bez migracji
+    db.refresh(new_activity)
+    assert new_activity.kcal_bmr_garmin == 80
+    assert new_activity.steps == 2000
+    db.close()
+
+
+def test_day_in_progress_walk_reproduces_symptom_and_uses_garmin_net(clients):
+    """Odtworzenie objawu z 2026-09-05 (patrz TODO.md „Poprawa wyliczania kcal
+    na dzień w toku"): marsz 4,5h liczony MET 5.0 przez cały czas trwania
+    zawyżał model o >1000 kcal. Dzień w toku ma teraz brać pomiar Garmina
+    netto z aktywności, bez `max` z modelem teoretycznym."""
+    alice, _, SessionLocal = clients
+    today = date.today()
+    user_id = _user_id(SessionLocal, "alice@example.com")
+
+    _seed_summary(SessionLocal, user_id, today,
+                  kcal_total_garmin=2889, kcal_active_garmin=1087, kcal_bmr_garmin=1802,
+                  steps=16038, complete=False)
+
+    db = SessionLocal()
+    db.add(Activity(user_id=user_id, date=today, type="walking", duration_s=16200,
+                    kcal_garmin=839, kcal_bmr_garmin=341, steps=11704,
+                    garmin_id="walk-1", source="garmin"))
+    db.add(Activity(user_id=user_id, date=today, type="cycling", duration_s=2760,
+                    kcal_garmin=475, kcal_bmr_garmin=58,
+                    garmin_id="ride-1", source="garmin"))
+    db.commit()
+    db.close()
+
+    body = alice.get(f"/api/day/{today.isoformat()}").json()
+
+    assert body["kcal_out"] == 2889
+    assert body["out_breakdown"]["kind"] == "garmin"
+    assert body["out_breakdown"]["activities_kcal"] == 498 + 417
+    assert body["out_breakdown"]["steps_kcal"] == 172
+
+    # strażnik: model teoretyczny dla tego samego dnia nie odjeżdża >15% od
+    # pomiaru Garmina — to jest dokładnie klasa błędu, która dała 4213 zamiast 2889
+    assert 0.85 * 2889 <= body["tdee_model"]["total"] <= 1.15 * 2889
+
+    # jedyne celowe przesunięcie: zaokrąglenie w dół do 50, nigdy więcej niż surowa różnica
+    raw_diff = (body["kcal_out"] - body["target_deficit_kcal"]) - body["kcal_in"]
+    assert body["remaining_kcal"] % 50 == 0
+    assert body["remaining_kcal"] <= raw_diff
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -35,6 +35,7 @@ TODAY = date.today()
 API_TRENDS_KEYS = {
     "days", "ranges", "chart_weight", "chart_energy", "chart_balance",
     "period_change", "weight_avg_7d", "avg_balance", "balance_days", "to_goal_kg", "goal_eta",
+    "calibration",
 }
 
 
@@ -195,7 +196,9 @@ def test_trends_in_progress_day_matches_day_report_and_is_estimated(client):
     db.close()
 
     assert report["estimated"] is True
-    assert report["balance"] < 0                      # 1600 spożyte < 2600 (model) spalone
+    # dzień w toku bierze pomiar Garmina (1300), bez `max` z modelem — decyzja
+    # właściciela 2026-09-05 (TODO.md „Poprawa wyliczania kcal na dzień w toku")
+    assert report["balance"] > 0                       # 1600 spożyte > 1300 (pomiar) spalone
     assert round(e.kcal_in - e.kcal_out) == report["balance"]
 
     # jedyny słupek bilansu to dzisiejszy, więc szacowany marker (obrys + legenda)

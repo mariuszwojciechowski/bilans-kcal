@@ -147,6 +147,7 @@
       <div class="stat"><b id="t-weight">—</b><span>ostatnia waga [kg]</span></div>
       <div class="stat"><b id="t-goal">—</b><span>do celu wagi</span></div>
     </div>
+    <p class="muted" id="t-calibration" style="font-size:12px"></p>
     <div style="display:flex;gap:6px;align-items:center;margin:4px 0">
       <button class="ghost" style="flex:none;padding:8px 14px;margin:0;width:auto" onclick="changeDay(-1)">◀</button>
       <input type="date" id="t-date" onchange="renderToday()" style="flex:1;margin:0">
@@ -561,6 +562,7 @@ async function renderToday() {
     document.getElementById("t-goal").textContent =
       rep.to_goal_kg === null ? "—" : rep.to_goal_kg + " kg";
     document.getElementById("quip").textContent = rep.quip || "";
+    renderCalibrationLine(rep);
     document.getElementById("a-steps").value = rep.steps ?? "";
     document.getElementById("a-steps-note").style.display = rep.steps_default ? "" : "none";
     renderMacros(rep.macros);
@@ -589,6 +591,16 @@ function changeDay(delta) {
   renderToday();
 }
 
+function renderCalibrationLine(rep) {
+  const el = document.getElementById("t-calibration");
+  if (!el) return;
+  const pct = Math.round((rep.calibration_factor - 1) * 100);
+  if (pct === 0) { el.textContent = ""; return; }
+  const sign = pct > 0 ? "+" : "";
+  const startowy = rep.calibration_days_used < 10 ? ", współczynnik startowy" : "";
+  el.textContent = `zapotrzebowanie skorygowane o ${sign}${pct}% (kalibracja: ${rep.calibration_days_used} dni${startowy})`;
+}
+
 function renderEnergyBreakdown(rep, elId) {
   const el = document.getElementById(elId);
   if (!el || !rep.out_breakdown) return;
@@ -596,7 +608,16 @@ function renderEnergyBreakdown(rep, elId) {
   const src = {garmin: "Garmin", mixed: "Garmin (dzień w toku)", model: "model szacunkowy"}[rep.out_source] || "model szacunkowy";
   let html = `<div style="font-size:12px;color:var(--stone);line-height:1.8">`;
   html += `Źródło: <b style="color:var(--ink)">${src}</b><br>`;
-  html += `BMR <b>${b.bmr}</b> + kroki <b>${b.steps_kcal} kcal</b> + aktywności <b>${b.activities_kcal}</b> + TEF <b>${b.tef}</b> = <b style="color:var(--ink)">${b.total} kcal</b>`;
+  if (b.kind === "garmin") {
+    html += `spoczynek <b>${b.resting}</b> + aktywności <b>${b.activities_kcal}</b> + kroki <b>${b.steps_kcal} kcal</b>`;
+    if (b.manual_kcal) html += ` + ręczne <b>${b.manual_kcal}</b>`;
+    html += ` = <b style="color:var(--ink)">${b.total} kcal</b>`;
+    if (rep.estimated) {
+      html += `<br><span style="color:var(--stone)">Garmin dosyła dane co kilka godzin — wydatek urośnie do końca dnia.</span>`;
+    }
+  } else {
+    html += `BMR <b>${b.bmr}</b> + kroki <b>${b.steps_kcal} kcal</b> + aktywności <b>${b.activities_kcal}</b> + TEF <b>${b.tef}</b> = <b style="color:var(--ink)">${b.total} kcal</b>`;
+  }
   html += `</div>`;
   el.innerHTML = html;
 }

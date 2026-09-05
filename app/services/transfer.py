@@ -220,4 +220,8 @@ def import_payload(db: Session, user_id: int, payload: dict) -> dict:
         counts["activities"] += 1
 
     db.commit()
+    # Stan filtru kalibracji nie wchodzi do eksportu (nie ma go w `payload`) —
+    # po imporcie przeliczamy go od zera z historii (kilkaset kroków, milisekundy).
+    from . import calibration
+    calibration.maybe_recalibrate(db, user_id)
     return counts

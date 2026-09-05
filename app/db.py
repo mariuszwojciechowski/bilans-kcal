@@ -115,6 +115,12 @@ def _migrate(engine) -> None:
         if activity_cols and "source" not in activity_cols:
             conn.execute(text("ALTER TABLE activity ADD COLUMN source VARCHAR DEFAULT 'garmin'"))
             conn.commit()
+        if activity_cols and "kcal_bmr_garmin" not in activity_cols:
+            conn.execute(text("ALTER TABLE activity ADD COLUMN kcal_bmr_garmin INTEGER"))
+            conn.commit()
+        if activity_cols and "steps" not in activity_cols:
+            conn.execute(text("ALTER TABLE activity ADD COLUMN steps INTEGER"))
+            conn.commit()
 
 
 def get_session() -> Session:

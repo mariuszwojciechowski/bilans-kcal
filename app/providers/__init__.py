@@ -31,6 +31,8 @@ class ActivityData:
     distance_m: float | None
     kcal: int | None
     avg_hr: int | None
+    kcal_bmr: int | None = None  # spoczynek zegarka za czas trwania (Garmin: bmrCalories)
+    steps: int | None = None  # kroki zarejestrowane przez zegarek dla tej aktywności
 
 
 class DataProvider(Protocol):

@@ -73,6 +73,8 @@ def sync_range(db: Session, provider: DataProvider, user_id: int, days: int = 7)
         row.distance_m = a.distance_m
         row.kcal_garmin = a.kcal
         row.avg_hr = a.avg_hr
+        row.kcal_bmr_garmin = a.kcal_bmr
+        row.steps = a.steps
 
     db.commit()
     return {"days": synced_days, "weights": len(weights), "activities": len(activities)}

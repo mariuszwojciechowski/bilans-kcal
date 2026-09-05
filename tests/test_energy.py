@@ -5,6 +5,7 @@ from app.services.energy import (
     age_from_year,
     age_years,
     bmr_mifflin,
+    cycling_met,
     neat_from_steps,
     smoothed_weight,
     tdee_theoretical,
@@ -71,15 +72,36 @@ def test_running_kcal_by_distance():
 
 
 def test_cycling_met_scales_with_speed():
+    # netto: (MET - 1) * kg * h — BMR liczony osobno (day.py)
     slow = activity_kcal_model("cycling", 3600, 15000, 90)   # 15 km/h -> MET 6
-    fast = activity_kcal_model("cycling", 3600, 25000, 90)   # 25 km/h -> MET 10
-    assert slow == 6 * 90
-    assert fast == 10 * 90
+    fast = activity_kcal_model("cycling", 3600, 25000, 90)   # 25 km/h -> MET 8 (obniżone z 10)
+    assert slow == (6 - 1) * 90
+    assert fast == (8 - 1) * 90
+
+
+def test_cycling_top_speed_met_lowered_to_8():
+    # Garmin dla szybkiej jazdy wychodzi ~7-8 MET brutto, nie 10 (TODO.md)
+    assert cycling_met(distance_m=25000, duration_s=3600) == 8.0
 
 
 def test_strength_uses_met():
     kcal = activity_kcal_model("strength_training", 3600, None, 90)
-    assert kcal == 4.0 * 90
+    assert kcal == (4.0 - 1) * 90
+
+
+def test_walking_and_hiking_use_net_met():
+    walking = activity_kcal_model("walking", 3600, None, 90)
+    hiking = activity_kcal_model("hiking", 3600, None, 90)
+    assert walking == (3.5 - 1) * 90
+    assert hiking == (6.0 - 1) * 90
+
+
+def test_hiking_checked_before_walking():
+    # "hiking" nie zawiera "walking" ale test pilnuje, że gałąź hiking
+    # rzeczywiście wygrywa dla tego typu (kolejność z TODO.md)
+    assert activity_kcal_model("hiking", 3600, None, 90) != activity_kcal_model(
+        "walking", 3600, None, 90
+    )
 
 
 def test_tdee_composition_and_tef():
@@ -95,3 +117,28 @@ def test_tdee_composition_and_tef():
     # kroki z biegu (5 km * 1400) odjęte od 8000
     assert tdee.neat == 1000 * 90 * 0.00057
     assert tdee.total == tdee.bmr + tdee.neat + tdee.activities + tdee.tef
+
+
+def test_tdee_kcal_net_wins_over_model():
+    tdee = tdee_theoretical(
+        weight_kg=90, height_cm=180, age=45, sex="M", steps=8000,
+        activities=[{"type": "walking", "duration_s": 3600, "distance_m": None,
+                    "kcal_net": 250}],
+        kcal_in=0,
+    )
+    assert tdee.activities == 250   # nie MET (3.5-1)*90=225
+
+
+def test_tdee_steps_from_activity_wins_over_distance():
+    tdee_with_steps = tdee_theoretical(
+        weight_kg=90, height_cm=180, age=45, sex="M", steps=8000,
+        activities=[{"type": "running", "duration_s": 1800, "distance_m": 5000, "steps": 6000}],
+        kcal_in=0,
+    )
+    tdee_without_steps = tdee_theoretical(
+        weight_kg=90, height_cm=180, age=45, sex="M", steps=8000,
+        activities=[{"type": "running", "duration_s": 1800, "distance_m": 5000}],
+        kcal_in=0,
+    )
+    # z jawnymi krokami (6000) odejmuje mniej niż z szacunku dystansu (7000) -> większy NEAT
+    assert tdee_with_steps.neat > tdee_without_steps.neat

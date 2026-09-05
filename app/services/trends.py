@@ -11,7 +11,8 @@ from datetime import date, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..models import Activity, DailySummary, Meal, UserProfile, WeightLog
+from ..models import Activity, CalibrationLog, DailySummary, Meal, UserProfile, WeightLog
+from . import calibration as calibration_service
 from .charts import Series, bar_chart, line_chart
 from .day import day_energy
 from .energy import smoothed_weight
@@ -151,9 +152,34 @@ def payload(db: Session, user_id: int, days: int, today: date | None = None) -> 
         round(sum(v for _, v in closed_balance) / len(closed_balance)) if closed_balance else None
     )
 
+    calibration_snapshot = calibration_service.latest_snapshot(db, user_id)
+    calibration_state = calibration_service.state_view(db, user_id)
+    calibration_log = db.scalars(
+        select(CalibrationLog).where(CalibrationLog.user_id == user_id, CalibrationLog.day >= start)
+        .order_by(CalibrationLog.day)
+    ).all()
+    calibration_card = {
+        "factor": calibration_state["factor"],
+        "days_used": calibration_state["days_used"],
+        "updated_on": calibration_state["updated_on"],
+        "batch": (
+            {
+                "period_start": calibration_snapshot.period_start.isoformat(),
+                "period_end": calibration_snapshot.period_end.isoformat(),
+                "expected_delta_kg": calibration_snapshot.expected_delta_kg,
+                "actual_delta_kg": calibration_snapshot.actual_delta_kg,
+                "factor": calibration_snapshot.factor,
+            }
+            if calibration_snapshot is not None else None
+        ),
+        "log": [{"day": log.day.isoformat(), "factor_after": log.factor_after}
+               for log in calibration_log],
+    }
+
     return {
         "days": days,
         "today": today,
+        "calibration": calibration_card,
         "chart_weight": line_chart(weight_series, start, today, y_fmt="{:.1f}"),
         "chart_energy": line_chart(
             [Series("spożyte", COLOR_MEASURED, kcal_in, dots=True),

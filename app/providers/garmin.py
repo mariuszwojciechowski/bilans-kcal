@@ -183,6 +183,8 @@ class GarminProvider:
                     distance_m=a.get("distance"),
                     kcal=int(a["calories"]) if a.get("calories") else None,
                     avg_hr=int(a["averageHR"]) if a.get("averageHR") else None,
+                    kcal_bmr=int(a["bmrCalories"]) if a.get("bmrCalories") else None,
+                    steps=int(a["steps"]) if a.get("steps") else None,
                 )
             )
         return out

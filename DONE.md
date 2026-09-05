@@ -10,6 +10,101 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Kalibracja adaptacyjna~~ ✓ zrobione (22.0.0, sha: do uzupełnienia po commicie)
+
+WYMAGANIA.md 6.2 — model uczy się na danych użytkownika (jak MacroFactor).
+Zaimplementowany mechanizm to **filtr dzienny** (uproszczony Kalman,
+`app/services/calibration.py:step_day`/`catch_up`), nie wsadowa kalibracja
+z pierwszej wersji planu w TODO.md: 10-14 dni czekania na pierwszy wynik było
+gorsze niż liczba, która koryguje się co dzień i wolno dochodzi do prawdy
+(decyzja właściciela 2026-09-05, „Warstwa 2" w TODO.md).
+
+**Mechanizm:** `CalibrationState` (1 wiersz/użytkownika: `factor`, `trend_kg`
+— EMA wagi α=0.1, `days_used`, `last_valid_day`, `updated_on`) i
+`CalibrationLog` (append-only, po wierszu na ważny dzień) — nowe tabele,
+`create_all` wystarczy, bez migracji. Start: `factor=0.97` (jawny
+konserwatyzm), gain maleje z 1/6≈0.17 do 0.05 po ~15 dniach, krok dnia ≤±1%,
+clamp asymetryczny **[0.85, 1.05]** (w dół bez ograniczeń, w górę tylko +5% —
+błąd wagi 14-dniowej sięga 0.5-1 kg). Dni sprzed `CALIBRATION_EPOCH =
+2026-09-05` (dzień tego wdrożenia, razem z poprawką wyliczania kcal na dzień
+w toku) nie wchodzą — liczone starym modelem wydatku.
+
+Wsadowe `compute()` (14-dniowe okno, `Calibration` — tabela ze szkicu
+WYMAGANIA.md 8.4) zostaje wyłącznie do: (a) karty „kalibracja" w tygodniówce
+(oczekiwana vs rzeczywista zmiana wagi, wymóg 6.4) i (b) strażnika — gdy filtr
+i wsad różnią się >10%, `catch_up()` resetuje filtr do wartości wsadu
+i zapisuje to w `CalibrationLog` (wpis z `gain=innov_kg=0.0` jako znacznik
+resetu, nie krok filtru).
+
+**Wpięcie:** `day.day_report()` mnoży `kcal_out` przez
+`calibration.current_factor()` przed odjęciem celu deficytu; odpowiedź ma
+nowe pola `calibration_factor`, `calibration_updated`, `calibration_days_used`.
+Zaokrąglenie `remaining_kcal` w dół do 50 (z poprawki 21.5.0) stosowane jest
+**po** przemnożeniu przez factor — jedno miejsce, dwa jawne przesunięcia obok
+siebie w kodzie. `catch_up` wołane w tle przy wejściu na dashboard
+(`background.add_task`, obok `maybe_sync`) i po imporcie transferu
+(`transfer.import_payload` → `calibration.maybe_recalibrate` — stan filtru
+nie wchodzi do eksportu, przelicza się od zera z historii). `/api/trends`
+i `/trends` dostały nowy klucz `calibration` (karta 6.4) —
+`API_TRENDS_KEYS` w testach zaktualizowane.
+
+**Testy** `tests/test_calibration.py`: syntetyczny użytkownik z losowym szumem
+wagi ±0.5 kg (seed 42) i prawdziwym wydatkiem 0.9×Garmin — filtr nie reaguje
+na 1 dzień, po 21 dniach zbieżny w [0.87, 0.93], krok dnia nigdy >1%, clamp
+1.05 przy wadze spadającej dwa razy szybciej niż bilans, dzień bez wagi nie
+zmienia stanu, `catch_up()` idempotentne, strażnik resetuje filtr 1.05 do
+wsadu ~0.9.
+
+Nota `/prywatnosc`: bez zmian — filtr przetwarza dane już zbierane (posiłki,
+Garmin, waga), bez nowej kategorii ani nowego odbiorcy.
+
+---
+
+## ~~Poprawa wyliczania kcal na dzień w toku~~ ✓ zrobione (21.5.0, sha: do uzupełnienia po commicie)
+
+Objaw z 2026-09-05 (konto właściciela): Krasnal pokazał wydatek 4213 kcal,
+Garmin za ten sam dzień 2889 kcal — model teoretyczny (który dzień w toku
+brał przez `max(pomiar, model)`) zawyżył marsz 4,5h licząc go MET 5.0 przez
+cały czas trwania, mimo że zegarek dał realny pomiar aktywny/spoczynkowy.
+
+**Weryfikacja założeń (krok 0 planu):** nie było możliwości zalogowania się na
+żywe konto Garmina w tym środowisku (brak sesji/danych logowania) — pola
+`bmrCalories` i `steps` w `get_activities_by_date` oraz narastanie
+`bmrKilocalories` w `get_user_summary` **nie zostały zweryfikowane na żywych
+danych**. Zaimplementowano od razu wg łańcucha fallbacków opisanego w planie
+(per-aktywność `kcal_bmr_garmin` → proporcja z dobowego `kcal_bmr_garmin` →
+`bmr_mifflin`), więc brak pola `bmrCalories` w realnej odpowiedzi Garmina nie
+wywali się — po prostu zawsze wejdzie ten fallback. Właściciel: przy
+najbliższym prawdziwym dniu z aktywnością zegarkową warto sprawdzić w logu/DB,
+czy `Activity.kcal_bmr_garmin` faktycznie się wypełnia, czy zawsze jest NULL.
+
+**Decyzje:** dzień w toku = pomiar Garmina (+ ręczne aktywności), bez `max` z
+modelem — model teoretyczny jest wyłącznie fallbackiem, gdy brak
+`kcal_total_garmin`. Model MET dla aktywności zegarkowych zastąpiony przez
+`kcal_garmin` netto (brutto minus spoczynek za czas trwania); MET zostaje
+tylko jako fallback, poprawiony: gałęzie `walking` (3.5) / `hiking` (6.0),
+wzór **netto** `(MET−1)×kg×h` (wcześniej brutto — podwójnie liczyło spoczynek
+razem z BMR), rower ≥20 km/h obniżony z MET 10 na 8. Rozbicie na ekranie dla
+dnia z Garminem: spoczynek + aktywności netto + kroki poza aktywnościami +
+ręczne (bez TEF, bo Garmin go nie wyodrębnia) — osobny kształt od modelu
+teoretycznego (bmr+neat+aktywności+tef).
+
+**Konserwatywne przesunięcie (zasada z nagłówka TODO):** `remaining_kcal`
+zaokrąglany w dół do pełnych 50 kcal (`day.py:_floor_to_50`) — jedyne miejsce
+z celowym przesunięciem w tym planie.
+
+**Strażnik przed powrotem awarii:** nowy test
+`test_day_in_progress_walk_reproduces_symptom_and_uses_garmin_net` odtwarza
+dokładnie objaw z 2026-09-05 i pilnuje, że `tdee_model.total` (model
+teoretyczny) mieści się w ±15% pomiaru Garmina dla tego samego dnia.
+
+Nota `/prywatnosc`: bez zmian — nowe kolumny `Activity.kcal_bmr_garmin` i
+`Activity.steps` to ta sama kategoria danych („aktywności z Garmina"), którą
+nota już opisuje; nie wchodzą do `transfer.py` (eksport tylko ręcznych
+aktywności, bez zmian).
+
+---
+
 ## ~~Trendy liczą kcal inaczej niż „Dziś" — jedna logika wydatku w całej aplikacji~~ ✓ zrobione (21.4.0)
 
 Bug zgłoszony 2026-09-04: dzień w toku miał zielony bilans na „Dziś", a

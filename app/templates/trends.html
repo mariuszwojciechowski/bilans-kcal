@@ -100,6 +100,33 @@
   </div>
 </section>
 
+<section class="card">
+  <h2>Kalibracja adaptacyjna</h2>
+  <div class="stats">
+    <div class="stat">
+      <b>{{ '%+.0f'|format((calibration.factor - 1) * 100) }}%</b>
+      <span>bieżąca korekta wydatku ({{ calibration.days_used }} dni{% if calibration.days_used < 10 %}, startowy{% endif %})</span>
+    </div>
+    {% if calibration.batch %}
+    <div class="stat">
+      <b>{{ '%+.2f'|format(calibration.batch.expected_delta_kg) }}</b>
+      <span>oczekiwana zmiana wagi [kg] (14 dni, z bilansu)</span>
+    </div>
+    <div class="stat">
+      <b>{{ '%+.2f'|format(calibration.batch.actual_delta_kg) }}</b>
+      <span>rzeczywista zmiana wagi [kg] (pomiar)</span>
+    </div>
+    {% else %}
+    <div class="stat"><b>—</b><span>za mało danych na porównanie 14-dniowe</span></div>
+    {% endif %}
+  </div>
+  <p class="muted" style="font-size:12px">
+    Filtr koryguje wydatek o tyle, ile realnie różni się od pomiaru zegarka —
+    zaczyna od konserwatywnego priora i dochodzi do prawdy w ciągu 2-3 tygodni
+    codziennego ważenia.
+  </p>
+</section>
+
 <section class="card"><h2>Bilans dzienny [kcal] — deficyt na zielono</h2>{{ chart_balance | safe }}
   <p class="muted">Dni z zapisanymi posiłkami. Jaśniejszy słupek = wydatek szacowany
     (dzień w toku albo brak pomiaru Garmina) — tak samo jak na „Dziś".</p></section>
