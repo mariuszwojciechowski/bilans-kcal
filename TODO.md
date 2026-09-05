@@ -72,7 +72,7 @@ istnieje, nie dopisuj drugiego planu na to samo**, bo się rozjadą.
 | 6.4 Karta kalibracji w tygodniówce | ✓ zrobione razem z 6.2 (22.0.0) — karta w `/trends` | — |
 | 8.3 Strefa czasowa jako granica dnia | ✓ zrobione (23.0.0) — patrz DONE.md „Strefa czasowa użytkownika…" | — |
 | 8.3 Prawo do usunięcia (samoobsługowe) | realizowane mailem; nota `/prywatnosc` mówi o tym wprost, więc nie jest to kłamstwo — tylko brak | „«Usuń moje dane i konto»…" (6/10) |
-| §4 Tabela MET konfigurowalna | MET to stałe w `app/services/energy.py` (43-45, 131-137), w przeciwieństwie do norm WHO wyniesionych do JSON | „Tabela MET jako dane…" (3/10) |
+| §4 Tabela MET konfigurowalna | ✓ zrobione (24.0.0) — patrz DONE.md „Tabela MET jako dane, nie kod" | — |
 | §10.2 Cel redukcyjny białka | `protein_cut_g_per_kg` leży w `who_norms.json`, ale nic go nie czyta | „Cel redukcyjny białka…" (2/10) |
 | §10.3 Nazwa pakietu / domena mobilna | nie zarezerwowane | „Nazwa pakietu i domena…" (1/10) |
 | Etap 2 — aplikacja mobilna | poza MVP, nie rozpoczęta | „Aplikacja mobilna (Etap 2)…" (10/10) |
@@ -133,64 +133,6 @@ tabeli tokenów resetu w bazie, szablonu maila, konfiguracji wysyłki
 `krasnal.cc`, testowania że maile nie lądują w spamie. Kilka dni pracy,
 w większości spoza samego kodu appki.
 
-
-## Tabela MET jako dane, nie kod — WYMAGANIA.md §4 (3/10)
-
-§4 wymaga: „Tabela MET konfigurowalna (Compendium of Physical Activities)".
-Dziś każdy współczynnik jest stałą w `app/services/energy.py` i jego zmiana
-wymaga commita: `KCAL_PER_STEP_PER_KG` (40), `MET_STRENGTH` (45),
-`MET_CYCLING_BY_SPEED_KMH` (48), `MET_DEFAULT` (49) — od 21.5.0 aktywności
-zegarkowe liczą się netto `(MET−1)×kg×h`, próg roweru ≥20 km/h to teraz 8.0
-(było 10.0), doszły `MET_WALKING`/`MET_HIKING` — patrz DONE.md „Poprawa
-wyliczania kcal na dzień w toku". 1400 kroków/km (linia z `tdee_theoretical`),
-`DEFAULT_STEPS` (147), `MANUAL_MET` (150-156), `INTENSITY_MAP` (158),
-mnożnik marszu 0.53 (181, tylko `manual_activity_kcal` — bez zmian, brutto).
-Normy WHO są już wyniesione do
-`app/resources/who_norms.json` — ten punkt robi z MET to samo.
-
-**Decyzje (wiążące):** wartości liczbowe zostają **identyczne** — to
-refaktoryzacja bez zmiany wyników, więc `tests/test_energy.py` musi przejść
-**bez modyfikacji** (jeśli któryś test padnie, znaczy że wartość się zmieniła
-przy przenoszeniu — cofnij, nie poprawiaj testu). Plik jest jedynym źródłem
-prawdy: nie zostawiamy „awaryjnych" wartości w kodzie, brak pliku = błąd, tak
-samo jak przy `who_norms.json`.
-
-**Kroki dla implementującego LLM:**
-
-1. **Nowy `app/resources/met_table.json`** wg wzorca `who_norms.json`: blok
-   `meta` (`fetched`, `sources` — Compendium of Physical Activities /
-   Ainsworth i in. — oraz jawna nota, które wartości są uproszczeniem
-   właściciela, a nie cytatem z Compendium) i sekcje:
-   - `steps`: `kcal_per_step_per_kg: 0.00057`, `steps_per_km: 1400`,
-     `default_steps: 5000`,
-   - `distance`: `running_kcal_per_kg_per_km: 1.0`,
-     `walking_kcal_per_kg_per_km: 0.53`,
-   - `cycling`: `met_by_speed_kmh: [[16.0, 6.0], [20.0, 8.0], [null, 10.0]]`
-     (`null` = brak górnej granicy, loader zamienia na `inf`),
-   - `garmin_types`: mapa fragmentu `typeKey` → MET dla `activity_kcal_model`
-     (`strength`/`training` → 4.0) plus `default_met: 5.0`,
-   - `manual`: per typ (`running`, `cycling`, `walking`, `swimming`,
-     `strength_training`) trójka `[lekka, umiarkowana, intensywna]` plus
-     `intensity_order: ["lekka", "umiarkowana", "intensywna"]`.
-2. **Loader w `app/services/energy.py`**: `MET_PATH` + `@lru_cache(maxsize=1)
-   def _met() -> dict` — dokładnie wzorzec `macros._norms()`
-   (`app/services/macros.py:18-23`). `neat_from_steps`, `running_kcal`,
-   `cycling_met`, `activity_kcal_model`, `manual_activity_kcal`,
-   `tdee_theoretical` czytają `_met()` zamiast stałych.
-3. **Zachowaj publiczne nazwy.** `DEFAULT_STEPS` jest importowany w trzech
-   miejscach (`app/routers/day.py`, `tests/test_activities_api.py:17`,
-   `tests/test_queue_settings.py:147`) — zostaw jako stałą modułu
-   inicjalizowaną z pliku (`DEFAULT_STEPS = _met()["steps"]["default_steps"]`),
-   nie kasuj. Sygnatury funkcji bez zmian — `manual_activity_kcal` woła
-   `app/routers/day.py:add_manual_activity()` i cztery pliki testów.
-4. **Testy `tests/test_met_table.py`**: plik wczytuje się i ma `meta.sources`;
-   każdy typ w `manual` ma trzy intensywności; progi `cycling` są rosnące,
-   a ostatni to `null`; monkeypatch `MET_PATH` na plik z innym `default_met`
-   + `_met.cache_clear()` zmienia wynik `activity_kcal_model` dla nieznanego
-   typu (dowód, że wartości naprawdę idą z pliku, a nie z kodu).
-
-Weryfikacja: pełny pytest zielony → commit + push. Nota `/prywatnosc` bez
-zmian — liczymy to samo, z tych samych danych.
 
 ## Cel redukcyjny białka — domyślnie czy opt-in? — WYMAGANIA.md §10.2 (2/10)
 

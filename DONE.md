@@ -10,6 +10,43 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Tabela MET jako dane, nie kod~~ ✓ zrobione (24.0.0) — WYMAGANIA.md §4
+
+§4 wymaga „Tabela MET konfigurowalna (Compendium of Physical Activities)".
+Współczynniki (`KCAL_PER_STEP_PER_KG`, `MET_STRENGTH`/`MET_WALKING`/
+`MET_HIKING`/`MET_DEFAULT`, progi roweru, mnożniki biegu/marszu, MET ręcznych
+aktywności, `DEFAULT_STEPS`) były stałymi w `app/services/energy.py` — zmiana
+którejkolwiek wymagała commita. Refaktoryzacja **bez zmiany wyników**:
+`tests/test_energy.py` przeszedł bez modyfikacji.
+
+**Nowy `app/resources/met_table.json`** — wzorzec `who_norms.json`: blok
+`meta.sources` (Compendium of Physical Activities / Ainsworth i in., plus
+jawna nota, które wartości są uproszczeniem właściciela — próg roweru ≥20 km/h
+obniżony do MET 8 zamiast ~10 z Compendium, mnożniki biegu/marszu, kcal/krok),
+sekcje `steps`/`distance`/`cycling`/`garmin_activities`/`manual`. Loader
+`_met()` w `energy.py` (`@lru_cache`, wzorzec `macros._norms()`) — plik jest
+jedynym źródłem prawdy, brak pliku wywala import modułu (nie cichy fallback).
+
+**Ważna różnica względem `who_norms.json`:** tylko `DEFAULT_STEPS` jest
+stałą modułu inicjalizowaną raz przy imporcie (bo importują go po nazwie
+`app/routers/day.py`, `tests/test_activities_api.py`, `tests/test_queue_settings.py`
+— zmiana na coś dynamicznego złamałaby te importy). Wszystkie pozostałe
+wartości (`neat_from_steps`, `running_kcal`, `cycling_met`,
+`activity_kcal_model`, `manual_activity_kcal`, `tdee_theoretical`) czytają
+`_met()` **przy każdym wywołaniu**, nie z eager module-level stałych — inaczej
+`test_met_table.py`'owy dowód „wartości naprawdę idą z pliku" (podmiana
+`MET_PATH` + `_met.cache_clear()` między wywołaniami) by nie zadziałał.
+
+Testy `tests/test_met_table.py`: plik ładuje się i ma `meta.sources`, każdy
+typ w `manual` ma trzy intensywności, progi `cycling` rosnące z `null` na
+końcu, podmiana `MET_PATH` na plik z innym `default_met` + `_met.cache_clear()`
+zmienia wynik `activity_kcal_model` dla nieznanego typu. `tests/test_energy.py`
+(18 testów) i `tests/test_activities_api.py`/`test_queue_settings.py`
+(importują `DEFAULT_STEPS`/`manual_activity_kcal`) przeszły bez zmian.
+
+Nota `/prywatnosc`: bez zmian — liczymy to samo, z tych samych danych, inny
+tylko sposób trzymania współczynników w kodzie.
+
 ## ~~Strefa czasowa użytkownika jako granica dnia~~ ✓ zrobione (23.0.0) — WYMAGANIA.md 8.3
 
 `user_profile.tz` było zapisywane i eksportowane, ale nigdzie nieczytane —

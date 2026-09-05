@@ -1,0 +1,37 @@
+{
+  "meta": {
+    "fetched": "2026-09-05",
+    "sources": [
+      "Ainsworth B.E. et al. — Compendium of Physical Activities (2011 update), https://sites.google.com/site/compendiumofphysicalactivities/",
+      "Uproszczenia właściciela aplikacji, NIE cytaty z Compendium: próg roweru ≥20 km/h obniżony z MET 10 do 8 (Compendium daje ~10 dla >20km/h, ale to zawyżało zmierzony wydatek Garmina o rząd 30% — patrz DONE.md „Poprawa wyliczania kcal na dzień w toku”, 21.5.0); mnożnik marszu 0.53 kcal/kg/km i bieg 1.0 kcal/kg/km to przybliżenia z literatury biegowej/marszowej, nie z samego Compendium; `kcal_per_step_per_kg` (0.00057) to przybliżenie chodu ~0.57 kcal/kg na 1000 kroków, też nie wprost z Compendium."
+    ]
+  },
+  "steps": {
+    "kcal_per_step_per_kg": 0.00057,
+    "steps_per_km": 1400,
+    "default_steps": 5000
+  },
+  "distance": {
+    "running_kcal_per_kg_per_km": 1.0,
+    "walking_kcal_per_kg_per_km": 0.53
+  },
+  "cycling": {
+    "met_by_speed_kmh": [[16.0, 6.0], [20.0, 8.0], [null, 8.0]]
+  },
+  "garmin_activities": {
+    "strength_training_met": 4.0,
+    "walking_met": 3.5,
+    "hiking_met": 6.0,
+    "default_met": 5.0
+  },
+  "manual": {
+    "types": {
+      "running": [8.0, 10.0, 12.0],
+      "cycling": [5.5, 7.0, 10.0],
+      "walking": [3.3, 4.3, 5.0],
+      "strength_training": [3.5, 5.0, 6.0],
+      "swimming": [6.0, 8.0, 10.0]
+    },
+    "intensity_order": ["lekka", "umiarkowana", "intensywna"]
+  }
+}
