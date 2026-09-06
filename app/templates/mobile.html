@@ -180,18 +180,15 @@
 
 <!-- ── DODAJ ────────────────────────────────────────────────────────── -->
 <div class="page" id="page-add">
-  <!-- Przeniesione z „Dziś" (właściciel 2026-09-06): wejście do aktywności/kroków
-       i szybki pomiar wagi mieszkają nad „Dodaj posiłek". Waga zapisuje się
+  <!-- Przeniesione z „Dziś" (właściciel 2026-09-06): szybki pomiar wagi nad
+       „Dodaj posiłek" — samo pole i jawny przycisk zapisu (przycisk
+       Aktywności/Kroki zdjęty, zakładka jest w nagłówku). Waga zapisuje się
        pod datę z pola daty posiłku niżej (domyślnie dziś). -->
   <section class="card">
-    <h2>Aktywność i waga</h2>
-    <div class="row2" style="align-items:flex-end">
-      <button class="ghost" style="flex:1;margin:4px 0;border:1px solid transparent" onclick="goActivities()">Aktywności/Kroki</button>
-      <span style="flex:1"><label>pomiar wagi [kg]</label>
-        <div style="display:flex;gap:6px;align-items:center">
-          <input type="number" id="t-newweight" step="0.1" placeholder="—" style="flex:1;margin:0" onchange="saveWeighIn()">
-          <button class="primary sm" style="flex:none;width:auto;margin:0" onclick="saveWeighIn()">Zapisz</button>
-        </div></span>
+    <h2>Pomiar wagi</h2>
+    <div style="display:flex;gap:6px;align-items:center">
+      <input type="number" id="t-newweight" step="0.1" placeholder="kg" style="flex:1;margin:0" onchange="saveWeighIn()">
+      <button class="primary sm" style="flex:none;width:auto;margin:0" onclick="saveWeighIn()">Zapisz wagę</button>
     </div>
     <p class="muted" id="w-status" style="margin:4px 0 0"></p>
   </section>
