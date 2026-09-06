@@ -46,14 +46,27 @@
     "Trenujesz czy nie, mięśnie jedzą białko, nie dobre chęci. Dziś dostały głodówkę.",
     "Kryminalista czy nie, gnój to gnój — a mięśnie bez białka to też gnój, bez wyjątków.",
     "Co ty wiesz o odchudzaniu? Ty na redukcji byłeś?",
-    "Co za ponury absurd... Żeby całe makro zjeść na śniadanie, kiedy jest się głodnym?"
+    "Co za ponury absurd... Żeby całe makro zjeść na śniadanie, kiedy jest się głodnym?",
+    "Ty to nazywasz makro?! To jest profanacja białka! Ja tu zaraz zrobię rewolucję w tej twojej diecie!",
+    "Proszę spojrzeć, oto wspaniały, dorodny niedobór białka. Tak się, proszę państwa, nie buduje muskulatury w Dalmacji.",
+    "To i tak by nic nie dało. Bez białka nawet Mariusz nie uciągnie samolotu, a co dopiero Ty sztangi.",
+    "Co to za białko? \"Biały kruk\"? W Twoim dzienniku to dzisiaj rzeczywiście gatunek zagrożony.",
+    "Nigdy do niczego się nie przyznawaj... zwłaszcza do tego, że zjadłeś dzisiaj mniej białka, niż jest w wodzie z kranu.",
+    "Paróweczką z Orlenu masy nie zrobisz, panie kierowniku. Gdzie jest mięso?!"
   ],
   "fiber_low": [
     "Błonnik poniżej normy — Twoje jelita właśnie piszą skargę do zarządu.",
     "Warzywa to nie dekoracja talerza, cholero. Zjedz coś, co kiedyś rosło w ziemi.",
     "Krasnal mieszka w lesie i wie jedno: bez błonnika daleko w te krzaki nie zajdziesz.",
     "Pieniądze to nie wszystko, błonnik też się liczy — a dziś go u Ciebie jak na giełdzie w kryzysie.",
-    "Spaliłem pączka."
+    "Spaliłem pączka.",
+    "Gdzie jest zielenina?! Dlaczego podajesz swoim jelitom mrożone gówno zamiast błonnika?! Rzucam talerzem!",
+    "A teraz dodajemy obficie świeżego koperku... którego w dzisiejszym makro, proszę państwa, w ogóle nie uświadczysz. Tragedia.",
+    "Błonnik? Jaki kurwa błonnik? Ty w ogóle wiesz, co to są warzywa, czy tylko parówki wpierdalasz?",
+    "Masz, poczęstuj się pomarańczą. Zjedz ten błonnik, bo ci zaraz jelita staną dęba.",
+    "O kurwa, zapomniałem o warzywach. Zgadza się – jesteś kulinarnym Kapitanem Dupą dzisiejszego jadłospisu.",
+    "Błonnika nie ma, ale też jest... a nie, czekaj, bez błonnika to jest po prostu dramat na tronie.",
+    "Mamy tu klasyczny brak szacunku do warzyw. Makłowicz by zapłakał, a Gesslerowa zamknęłaby Ci tę lodówkę na kłódkę."
   ],
   "sugar_high": [
     "Cukru dziś tyle, że pszczoły składają Ci hołd. Wyluzuj ze słodkim, do diaska.",
@@ -70,21 +83,38 @@
     "Ciężar na celu. Oficjalnie przestajesz być projektem, a zaczynasz być wzorem. Nie spierdol tego.",
     "Zrobione! Teraz najtrudniejsze: utrzymać. Krasnal widział wielu, co wracali. Ty nie wracaj.",
     "Cel zdobyty. Chłopaki nie płaczą, ale krasnal by uronił łezkę wzruszenia.",
-    "Węglowodanów nie ma, ale też jest zajebiście."
+    "Węglowodanów nie ma, ale też jest zajebiście.",
+    "Zrobiłeś to! Jest genialnie, jest pysznie! Rozpływam się jak masełko, ogromne besos dla Ciebie!",
+    "I to jest, proszę państwa, ten wspaniały moment, w którym możemy oficjalnie pogratulować formy. Cel osiągnięty!",
+    "Bezapelacyjnie, do samego końca. Zrobiłeś tę formę, skurwysynu."
   ],
   "goal_close": [
     "Do celu zostało {diff} kg — mniej niż wiadro borówek. Nie odpuszczaj teraz, cholero.",
     "{diff} kg do celu. Krasnal już poleruje medal. Byle nie zapeklować go w smalcu na ostatniej prostej.",
     "Finisz! {diff} kg i po sprawie. To nie moment na 'jeden pączuszek nie zaszkodzi'.",
     "Blisko celu jak Tusk blisko emerytury — {diff} kg, ale jeszcze trochę roboty.",
-    "Bliska hossa na wadze — {diff} kg. Pieniądze to nie wszystko, ale ten wynik też się liczy."
+    "Bliska hossa na wadze — {diff} kg. Pieniądze to nie wszystko, ale ten wynik też się liczy.",
+    "Wygląda to wybornie, po prostu masełko! Zostało tylko {diff} kg, nie zepsuj tego na ostatniej prostej jakimś syfem!",
+    "Zaledwie {diff} kg dzieli nas od absolutnego arcydzieła, mmm, kulinarno-sylwetkowej wspaniałości!",
+    "Wystarczy, że odpowiesz sobie na jedno zajebiście ważne pytanie: czy te ostatnie {diff} kg zrzucisz z godnością?",
+    "Ty stara dupa jesteś... ale za {diff} kg będziesz wyglądać jak młody bóg!",
+    "{diff} kg! Ciemność, widzę ciemność! Koniec jest blisko, nie zatrzymuj się teraz na schabowego.",
+    "A komu to potrzebne? A dlaczego? Bo zostało tylko {diff} kg do formy życia, panie Ferdku!",
+    "Jeszcze tylko {diff} kg. Będziesz chudy jak po wypłacie w polskim kinie!"
   ],
   "goal_far": [
     "Do celu {diff} kg. Dużo? Krasnal nosi cięższe rzeczy przez okrągły rok. Krok po kroku, walczysz Mordo.",
     "{diff} kg do zrzucenia. Słonia też je się kawałkami… znaczy, wiesz o co chodzi.",
     "Dystans do celu: {diff} kg. Dobra wiadomość: grawitacja pomaga przy zrzucaniu. Zła: lodówka nie.",
     "{diff} kg. Droga daleka, ale prawdziwy mężczyzna nie mówi 'odpuszczam', tylko 'jeszcze jedna runda'.",
-    "Fortunę się odbudowuje latami, ciężar też — {diff} kg. Cierpliwości, inwestorze."
+    "Fortunę się odbudowuje latami, ciężar też — {diff} kg. Cierpliwości, inwestorze.",
+    "Dlaczego Wy się trujecie?! Do celu jeszcze {diff} kg, a Ty rzucasz się na węgle jak na wyprzedaż! Besos.",
+    "Eeee, yyy, proszę państwa, do pełni szczęścia i wymarzonej sylwetki brakuje nam dokładnie {diff} kg. Czysta poezja cierpliwości!",
+    "{diff} kg? Mają rozmach skurwysyny! Ale powolutku, wyrzeźbimy z tego piękną formę.",
+    "{diff} kg do celu. I wszystko w pizdu... żartowałem! Cały misterny plan redukcji dopiero się rozkręca.",
+    "Patrzcie na niego, {diff} kg do zrzucenia! Nie dla psa kiełbasa, dla Ciebie to jest teraz piękny deficyt kaloryczny.",
+    "Panie boczku, w mordę jeża, tu trzeba kręcić aeroby, a nie kiełbasę wsuwać. Zostało jeszcze {diff} kg.",
+    "{diff} kg to by nic nie dało i tak? Zrzucamy to, tanio skóry nie sprzedam!"
   ],
   "empty": [
     "Pusty dziennik. Krasnal nie wierzy, że żyjesz powietrzem — wrzuć, co jadłeś, choćby to była zbrodnia.",
@@ -94,6 +124,10 @@
     "Czasy się zmieniają, a pan zawsze na masie.",
     "Nie chce mi się z wami biegać.",
     "Dawno temu ja też zaufałem pewnej diecie cud... Wtedy dałbym sobie za nią rękę uciąć. I wiesz, co? I byłbym teraz, kurwa, lżejszy o ręke!",
-    "Boję się rano wstać, boję się wagi, codziennie rano boję się na nią wejść."
+    "Boję się rano wstać, boję się wagi, codziennie rano boję się na nią wejść.",
+    "Pusta karta?! Ja mam Cię karmić powietrzem i wkurwieniem?! Wpisuj co żarłeś, ale to już!",
+    "Yyy... pustka w dzienniku przypomina mi bezkresne stepy akermańskie. Same kalorie się nie policzą.",
+    "Urwałeś mi od internetu... dziennik? Gdzie są twoje wpisane posiłki, Siara?!",
+    "Niewinny jesteś? Tutaj wszyscy są na redukcji niewinni, póki dziennik jest pusty. Dawaj to makro, cwaniaczku."
   ]
 }
