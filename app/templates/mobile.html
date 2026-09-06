@@ -53,6 +53,10 @@
                border-radius: 0; font-size: 11px; margin: 0; }
   nav button.active { color: #fff; font-weight: 700; background: rgba(255,255,255,.12); }
   .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  /* „Dziś": 3 kolumny (właściciel 2026-09-06) — spożyte | spalone | bilans,
+     cel | zostało, waga | do celu; nieco mniejsze liczby, żeby zmieścić się na telefonie */
+  .stats-3 { grid-template-columns: repeat(3, 1fr); }
+  .stats-3 .stat b { font-size: 20px; }
   .stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
   .stat span { color: var(--stone); font-size: 12px; }
   .bar { background: rgba(108,117,125,.18); border-radius: 6px; height: 8px;
@@ -145,17 +149,16 @@
   <section class="card">
     <h2>Bilans — <span id="t-day"></span></h2>
     <p class="muted" id="quip" style="font-style:italic"></p>
-    <!-- Układ 2 kolumn (właściciel 2026-09-06, druga roszada): wiersz 1 spożyte |
-         spalone, wiersz 2 cel dnia | bilans, wiersz 3 (puste) | zostało dziś —
-         „zostało" pod bilansem; dolny wiersz to waga. Równanie celu dnia i linia
-         kalibracji przeniesione na dół zakładki Trendy. -->
-    <div class="stats">
+    <!-- Układ 3 kolumn (właściciel 2026-09-06): wiersz 1 spożyte | spalone | bilans,
+         wiersz 2 cel dnia | zostało dziś, wiersz 3 ostatnia waga | do celu wagi.
+         Równanie celu dnia i linia kalibracji są na dole zakładki Trendy. -->
+    <div class="stats stats-3">
       <div class="stat"><b id="t-in">—</b><span>kcal spożyte</span></div>
       <div class="stat"><b id="t-out">—</b><span>kcal spalone</span></div>
-      <div class="stat"><b id="t-target">—</b><span>cel dnia</span></div>
       <div class="stat"><b id="t-bal">—</b><span>bilans</span></div>
-      <div class="stat" aria-hidden="true"></div>
+      <div class="stat"><b id="t-target">—</b><span>cel dnia</span></div>
       <div class="stat"><b id="t-left">—</b><span>zostało dziś</span></div>
+      <div class="stat" aria-hidden="true"></div>
       <div class="stat"><b id="t-weight">—</b><span>ostatnia waga [kg]</span></div>
       <div class="stat"><b id="t-goal">—</b><span>do celu wagi</span></div>
     </div>
