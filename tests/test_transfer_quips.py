@@ -193,11 +193,14 @@ def test_quips_two_day_categories_enter_pool():
 
 
 def test_quips_pool_weighted_by_size_not_50_50():
-    """Kategoria celu (5 tekstów) obok kategorii dnia (13) ma dostawać ~28%
-    losowań, nie 50% — równa szansa per tekst."""
+    """Kategoria celu obok kategorii dnia ma dostawać udział równy swojej
+    wielkości w połączonej puli (równa szansa per tekst), nie sztywne 50%.
+    Oczekiwany udział liczony z faktycznych rozmiarów pul — teksty dopisuje
+    właściciel i liczby się zmieniają."""
     import random
     random.seed(1234)
     goal_far = set(quips._quips()["goal_far"])
+    expected = len(goal_far) / (len(goal_far) + len(quips._quips()["ontrack"]))
     hits = 0
     n = 2000
     for _ in range(n):
@@ -206,4 +209,5 @@ def test_quips_pool_weighted_by_size_not_50_50():
         if quips._recent[None][-1] in goal_far:   # pamięć trzyma surowy tekst z {diff}
             hits += 1
     share = hits / n
-    assert 0.20 < share < 0.36, share
+    assert abs(share - expected) < 0.05, (share, expected)
+    assert share != 0.5 or abs(expected - 0.5) < 0.05
