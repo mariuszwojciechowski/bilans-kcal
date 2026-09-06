@@ -23,7 +23,8 @@
     "A wiesz, jak mówią na siłowni na podwójnego burgera z frytkami? ... Zrujnowane makro.",
     "Czy on wygląda jakby miał nadwagę?!",
     "To białko zresztą wybitne, 'Izolat' się nazywa.",
-    "Dżizus, znowu leg day, ja pierdolę!"
+    "Dżizus, znowu leg day, ja pierdolę!",
+    "O Jezus Maria! Taka nadwyżka kalorii?! Ale za co to? Za co to?! Panie kochany, my przecież na redukcji jesteśmy!"
   ],
   "ontrack": [
     "Jesz jak należy. Krasnal uchyla kapelusza — tak trzymaj, Mordeczko.",
@@ -38,7 +39,8 @@
     "Ścieżka fit-świra wiedzie przez pokusy cukierni i tyranię tanich fast foodów...",
     "Wystarczy, że odpowiesz sobie na jedno zajebiście ważne pytanie: jaki sport lubię w życiu uprawiać? A potem zacznij to robić.",
     "Kardio to nie wszystko, a odchudzanie bez deficytu to fikcja.",
-    "Moja jest tylko dieta i to święta dieta! Bo nawet jak keto jest twoje, to liczenie kalorii jest lepsze niż twojsze!"
+    "Moja jest tylko dieta i to święta dieta! Bo nawet jak keto jest twoje, to liczenie kalorii jest lepsze niż twojsze!",
+    "Fiu, fiu, fiu... co za idealny bilans! Proszę państwa, to jest po prostu poezja dla moich krasnalich oczu. Masełko!"
   ],
   "protein_low": [
     "Białka dziś tyle, co w ogórku kiszonym. Mięśnie zaraz się spakują i pójdą w las.",
@@ -66,7 +68,9 @@
     "Masz, poczęstuj się pomarańczą. Zjedz ten błonnik, bo ci zaraz jelita staną dęba.",
     "O kurwa, zapomniałem o warzywach. Zgadza się – jesteś kulinarnym Kapitanem Dupą dzisiejszego jadłospisu.",
     "Błonnika nie ma, ale też jest... a nie, czekaj, bez błonnika to jest po prostu dramat na tronie.",
-    "Mamy tu klasyczny brak szacunku do warzyw. Makłowicz by zapłakał, a Gesslerowa zamknęłaby Ci tę lodówkę na kłódkę."
+    "Mamy tu klasyczny brak szacunku do warzyw. Makłowicz by zapłakał, a Gesslerowa zamknęłaby Ci tę lodówkę na kłódkę.",
+    "Patrzcie, jak on żre ten koperek! Szkoda, że Ty dzisiaj warzyw unikasz jak ognia, za to ładujesz w siebie same suche węgle.",
+    "Nawet pies wie, że trzeba żreć koperek. A u Ciebie dzisiaj błonnika tyle, co mięsa w parówkach."
   ],
   "sugar_high": [
     "Cukru dziś tyle, że pszczoły składają Ci hołd. Wyluzuj ze słodkim, do diaska.",
@@ -76,7 +80,8 @@
     "Bo to zła kaloria była.",
     "Co wy tam jecie, fast foody? Ale dno...",
     "Słodki... słodziku.",
-    "Gruby, bo podjada, podjada, bo smutny."
+    "Gruby, bo podjada, podjada, bo smutny.",
+    "O Jezus Maria! Tyle cukru na raz?! Ale za co to? Za co to?! Przecież to wywala insulinę w kosmos, panie smakoszu!"
   ],
   "goal_reached": [
     "Cel osiągnięty, do diaska! Krasnal stawia grzybowe piwo. Tylko nie zaczynaj 'świętować jedzeniem', bo za miesiąc znów się spotkamy.",
@@ -100,7 +105,8 @@
     "Ty stara dupa jesteś... ale za {diff} kg będziesz wyglądać jak młody bóg!",
     "{diff} kg! Ciemność, widzę ciemność! Koniec jest blisko, nie zatrzymuj się teraz na schabowego.",
     "A komu to potrzebne? A dlaczego? Bo zostało tylko {diff} kg do formy życia, panie Ferdku!",
-    "Jeszcze tylko {diff} kg. Będziesz chudy jak po wypłacie w polskim kinie!"
+    "Jeszcze tylko {diff} kg. Będziesz chudy jak po wypłacie w polskim kinie!",
+    "Fiu, fiu, fiu, ledwie {diff} kg do końca! Aż chce się zanucić z zachwytu. Tylko tego teraz nie zepsuj, błagam!"
   ],
   "goal_far": [
     "Do celu {diff} kg. Dużo? Krasnal nosi cięższe rzeczy przez okrągły rok. Krok po kroku, walczysz Mordo.",
