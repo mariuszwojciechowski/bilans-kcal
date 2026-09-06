@@ -156,3 +156,54 @@ def test_quips_goal_texts_all_have_diff_placeholder():
     for cat in ("goal_close", "goal_far"):
         for text in quips._quips()[cat]:
             assert "{diff}" in text, text
+
+
+# ── różnorodność tekstów (właściciel 2026-09-06) ──
+
+def test_quips_recent_memory_avoids_repeats_per_user():
+    quips._recent.clear()
+    pool = quips._quips()["ontrack"] + quips._quips()["goal_far"]   # 13 + 5 = 18 tekstów
+    seen = []
+    for _ in range(quips.RECENT_MEMORY):
+        seen.append(quips.pick(1700, 2000, -400, _macros(), weight_to_goal_kg=5.2, user_id=7))
+    # 10 kolejnych losowań w puli 18 — bez żadnej powtórki
+    assert len(set(seen)) == quips.RECENT_MEMORY
+    # inny użytkownik ma własną pamięć — może dostać tekst, który user 7 już widział
+    assert isinstance(quips.pick(1700, 2000, -400, _macros(), weight_to_goal_kg=5.2, user_id=8), str)
+
+
+def test_quips_memory_falls_back_to_full_pool_when_exhausted():
+    quips._recent.clear()
+    small = quips._quips()["goal_reached"]                      # 5 tekstów, sam w puli
+    for _ in range(len(small) + 3):
+        text = quips.pick(1700, 2000, -400, _macros(), weight_to_goal_kg=-0.3, user_id=9)
+        assert text in small                                     # po wyczerpaniu wraca cała pula
+
+
+def test_quips_two_day_categories_enter_pool():
+    # cukier powyżej normy i nadwyżka kcal -> obie kategorie w puli, nie tylko cukier
+    cats = quips.candidate_categories(2600, 2000, 300, _macros(sugars="above"))
+    assert cats == ["sugar_high", "over"]
+    # trzecia pasująca (błonnik) już nie wchodzi — limit DAY_CATEGORIES_IN_POOL
+    cats = quips.candidate_categories(2600, 2000, 300, _macros(sugars="above", fiber="below"))
+    assert cats == ["sugar_high", "fiber_low"]
+    # osiągnięty cel wygrywa sam
+    assert quips.candidate_categories(2600, 2000, 300, _macros(sugars="above"),
+                                      weight_to_goal_kg=-1) == ["goal_reached"]
+
+
+def test_quips_pool_weighted_by_size_not_50_50():
+    """Kategoria celu (5 tekstów) obok kategorii dnia (13) ma dostawać ~28%
+    losowań, nie 50% — równa szansa per tekst."""
+    import random
+    random.seed(1234)
+    goal_far = set(quips._quips()["goal_far"])
+    hits = 0
+    n = 2000
+    for _ in range(n):
+        quips._recent.clear()   # bez pamięci, żeby mierzyć samą wagę losowania
+        quips.pick(1700, 2000, -400, _macros(), weight_to_goal_kg=5.2, user_id=None)
+        if quips._recent[None][-1] in goal_far:   # pamięć trzyma surowy tekst z {diff}
+            hits += 1
+    share = hits / n
+    assert 0.20 < share < 0.36, share

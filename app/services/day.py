@@ -382,7 +382,7 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
         "target_weight_kg": profile.target_weight_kg,
         "to_goal_kg": to_goal_kg,
         "quip": quips.pick(e.kcal_in, e_target, balance, macros,
-                           weight_to_goal_kg=to_goal_kg),
+                           weight_to_goal_kg=to_goal_kg, user_id=user_id),
         "norms_group_label": (
             {"adult": "dorośli 18–64 lat", "senior": "seniorzy 65+"}.get(
                 targets.group_id, targets.group_id
