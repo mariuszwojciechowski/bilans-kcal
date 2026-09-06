@@ -188,8 +188,12 @@
     <div class="row2" style="align-items:flex-end">
       <button class="ghost" style="flex:1;margin:4px 0;border:1px solid transparent" onclick="goActivities()">Aktywności/Kroki</button>
       <span style="flex:1"><label>pomiar wagi [kg]</label>
-        <input type="number" id="t-newweight" step="0.1" placeholder="—" onchange="saveWeighIn()"></span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="number" id="t-newweight" step="0.1" placeholder="—" style="flex:1;margin:0" onchange="saveWeighIn()">
+          <button class="primary sm" style="flex:none;width:auto;margin:0" onclick="saveWeighIn()">Zapisz</button>
+        </div></span>
     </div>
+    <p class="muted" id="w-status" style="margin:4px 0 0"></p>
   </section>
   <section class="card">
     <h2>Dodaj posiłek</h2>
@@ -502,6 +506,7 @@ const KRASNAL_STATUS = {
   queue: "Krasnal stoi w kolejce…",
   nodata: "Krasnal nie ma danych — uzupełnij profil i wagę w Ustawieniach.",
   profileSaved: "Krasnal zapisał profil",
+  weightSaved: "Krasnal zapisał wagę:",
 };
 
 function krasnalSays(el, text) {
@@ -829,10 +834,15 @@ async function saveWeighIn() {
   const v = +document.getElementById("t-newweight").value;
   // pole wagi mieszka w zakładce „Dodaj" — data z pola daty posiłku (domyślnie dziś)
   const day = document.getElementById("f-date").value || todayIso();
-  if (v > 0) {
+  const status = document.getElementById("w-status");
+  if (!(v > 0)) return;
+  try {
     await apiJson("/api/weight", {date: day, weight_kg: v});
     document.getElementById("t-newweight").value = "";
+    if (status) krasnalSays(status, `${KRASNAL_STATUS.weightSaved} ${v} kg (${day})`);
     renderToday();
+  } catch (e) {
+    if (status) status.textContent = `Nie udało się zapisać wagi: ${e.message}`;
   }
 }
 
