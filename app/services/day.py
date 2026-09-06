@@ -312,7 +312,10 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
         if summary.forecast_total_kcal is None:
             summary.forecast_total_kcal = round(forecast.total)
             db.commit()
-    forecast_kcal = forecast.total if forecast is not None else e.kcal_out
+    # Zaokrąglone TUTAJ, nie dopiero w odpowiedzi: cel dnia ma się liczyć z tej
+    # samej liczby, którą API zwraca jako `forecast_kcal` — inaczej równanie
+    # odtworzone z pól odpowiedzi różni się o 1 kcal (czerwony CI 2026-09-06).
+    forecast_kcal = round(forecast.total) if forecast is not None else e.kcal_out
 
     calibration_factor = calibration.current_factor(db, user_id)
     calibration_state = calibration.state_view(db, user_id)

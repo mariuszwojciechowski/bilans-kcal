@@ -372,9 +372,10 @@ def test_day_in_progress_walk_reproduces_symptom_and_uses_garmin_net(clients):
     # w toku liczona z PROGNOZY pełnej doby, nie z pomiaru „dotąd" (DONE.md
     # „Cel dnia z prognozy pełnej doby")
     assert body["forecast_kcal"] >= body["kcal_out"]
-    assert body["target_kcal"] == round(
+    # `calibration_factor` w odpowiedzi jest zaokrąglony do 4 miejsc — tolerancja 1 kcal
+    assert abs(body["target_kcal"] - (
         body["forecast_kcal"] * body["calibration_factor"] - body["target_deficit_kcal"]
-    )
+    )) <= 1
 
 
 def test_day_in_progress_target_uses_full_day_forecast_with_baseline_neat(clients):
@@ -408,9 +409,9 @@ def test_day_in_progress_target_uses_full_day_forecast_with_baseline_neat(client
     # części są zaokrąglane osobno — suma może różnić się o 1 od zaokrąglonej całości
     assert abs(body["forecast_kcal"] - (f["measured"] + f["resting_left"] + f["neat_left"])) <= 1
     assert body["forecast_kcal"] > 2000                 # nie 811
-    assert body["target_kcal"] == round(
+    assert abs(body["target_kcal"] - (
         body["forecast_kcal"] * body["calibration_factor"] - body["target_deficit_kcal"]
-    )
+    )) <= 1
 
     # pierwsza prognoza dnia zapisana raz — do porównania z pomiarem końcowym na /usage
     db = SessionLocal()
@@ -430,7 +431,7 @@ def test_closed_day_has_no_forecast_and_target_from_measurement(clients):
     body = alice.get(f"/api/day/{today.isoformat()}").json()
     assert body["forecast"] is None
     assert body["forecast_kcal"] == body["kcal_out"] == 2400
-    assert body["target_kcal"] == round(2400 * body["calibration_factor"] - body["target_deficit_kcal"])
+    assert abs(body["target_kcal"] - (2400 * body["calibration_factor"] - body["target_deficit_kcal"])) <= 1
 
 
 def test_baseline_neat_falls_back_to_default_steps_with_little_history(clients):
