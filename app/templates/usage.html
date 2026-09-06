@@ -67,16 +67,17 @@ bez e-maili, treści posiłków, zdjęć, wag ani kalorii.
   <h2>Moje dni: model vs pomiar</h2>
   <table>
     <thead><tr><th>Data</th><th>Total (Garmin)</th><th>Aktywne (Garmin)</th><th>BMR (Garmin)</th>
-      <th>Model</th><th>Aktywności</th><th>z BMR</th></tr></thead>
+      <th>Model</th><th>Prognoza poranna</th><th>Aktywności</th><th>z BMR</th></tr></thead>
     <tbody>
       {% for d in my_days %}
       <tr><td>{{ d.date }}</td><td>{{ d.kcal_total_garmin if d.kcal_total_garmin is not none else "—" }}</td>
         <td>{{ d.kcal_active_garmin if d.kcal_active_garmin is not none else "—" }}</td>
         <td>{{ d.kcal_bmr_garmin if d.kcal_bmr_garmin is not none else "—" }}</td>
         <td>{{ d.model_total_kcal if d.model_total_kcal is not none else "—" }}</td>
+        <td>{{ d.forecast_total_kcal if d.forecast_total_kcal is not none else "—" }}</td>
         <td>{{ d.activities }}</td><td>{{ d.activities_with_bmr }}</td></tr>
       {% else %}
-      <tr><td colspan="7" class="muted">Brak danych.</td></tr>
+      <tr><td colspan="8" class="muted">Brak danych.</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -121,6 +122,13 @@ bez e-maili, treści posiłków, zdjęć, wag ani kalorii.
     p10 <b>{{ model_vs_measurement.model_ratio.p10 if model_vs_measurement.model_ratio.p10 is not none else "—" }}</b>,
     p90 <b>{{ model_vs_measurement.model_ratio.p90 if model_vs_measurement.model_ratio.p90 is not none else "—" }}</b>,
     poza ±15%: <b>{{ model_vs_measurement.model_ratio.outside_15pct if model_vs_measurement.model_ratio.outside_15pct is not none else "—" }}%</b>.</p>
+  <p class="muted" style="margin-top:6px">Prognoza doby / pomiar końcowy (pierwsza prognoza dnia ÷ kcal_total_garmin,
+    {{ model_vs_measurement.forecast_ratio.n }} dni domkniętych):
+    mediana <b>{{ model_vs_measurement.forecast_ratio.median if model_vs_measurement.forecast_ratio.median is not none else "—" }}</b>,
+    p10 <b>{{ model_vs_measurement.forecast_ratio.p10 if model_vs_measurement.forecast_ratio.p10 is not none else "—" }}</b>,
+    p90 <b>{{ model_vs_measurement.forecast_ratio.p90 if model_vs_measurement.forecast_ratio.p90 is not none else "—" }}</b>,
+    poza ±15%: <b>{{ model_vs_measurement.forecast_ratio.outside_15pct if model_vs_measurement.forecast_ratio.outside_15pct is not none else "—" }}%</b>
+    — czy cel dnia pokazywany rano trafia w to, co doba naprawdę przyniosła.</p>
   <p class="muted">Domkniętych dni z posiłkiem: {{ model_vs_measurement.source_share.closed_with_meal }},
     z nich bez danych Garmina (bilans z modelu):
     <b>{{ model_vs_measurement.source_share.without_garmin_pct if model_vs_measurement.source_share.without_garmin_pct is not none else "—" }}%</b>.</p>

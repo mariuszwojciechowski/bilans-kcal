@@ -311,24 +311,36 @@ def _stats_model_vs_measurement(db: Session, allowed_ids: set[int], today: date)
         if n_activities else None
     )
 
-    summaries = db.execute(
+    rows = db.execute(
         select(DailySummary.user_id, DailySummary.date, DailySummary.kcal_total_garmin,
-               DailySummary.model_total_kcal, DailySummary.complete)
+               DailySummary.model_total_kcal, DailySummary.complete,
+               DailySummary.forecast_total_kcal)
         .where(DailySummary.user_id.in_(allowed_ids), DailySummary.date >= since)
     ).all()
-    ratios = sorted(
-        m / g for _, _, g, m, _ in summaries if g is not None and g > 0 and m is not None
+    summaries = [(uid, d, g, m, c) for uid, d, g, m, c, _ in rows]
+
+    def _ratio_stats(ratios: list[float]) -> dict:
+        ratios = sorted(ratios)
+        return {
+            "n": len(ratios),
+            "median": round(_percentile(ratios, 50), 3) if ratios else None,
+            "p10": round(_percentile(ratios, 10), 3) if ratios else None,
+            "p90": round(_percentile(ratios, 90), 3) if ratios else None,
+            "outside_15pct": (
+                round(100 * sum(1 for r in ratios if abs(r - 1) > 0.15) / len(ratios), 1)
+                if ratios else None
+            ),
+        }
+
+    model_ratio = _ratio_stats(
+        [m / g for _, _, g, m, _ in summaries if g is not None and g > 0 and m is not None]
     )
-    model_ratio = {
-        "n": len(ratios),
-        "median": round(_percentile(ratios, 50), 3) if ratios else None,
-        "p10": round(_percentile(ratios, 10), 3) if ratios else None,
-        "p90": round(_percentile(ratios, 90), 3) if ratios else None,
-        "outside_15pct": (
-            round(100 * sum(1 for r in ratios if abs(r - 1) > 0.15) / len(ratios), 1)
-            if ratios else None
-        ),
-    }
+    # Prognoza poranna vs pomiar końcowy — tylko dni domknięte (DONE.md „Cel
+    # dnia z prognozy pełnej doby"): mówi, czy cel dnia pokazywany rano trafia.
+    forecast_ratio = _ratio_stats(
+        [f / g for _, _, g, _, complete, f in rows
+         if complete and g is not None and g > 0 and f is not None]
+    )
 
     meal_days = set(
         db.execute(
@@ -351,6 +363,7 @@ def _stats_model_vs_measurement(db: Session, allowed_ids: set[int], today: date)
         "activities_30d": n_activities, "pct_with_bmr": pct_with_bmr,
         "pct_with_steps": pct_with_steps, "model_ratio": model_ratio,
         "source_share": source_share,
+        "forecast_ratio": forecast_ratio,
     }
 
 
@@ -593,6 +606,7 @@ def _my_days(db: Session, admin_id: int, limit: int = 14) -> list[dict]:
             "kcal_active_garmin": s.kcal_active_garmin,
             "kcal_bmr_garmin": s.kcal_bmr_garmin,
             "model_total_kcal": s.model_total_kcal,
+            "forecast_total_kcal": s.forecast_total_kcal,
             "activities": acts_by_day.get(s.date, {}).get("count", 0),
             "activities_with_bmr": acts_by_day.get(s.date, {}).get("with_bmr", 0),
         }

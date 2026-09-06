@@ -10,6 +10,78 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Cel dnia z prognozy pełnej doby + roszady na „Dziś"~~ ✓ zrobione (24.4.0 f0f7080, 24.5.0 1f4d59d, 24.6.0 — statystyki)
+
+**Zgłoszenie właściciela 2026-09-06, poranek:** „cel dnia 737 — to nie jest cel
+dnia; realistyczny cel powinien zakładać zwyczajny dzień, a przy aktywnościach
+rosnąć; zostało dziś 150 powinno liczyć się od nowego celu." Spalone 811 kcal,
+spożyte 550, bilans −261 — te trzy były OK.
+
+**Odkrycie:** Garmin w podsumowaniu dnia podaje wydatek (i spoczynek)
+**narastająco**, nie za całą dobę. Poprawka 21.5.0 zakładała odwrotnie (nie
+dało się wtedy sprawdzić na żywym koncie, patrz jej wpis niżej). Skutek:
+cel dnia = pomiar „dotąd" × kalibracja − deficyt, rano absurdalnie niski.
+Komentarz w `balance.py` o „spoczynku za całą dobę od rana" był błędny —
+mechanizm dnia w toku (pomiar bez `max` z modelem) zostaje, zmienia się
+wyłącznie to, z czego liczy się **cel**.
+
+**Decyzja (24.4.0, `app/services/energy.py:full_day_forecast`,
+`app/services/day.py:_baseline_neat/_sync_hour_local`):** dla dnia w toku cel
+dnia liczy się z **prognozy pełnej doby** = zmierzone do ostatniej
+synchronizacji + spoczynek do północy (BMR/h × godziny do końca doby) +
+zwyczajny ruch do końca okna czuwania 6–23 (bazowy NEAT × ułamek okna, który
+został). Bazowy NEAT = **mediana** z ostatnich 7 domkniętych dni z
+`kcal_active_garmin − netto aktywności zegarkowych` (mediana, żeby dzień
+z marszem 4,5 h nie zawyżał bazy); poniżej 3 dni historii — fallback
+`DEFAULT_STEPS` jak w modelu. BMR do prognozy = `max(kcal_bmr_garmin,
+Mifflin)` — narastające BMR Garmina przegrywa z Mifflinem, całodobowe (gdyby
+jednak) wygrywa. Godzina odniesienia = `sync_ts` w strefie użytkownika, nie
+„teraz" (pomiar jest aktualny na moment synchronizacji). Własność: prognoza
+**monotoniczna względem czasu**, o północy równa pomiarowi — dzień leniwszy
+niż baza sam zjeżdża w dół w ciągu dnia; każda zsynchronizowana aktywność
+podnosi prognozę od razu (siedzi w „zmierzone"). `kcal_out` i bilans
+**zostają pomiarem** (fakty), prognoza dotyczy celu i „zostało dziś".
+Bez trzeciego przesunięcia: konserwatyzm nadal tylko w 0.97 i floor-50.
+Nowe pola `/api/day`: `forecast_kcal`, `forecast{measured, resting_left,
+neat_left, hours_left, baseline_neat, baseline_days, bmr_full}` (`null` dla
+dni domkniętych / bez Garmina). `deficit_warning` liczony z prognozy.
+Pierwsza prognoza dnia zapisywana raz w `DailySummary.forecast_total_kcal`
+(migracja addytywna, bez backfillu). Dla dnia domkniętego `forecast_kcal ==
+kcal_out`, nic się nie zmienia; Trendy bez zmian.
+
+**Roszady UI (24.5.0, `mobile.html`):** kcal spalone w miejscu „zostało dziś";
+„zostało dziś" pod bilansem (siatka: spożyte | spalone / cel dnia | bilans /
+puste | zostało dziś / waga | do celu). Przycisk „Aktywności/Kroki" i pole
+„pomiar wagi" przeniesione na górę zakładki **Dodaj** (nowa karta „Aktywność
+i waga" nad „Dodaj posiłek"); waga zapisuje się pod datę z pola daty posiłku
+(domyślnie dziś). Z „Dziś" znikła linia „zapotrzebowanie skorygowane o −x%";
+równanie celu dnia (teraz z rozbiciem prognozy: zmierzone + spoczynek +
+zwyczajny ruch, baza i liczba dni) **oraz** stan kalibracji są na samym dole
+zakładki **Trendy** (`renderTargetFormula`, z ostatniego raportu „dziś" albo
+jednego zapytania `/api/day`).
+
+**Statystyki (24.6.0, `/usage`):** w sekcji „Wydatek: model vs pomiar" nowy
+rozkład **prognoza poranna ÷ pomiar końcowy** dla dni domkniętych (mediana,
+p10, p90, % poza ±15%) — mówi, czy cel pokazywany rano trafia; w „Moje dni"
+(`scope=me`) kolumna „Prognoza poranna". Honoruje `scope`, agregaty.
+
+**Testy:** `test_energy.py` (prognoza: składniki o 9:00, monotoniczność,
+o północy == pomiar, przed 6:00 pełny NEAT), `test_activities_api.py`
+(dzień w toku z 7 dniami historii → baza 400 = mediana, prognoza > 2000
+przy pomiarze 811, zapis pierwszej prognozy; dzień domknięty bez prognozy;
+fallback bazy przy 1 dniu historii; test objawu 4213 przepięty na
+`forecast_kcal`), `test_usage.py` (rozkład prognozy liczy tylko dni
+domknięte). Uruchamiane tylko dotknięte pliki; pełna suita po zgodzie.
+
+**Nota `/prywatnosc`:** bez zmian — prognoza liczy się z danych już
+zbieranych, nowa kolumna to pochodna tych danych, bez nowego odbiorcy.
+
+**Dla właściciela:** komentarz o całodobowym BMR w `balance.py:39-43` jest
+nieaktualny (poprawiony w tym wpisie słownie, nie w kodzie — zachowanie
+`day_balance` się nie zmienia); wpis „Poprawa wyliczania kcal na dzień
+w toku" niżej ma niezweryfikowane założenie — **to jest jego weryfikacja:
+narastająco**.
+
 ## ~~Podmiana ikony krasnala z prawdziwej grafiki 24×24~~ ✓ zrobione (24.3.5, CSS/HTML wjechało wcześniej przypadkiem w 82492c4)
 
 „Ikona krasnala przy komunikatach" (24.3.0, patrz niżej) trzymała fallback na

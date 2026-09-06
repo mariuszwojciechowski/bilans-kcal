@@ -186,18 +186,26 @@ def test_dashboard_stats_model_ratio_and_clamp_counts_use_constants(tmp_path, mo
     today = date.today()
     d0 = today - timedelta(days=1)
     d1 = today - timedelta(days=2)
-    # d0: rozjazd modelu > 15% (model 3000 vs garmin 2000 -> ratio 1.5)
+    # d0: rozjazd modelu > 15% (model 3000 vs garmin 2000 -> ratio 1.5);
+    #     prognoza poranna 2400 vs 2000 -> 1.2 (poza ±15%)
     db.add(DailySummary(user_id=1, date=d0, kcal_total_garmin=2000, model_total_kcal=3000,
-                        model_checked_on=d0, complete=True))
-    # d1: w granicach (model 2100 vs garmin 2000 -> ratio 1.05)
+                        model_checked_on=d0, forecast_total_kcal=2400, complete=True))
+    # d1: w granicach (model 2100 vs garmin 2000 -> ratio 1.05); prognoza 1900 -> 0.95
     db.add(DailySummary(user_id=1, date=d1, kcal_total_garmin=2000, model_total_kcal=2100,
-                        model_checked_on=d1, complete=True))
+                        model_checked_on=d1, forecast_total_kcal=1900, complete=True))
+    # dzień w toku z prognozą — NIE wchodzi do rozkładu (brak pomiaru końcowego)
+    db.add(DailySummary(user_id=1, date=today, kcal_total_garmin=800, forecast_total_kcal=2200,
+                        complete=False))
     db.add(CalibrationState(user_id=1, factor=CLAMP_HIGH, days_used=15))
     db.commit()
 
     stats = usage.dashboard_stats(db, scope="all")
     assert stats["model_vs_measurement"]["model_ratio"]["n"] == 2
     assert stats["model_vs_measurement"]["model_ratio"]["outside_15pct"] == 50.0
+    assert stats["model_vs_measurement"]["forecast_ratio"]["n"] == 2
+    assert stats["model_vs_measurement"]["forecast_ratio"]["outside_15pct"] == 50.0
+    # `_percentile` jest rangowy (bez interpolacji) — mediana z dwu to jedna z nich
+    assert 0.95 <= stats["model_vs_measurement"]["forecast_ratio"]["median"] <= 1.2
     assert stats["calibration_stats"]["factor_dist"]["on_clamp"] == 1
     db.close()
 
