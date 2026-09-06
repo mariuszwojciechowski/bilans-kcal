@@ -145,29 +145,24 @@
   <section class="card">
     <h2>Bilans — <span id="t-day"></span></h2>
     <p class="muted" id="quip" style="font-style:italic"></p>
-    <!-- Układ 2 kolumn (właściciel 2026-09-06): górne 5 pól to kcal, z pustym
-         miejscem po prawej od „cel dnia"; dolny wiersz to waga. -->
+    <!-- Układ 2 kolumn (właściciel 2026-09-06, druga roszada): wiersz 1 spożyte |
+         spalone, wiersz 2 cel dnia | bilans, wiersz 3 (puste) | zostało dziś —
+         „zostało" pod bilansem; dolny wiersz to waga. Równanie celu dnia i linia
+         kalibracji przeniesione na dół zakładki Trendy. -->
     <div class="stats">
       <div class="stat"><b id="t-in">—</b><span>kcal spożyte</span></div>
-      <div class="stat"><b id="t-left">—</b><span>zostało dziś</span></div>
       <div class="stat"><b id="t-out">—</b><span>kcal spalone</span></div>
-      <div class="stat"><b id="t-bal">—</b><span>bilans</span></div>
       <div class="stat"><b id="t-target">—</b><span>cel dnia</span></div>
+      <div class="stat"><b id="t-bal">—</b><span>bilans</span></div>
       <div class="stat" aria-hidden="true"></div>
+      <div class="stat"><b id="t-left">—</b><span>zostało dziś</span></div>
       <div class="stat"><b id="t-weight">—</b><span>ostatnia waga [kg]</span></div>
       <div class="stat"><b id="t-goal">—</b><span>do celu wagi</span></div>
     </div>
-    <p class="muted" id="t-calibration" style="font-size:12px"></p>
-    <p class="muted" id="t-target-formula" style="font-size:12px"></p>
     <div style="display:flex;gap:6px;align-items:center;margin:4px 0">
       <button class="ghost" style="flex:none;padding:8px 14px;margin:0;width:auto" onclick="changeDay(-1)">◀</button>
       <input type="date" id="t-date" onchange="renderToday()" style="flex:1;margin:0">
       <button class="ghost" style="flex:none;padding:8px 14px;margin:0;width:auto" onclick="changeDay(1)">▶</button>
-    </div>
-    <div class="row2" style="align-items:flex-end">
-      <button class="ghost" style="flex:1;margin:4px 0;border:1px solid transparent" onclick="goActivities()">Aktywności/Kroki</button>
-      <span style="flex:1"><label>pomiar wagi [kg]</label>
-        <input type="number" id="t-newweight" step="0.1" placeholder="—" onchange="saveWeighIn()"></span>
     </div>
     <div id="tdee-breakdown"></div>
   </section>
@@ -185,6 +180,17 @@
 
 <!-- ── DODAJ ────────────────────────────────────────────────────────── -->
 <div class="page" id="page-add">
+  <!-- Przeniesione z „Dziś" (właściciel 2026-09-06): wejście do aktywności/kroków
+       i szybki pomiar wagi mieszkają nad „Dodaj posiłek". Waga zapisuje się
+       pod datę z pola daty posiłku niżej (domyślnie dziś). -->
+  <section class="card">
+    <h2>Aktywność i waga</h2>
+    <div class="row2" style="align-items:flex-end">
+      <button class="ghost" style="flex:1;margin:4px 0;border:1px solid transparent" onclick="goActivities()">Aktywności/Kroki</button>
+      <span style="flex:1"><label>pomiar wagi [kg]</label>
+        <input type="number" id="t-newweight" step="0.1" placeholder="—" onchange="saveWeighIn()"></span>
+    </div>
+  </section>
   <section class="card">
     <h2>Dodaj posiłek</h2>
     <div class="row2">
@@ -254,6 +260,9 @@
       </div>
     </div>
     <div id="trends-charts"><p class="muted">Wybierz okres powyżej.</p></div>
+    <!-- Równanie celu dnia + stan kalibracji — przeniesione z „Dziś" (właściciel
+         2026-09-06), żeby ekran dnia pokazywał liczby, a wyjaśnienie było tu. -->
+    <p class="muted" id="tr-target-formula" style="font-size:12px;margin-top:12px"></p>
   </section>
 </div>
 
@@ -632,8 +641,7 @@ async function renderToday() {
     document.getElementById("t-goal").textContent =
       rep.to_goal_kg === null ? "—" : rep.to_goal_kg + " kg";
     krasnalSays(document.getElementById("quip"), rep.quip || "");
-    renderCalibrationLine(rep);
-    renderTargetFormula(rep);
+    if (day === todayIso()) _lastTodayReport = rep;
     document.getElementById("a-steps").value = rep.steps ?? "";
     document.getElementById("a-steps-note").style.display = rep.steps_default ? "" : "none";
     renderMacros(rep.macros);
@@ -661,23 +669,35 @@ function changeDay(delta) {
   renderToday();
 }
 
-function renderCalibrationLine(rep) {
-  const el = document.getElementById("t-calibration");
-  if (!el) return;
-  const pct = Math.round((rep.calibration_factor - 1) * 100);
-  const sign = pct > 0 ? "+" : "";
-  const startowy = rep.calibration_days_used < 10 ? ", współczynnik startowy" : "";
-  el.textContent = `zapotrzebowanie skorygowane o ${sign}${pct}% (kalibracja: ${rep.calibration_days_used} dni${startowy})`;
-}
+// Ostatni raport dnia „dziś" — do równania celu na dole Trendów (bez drugiego
+// zapytania, gdy użytkownik przechodzi z „Dziś" do „Trendy").
+let _lastTodayReport = null;
 
-function renderTargetFormula(rep) {
-  const el = document.getElementById("t-target-formula");
+async function renderTargetFormula() {
+  const el = document.getElementById("tr-target-formula");
   if (!el) return;
-  const calStr = rep.calibration_factor.toFixed(2).replace(".", ",");
-  const balUi = -rep.target_deficit_kcal;
-  const balSigned = balUi >= 0 ? `+${balUi}` : `−${Math.abs(balUi)}`;
-  el.textContent = `cel dnia = spalone ${rep.kcal_out} × kalibracja ${calStr} + bilans ${balSigned} `
-    + `= ${rep.target_kcal}; zostało zaokrąglone w dół do 50`;
+  try {
+    const rep = _lastTodayReport || await api(`/api/day/${todayIso()}`);
+    const calStr = rep.calibration_factor.toFixed(2).replace(".", ",");
+    const balUi = -rep.target_deficit_kcal;
+    const balSigned = balUi >= 0 ? `+${balUi}` : `−${Math.abs(balUi)}`;
+    const startowy = rep.calibration_days_used < 10 ? ", współczynnik startowy" : "";
+    let txt;
+    if (rep.forecast) {
+      const f = rep.forecast;
+      txt = `Cel dnia (dziś) = prognoza doby ${rep.forecast_kcal} × kalibracja ${calStr} + bilans ${balSigned} = ${rep.target_kcal}. `
+        + `Prognoza doby = zmierzone przez Garmina ${f.measured} + spoczynek do północy ${f.resting_left} `
+        + `+ zwyczajny ruch do wieczora ${f.neat_left}`
+        + (f.baseline_days ? ` (Twoja baza ${f.baseline_neat} kcal/d, mediana z ${f.baseline_days} dni)` : ` (baza domyślna ${f.baseline_neat} kcal/d — za mało historii)`)
+        + `. Każda zsynchronizowana aktywność podnosi prognozę od razu.`;
+    } else {
+      txt = `Cel dnia (dziś) = spalone ${rep.kcal_out} × kalibracja ${calStr} + bilans ${balSigned} = ${rep.target_kcal}.`;
+    }
+    txt += ` „Zostało dziś" zaokrąglone w dół do 50. Kalibracja: ${rep.calibration_days_used} dni${startowy}.`;
+    el.textContent = txt;
+  } catch (e) {
+    el.textContent = "";
+  }
 }
 
 function renderEnergyBreakdown(rep, elId) {
@@ -807,7 +827,8 @@ async function delMeal(id) {
 
 async function saveWeighIn() {
   const v = +document.getElementById("t-newweight").value;
-  const day = document.getElementById("t-date").value || todayIso();
+  // pole wagi mieszka w zakładce „Dodaj" — data z pola daty posiłku (domyślnie dziś)
+  const day = document.getElementById("f-date").value || todayIso();
   if (v > 0) {
     await apiJson("/api/weight", {date: day, weight_kg: v});
     document.getElementById("t-newweight").value = "";
@@ -1010,6 +1031,7 @@ function _fmtChange(v, suffix) {
 }
 
 async function renderTrends(days) {
+  renderTargetFormula();  // równanie celu dnia na dole — niezależne od okresu
   days = days || _trendDays || 30;
   if (days === _trendDays) return;  // already loaded this period
   _trendDays = days;
