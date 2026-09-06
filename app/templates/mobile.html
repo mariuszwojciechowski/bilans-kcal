@@ -531,10 +531,22 @@ function refreshMealWhen() {
   document.getElementById("f-date").value = todayIso();
   document.getElementById("f-time").value = localTime();
 }
+// Pole wagi jest prepopulowane ostatnim pomiarem (właściciel 2026-09-06) —
+// zapis tylko, gdy użytkownik wpisał inną wartość niż ta podstawiona.
+let _prefilledWeight = null;
+function prefillWeight(kg) {
+  const el = document.getElementById("t-newweight");
+  if (!el || !(kg > 0)) return;
+  const current = +el.value;
+  // nie nadpisuj, gdy użytkownik właśnie coś wpisuje (wartość różna od poprzedniej podstawionej)
+  if (document.activeElement === el || (current > 0 && current !== _prefilledWeight)) return;
+  el.value = kg;
+  _prefilledWeight = kg;
+}
 function flushPendingWeight() {
   const el = document.getElementById("t-newweight");
   const v = el && +el.value;
-  if (v > 0) saveWeighIn();
+  if (v > 0 && v !== _prefilledWeight) saveWeighIn();
 }
 // Autozapis profilu przy zmianie zakładki (cel wagi, bilans, styl życia mają
 // też onchange="saveProfile()" — to tu domyka przypadek zmiany zakładki bez
@@ -644,6 +656,7 @@ async function renderToday() {
       rep.to_goal_kg === null ? "—" : rep.to_goal_kg + " kg";
     krasnalSays(document.getElementById("quip"), rep.quip || "");
     if (day === todayIso()) _lastTodayReport = rep;
+    prefillWeight(rep.weight_last_kg);
     document.getElementById("a-steps").value = rep.steps ?? "";
     document.getElementById("a-steps-note").style.display = rep.steps_default ? "" : "none";
     renderMacros(rep.macros);
@@ -833,9 +846,13 @@ async function saveWeighIn() {
   const day = document.getElementById("f-date").value || todayIso();
   const status = document.getElementById("w-status");
   if (!(v > 0)) return;
+  if (v === _prefilledWeight) {
+    if (status) status.textContent = `Bez zmian — ostatni pomiar to już ${v} kg.`;
+    return;
+  }
   try {
     await apiJson("/api/weight", {date: day, weight_kg: v});
-    document.getElementById("t-newweight").value = "";
+    _prefilledWeight = v;   // pole zostaje z zapisaną wartością jako nowa podstawa
     if (status) krasnalSays(status, `${KRASNAL_STATUS.weightSaved} ${v} kg (${day})`);
     renderToday();
   } catch (e) {
