@@ -665,6 +665,7 @@ async function renderToday() {
     document.getElementById("t-weight").textContent = rep.weight_last_kg;
     document.getElementById("t-goal").textContent =
       rep.to_goal_kg === null ? "—" : rep.to_goal_kg + " kg";
+    colorGoalTiles(rep);
     krasnalSays(document.getElementById("quip"), rep.quip || "");
     if (day === todayIso()) _lastTodayReport = rep;
     prefillWeight(rep.weight_last_kg);
@@ -693,6 +694,32 @@ function changeDay(delta) {
   document.getElementById("t-date").value =
     `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   renderToday();
+}
+
+// Kolor kafelków „waga" i „do celu wagi" — im bliżej celu, tym optymistyczniej
+// (właściciel 2026-09-06). Kierunek zgodny z intencją z bilansu docelowego:
+// deficyt = odchudzanie (przekroczenie celu w dół = najlepiej), nadwyżka =
+// masa (bycie nad celem = najlepiej), 0 = utrzymanie (blisko z obu stron).
+// Skala: >= GOAL_FAR_KG od celu — neutralnie; bliżej — od bursztynu (hue 40)
+// do zieleni (hue 130); cel osiągnięty/przekroczony — zieleń sukcesu.
+const GOAL_FAR_KG = 6;
+function goalColor(toGoalKg, targetDeficitKcal) {
+  if (toGoalKg === null || toGoalKg === undefined) return "";
+  let remaining;                       // kg, które zostały W INTENCJONALNYM kierunku
+  if (targetDeficitKcal > 0) remaining = toGoalKg;          // odchudzanie: nad celem = zostało
+  else if (targetDeficitKcal < 0) remaining = -toGoalKg;    // masa: pod celem = zostało
+  else remaining = Math.abs(toGoalKg);                      // utrzymanie
+  if (remaining <= 0) return "var(--success)";
+  if (remaining >= GOAL_FAR_KG) return "";
+  const hue = Math.round(40 + (1 - remaining / GOAL_FAR_KG) * 90);
+  return `hsl(${hue} 60% 40%)`;
+}
+function colorGoalTiles(rep) {
+  const color = goalColor(rep.to_goal_kg, rep.target_deficit_kcal);
+  for (const id of ["t-weight", "t-goal"]) {
+    const el = document.getElementById(id);
+    if (el) { el.className = ""; el.style.color = color; }
+  }
 }
 
 // Ostatni raport dnia „dziś" — do równania celu na dole Trendów (bez drugiego
