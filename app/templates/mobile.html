@@ -702,7 +702,7 @@ function changeDay(delta) {
 // masa (bycie nad celem = najlepiej), 0 = utrzymanie (blisko z obu stron).
 // Skala: >= GOAL_FAR_KG od celu — neutralnie; bliżej — od bursztynu (hue 40)
 // do zieleni (hue 130); cel osiągnięty/przekroczony — zieleń sukcesu.
-const GOAL_FAR_KG = 6;
+const GOAL_FAR_KG = 5;
 function goalColor(toGoalKg, targetDeficitKcal) {
   if (toGoalKg === null || toGoalKg === undefined) return "";
   let remaining;                       // kg, które zostały W INTENCJONALNYM kierunku
