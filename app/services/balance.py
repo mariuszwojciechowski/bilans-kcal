@@ -37,11 +37,13 @@ def day_balance(
     measured = garmin_total + manual_kcal
     if day_complete:
         return DayBalance(kcal_in, measured, "garmin", False)
-    # Dzień w toku: pomiar Garmina, choć częściowy — bez `max` z modelem teoretycznym.
-    # Total Garmina w ciągu dnia nie jest zaniżony o BMR (spoczynek jest liczony za
-    # całą dobę od rana), brakuje mu tylko przyszłych aktywności — model tylko je
-    # zgadywał i potrafił chybić o >1000 kcal (patrz TODO.md). `estimated=True`,
-    # bo wydatek jeszcze urośnie, gdy zegarek dośle dane.
+    # Dzień w toku: pomiar Garmina, choć częściowy — bez `max` z modelem teoretycznym
+    # (model zgadywał przyszłe aktywności i potrafił chybić o >1000 kcal, patrz
+    # DONE.md „Poprawa wyliczania kcal na dzień w toku"). Garmin podaje wydatek
+    # NARASTAJĄCO — także spoczynek (zweryfikowane 2026-09-06: 811 kcal o poranku),
+    # więc ta liczba to „spalone dotąd", fakt do bilansu. Cel dnia NIE liczy się
+    # z niej, tylko z prognozy pełnej doby (`energy.full_day_forecast`, wołana
+    # w `day.day_report`). `estimated=True`, bo wydatek urośnie do końca dnia.
     return DayBalance(kcal_in, measured, "mixed", True)
 
 

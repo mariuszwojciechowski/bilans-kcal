@@ -76,11 +76,10 @@ domknięte). Uruchamiane tylko dotknięte pliki; pełna suita po zgodzie.
 **Nota `/prywatnosc`:** bez zmian — prognoza liczy się z danych już
 zbieranych, nowa kolumna to pochodna tych danych, bez nowego odbiorcy.
 
-**Dla właściciela:** komentarz o całodobowym BMR w `balance.py:39-43` jest
-nieaktualny (poprawiony w tym wpisie słownie, nie w kodzie — zachowanie
-`day_balance` się nie zmienia); wpis „Poprawa wyliczania kcal na dzień
-w toku" niżej ma niezweryfikowane założenie — **to jest jego weryfikacja:
-narastająco**.
+**Dla właściciela:** komentarz o całodobowym BMR w `balance.py` poprawiony
+(24.6.1, sam komentarz — zachowanie `day_balance` bez zmian); wpis „Poprawa
+wyliczania kcal na dzień w toku" niżej ma niezweryfikowane założenie —
+**to jest jego weryfikacja: Garmin podaje narastająco**.
 
 ## ~~Podmiana ikony krasnala z prawdziwej grafiki 24×24~~ ✓ zrobione (24.3.5, CSS/HTML wjechało wcześniej przypadkiem w 82492c4)
 
