@@ -6,6 +6,7 @@ from app.services.energy import (
     age_years,
     bmr_mifflin,
     cycling_met,
+    full_day_forecast,
     neat_from_steps,
     smoothed_weight,
     tdee_theoretical,
@@ -142,3 +143,32 @@ def test_tdee_steps_from_activity_wins_over_distance():
     )
     # z jawnymi krokami (6000) odejmuje mniej niż z szacunku dystansu (7000) -> większy NEAT
     assert tdee_with_steps.neat > tdee_without_steps.neat
+
+
+# ── prognoza pełnej doby dla dnia w toku (DONE.md „Cel dnia z prognozy pełnej doby") ──
+
+def test_full_day_forecast_morning_adds_resting_and_neat():
+    f = full_day_forecast(measured=811, bmr_full=1752, baseline_neat=400, hour_local=9.0)
+    assert f.hours_left == 15
+    assert round(f.resting_left) == round(1752 / 24 * 15)          # 1095
+    assert round(f.neat_left) == round(400 * (23 - 9) / 17)        # 329 — okno czuwania 6-23
+    assert round(f.total) == round(811 + 1752 / 24 * 15 + 400 * 14 / 17)
+
+
+def test_full_day_forecast_is_monotone_and_equals_measured_at_midnight():
+    prev = None
+    for h in (6.0, 9.0, 12.0, 18.0, 22.0, 23.5, 24.0):
+        f = full_day_forecast(measured=1500, bmr_full=1700, baseline_neat=350, hour_local=h)
+        if prev is not None:
+            assert f.total <= prev + 1e-9          # z każdą godziną reszta dnia maleje
+        prev = f.total
+    assert full_day_forecast(1500, 1700, 350, 24.0).total == 1500
+    # po 23:00 zwyczajny ruch już nie wchodzi, spoczynek jeszcze tak
+    late = full_day_forecast(1500, 1700, 350, 23.5)
+    assert late.neat_left == 0
+    assert round(late.resting_left, 1) == round(1700 / 24 * 0.5, 1)
+
+
+def test_full_day_forecast_before_waking_window_counts_full_neat():
+    f = full_day_forecast(measured=300, bmr_full=1700, baseline_neat=350, hour_local=4.0)
+    assert f.neat_left == 350

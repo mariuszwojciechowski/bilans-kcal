@@ -86,6 +86,11 @@ class DailySummary(Base):
     # przesłonięta w przestrzeni nazw klasy), nie do `datetime.date` —
     # `nullable=True` jawnie, żeby nie polegać na wykryciu Optional z adnotacji.
     model_checked_on: Mapped["date | None"] = mapped_column(Date, nullable=True)
+    # Pierwsza prognoza pełnej doby wyliczona dla dnia w toku (day.day_report,
+    # DONE.md „Cel dnia z prognozy pełnej doby") — zapisywana raz, przy pierwszym
+    # wejściu na dzień; po domknięciu doby porównywana z kcal_total_garmin na
+    # /usage. Bez backfillu.
+    forecast_total_kcal: Mapped[int | None] = mapped_column(Integer)
 
 
 class Activity(Base):

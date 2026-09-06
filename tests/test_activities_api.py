@@ -4,7 +4,7 @@ Wzorzec jak w test_saved_meals_api.py: prawdziwe zapytania przez TestClient,
 sesja przez /register, profil i waga seedowane przez API (nie ORM wprost) —
 inaczej rejestrowany użytkownik nie ma danych i /api/activities / /api/day
 zwracają 409."""
-from datetime import date
+from datetime import date, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -364,15 +364,88 @@ def test_day_in_progress_walk_reproduces_symptom_and_uses_garmin_net(clients):
     assert 0.85 * 2889 <= body["tdee_model"]["total"] <= 1.15 * 2889
 
     # jedyne celowe przesunięcie: zaokrąglenie w dół do 50, nigdy więcej niż surowa różnica
-    raw_diff = (body["kcal_out"] - body["target_deficit_kcal"]) - body["kcal_in"]
+    raw_diff = (body["forecast_kcal"] - body["target_deficit_kcal"]) - body["kcal_in"]
     assert body["remaining_kcal"] % 50 == 0
     assert body["remaining_kcal"] <= raw_diff
 
-    # cel dnia — jawna liczba, do której odnosi się "zostało dziś" (TODO.md
-    # „Bilans zamiast deficytu…")
+    # cel dnia — jawna liczba, do której odnosi się "zostało dziś"; dla dnia
+    # w toku liczona z PROGNOZY pełnej doby, nie z pomiaru „dotąd" (DONE.md
+    # „Cel dnia z prognozy pełnej doby")
+    assert body["forecast_kcal"] >= body["kcal_out"]
     assert body["target_kcal"] == round(
-        body["kcal_out"] * body["calibration_factor"] - body["target_deficit_kcal"]
+        body["forecast_kcal"] * body["calibration_factor"] - body["target_deficit_kcal"]
     )
+
+
+def test_day_in_progress_target_uses_full_day_forecast_with_baseline_neat(clients):
+    """Poranek (2026-09-06): Garmin podaje wydatek narastająco — 811 kcal o 9:00
+    dawało cel dnia 737. Cel ma iść z prognozy: zmierzone + spoczynek do
+    północy + zwyczajny ruch (mediana z domkniętych dni) do końca czuwania."""
+    alice, _, SessionLocal = clients
+    today = app_today()
+    user_id = _user_id(SessionLocal, "alice@example.com")
+
+    # 7 domkniętych dni bez treningów, aktywne 400/300/500/400/400/900/400 -> mediana 400
+    for i, active in enumerate([400, 300, 500, 400, 400, 900, 400], start=1):
+        _seed_summary(SessionLocal, user_id, today - timedelta(days=i),
+                      kcal_total_garmin=1800 + active, kcal_active_garmin=active,
+                      kcal_bmr_garmin=1800, steps=6000, complete=True)
+    # dziś: synchronizacja o 07:00 UTC (09:00 CEST / 08:00 CET)
+    _seed_summary(SessionLocal, user_id, today,
+                  kcal_total_garmin=811, kcal_active_garmin=60, kcal_bmr_garmin=751,
+                  steps=1200, complete=False,
+                  sync_ts=datetime(today.year, today.month, today.day, 7, 0))
+
+    body = alice.get(f"/api/day/{today.isoformat()}").json()
+    f = body["forecast"]
+
+    assert body["kcal_out"] == 811                      # pomiar zostaje faktem
+    assert f["measured"] == 811
+    assert f["baseline_neat"] == 400 and f["baseline_days"] == 7
+    assert 14 <= f["hours_left"] <= 17                  # 09:00 CEST albo 08:00 CET
+    assert f["bmr_full"] > 751                          # narastające BMR Garmina przegrywa z Mifflinem
+    assert f["resting_left"] == round(f["bmr_full"] / 24 * f["hours_left"])
+    # części są zaokrąglane osobno — suma może różnić się o 1 od zaokrąglonej całości
+    assert abs(body["forecast_kcal"] - (f["measured"] + f["resting_left"] + f["neat_left"])) <= 1
+    assert body["forecast_kcal"] > 2000                 # nie 811
+    assert body["target_kcal"] == round(
+        body["forecast_kcal"] * body["calibration_factor"] - body["target_deficit_kcal"]
+    )
+
+    # pierwsza prognoza dnia zapisana raz — do porównania z pomiarem końcowym na /usage
+    db = SessionLocal()
+    saved = db.scalar(select(DailySummary.forecast_total_kcal).where(
+        DailySummary.user_id == user_id, DailySummary.date == today))
+    db.close()
+    assert saved == body["forecast_kcal"]
+
+
+def test_closed_day_has_no_forecast_and_target_from_measurement(clients):
+    alice, _, SessionLocal = clients
+    today = app_today()
+    user_id = _user_id(SessionLocal, "alice@example.com")
+    _seed_summary(SessionLocal, user_id, today, kcal_total_garmin=2400, kcal_active_garmin=600,
+                  steps=9000, complete=True)
+
+    body = alice.get(f"/api/day/{today.isoformat()}").json()
+    assert body["forecast"] is None
+    assert body["forecast_kcal"] == body["kcal_out"] == 2400
+    assert body["target_kcal"] == round(2400 * body["calibration_factor"] - body["target_deficit_kcal"])
+
+
+def test_baseline_neat_falls_back_to_default_steps_with_little_history(clients):
+    alice, _, SessionLocal = clients
+    today = app_today()
+    user_id = _user_id(SessionLocal, "alice@example.com")
+    _seed_summary(SessionLocal, user_id, today - timedelta(days=1), kcal_total_garmin=2200,
+                  kcal_active_garmin=400, complete=True)          # tylko 1 dzień < minimum 3
+    _seed_summary(SessionLocal, user_id, today, kcal_total_garmin=900, kcal_active_garmin=50,
+                  steps=1000, complete=False)
+
+    body = alice.get(f"/api/day/{today.isoformat()}").json()
+    f = body["forecast"]
+    assert f["baseline_days"] == 0
+    assert f["baseline_neat"] == round(DEFAULT_STEPS * WEIGHT_KG * 0.00057)
 
 
 if __name__ == "__main__":

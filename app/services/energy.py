@@ -69,6 +69,46 @@ def neat_from_steps(steps: int, weight_kg: float, activity_steps: int = 0) -> fl
     return effective * weight_kg * _met()["steps"]["kcal_per_step_per_kg"]
 
 
+# Prognoza pełnej doby dla dnia w toku (decyzja właściciela 2026-09-06, DONE.md
+# „Cel dnia z prognozy pełnej doby"): Garmin podaje wydatek narastająco, więc
+# rano „spalone" to kilkaset kcal i cel dnia liczony z pomiaru był absurdalnie
+# niski. Prognoza = zmierzone dotąd + spoczynek do północy + zwyczajny ruch
+# (NEAT) do końca okna czuwania. Zwyczajny ruch dzieje się w oknie czuwania —
+# ułamek „ile dnia zostało" liczy się względem tego okna, nie 24 h.
+WAKING_START_H = 6
+WAKING_END_H = 23
+
+
+@dataclass
+class DayForecast:
+    measured: float        # pomiar Garmina do ostatniej synchronizacji (+ ręczne aktywności)
+    resting_left: float    # spoczynek od synchronizacji do północy
+    neat_left: float       # zwyczajny ruch do końca okna czuwania
+    hours_left: float
+    baseline_neat: float   # bazowy NEAT użytkownika (mediana z domkniętych dni)
+    bmr_full: float        # spoczynek za pełną dobę użyty do prognozy
+
+    @property
+    def total(self) -> float:
+        return self.measured + self.resting_left + self.neat_left
+
+
+def full_day_forecast(measured: float, bmr_full: float, baseline_neat: float,
+                      hour_local: float) -> DayForecast:
+    """`hour_local` — godzina (z ułamkiem) ostatniej synchronizacji w strefie
+    użytkownika; pomiar jest aktualny na ten moment, nie na „teraz".
+    Monotoniczna względem czasu: o północy prognoza == pomiar."""
+    hours_left = min(max(24.0 - hour_local, 0.0), 24.0)
+    resting_left = bmr_full / 24.0 * hours_left
+    waking = WAKING_END_H - WAKING_START_H
+    frac_left = min(max((WAKING_END_H - hour_local) / waking, 0.0), 1.0)
+    neat_left = baseline_neat * frac_left
+    return DayForecast(
+        measured=measured, resting_left=resting_left, neat_left=neat_left,
+        hours_left=hours_left, baseline_neat=baseline_neat, bmr_full=bmr_full,
+    )
+
+
 def running_kcal(weight_kg: float, distance_m: float) -> float:
     # netto ~0.9-1.0 kcal / kg / km; używamy 1.0 brutto
     return weight_kg * (distance_m / 1000.0) * _met()["distance"]["running_kcal_per_kg_per_km"]

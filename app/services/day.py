@@ -10,8 +10,9 @@ na 409 z tym samym komunikatem, jaki był wcześniej.
 """
 
 import math
+import statistics
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -19,16 +20,25 @@ from sqlalchemy.orm import Session
 from ..models import Activity, DailySummary, Meal, PendingMeal, UserProfile, WeightLog
 from ..providers import garmin as garmin_provider
 from . import calibration, quips
-from .clock import user_today
+from .clock import user_now, user_today, user_tz
 from .balance import day_balance, deficit_warning, projected_weekly_change_kg
 from .energy import (
     DEFAULT_STEPS,
+    DayForecast,
     TheoreticalTdee,
     age_from_year,
     bmr_mifflin,
+    full_day_forecast,
+    neat_from_steps,
     smoothed_weight,
     tdee_theoretical,
 )
+
+# Bazowy NEAT (zwyczajny ruch bez treningów) do prognozy doby: mediana z tylu
+# ostatnich domkniętych dni z danymi Garmina; poniżej minimum — fallback na
+# DEFAULT_STEPS. Mediana, nie średnia — dzień z marszem 4,5 h nie ma zawyżać bazy.
+BASELINE_NEAT_DAYS = 7
+BASELINE_NEAT_MIN_DAYS = 3
 from .macros import coverage, who_targets
 from .timeago import humanize_ago
 
@@ -63,6 +73,57 @@ def _activity_resting_kcal(activity: Activity, summary: DailySummary | None, bmr
     if summary and summary.kcal_bmr_garmin is not None:
         return summary.kcal_bmr_garmin / 86400 * activity.duration_s
     return bmr / 86400 * activity.duration_s
+
+
+def _garmin_activities_net_kcal(activities: list[Activity], summary: DailySummary | None,
+                                bmr: float) -> float:
+    """Suma netto (bez spoczynku) aktywności z zegarka — ta sama reguła, którą
+    stosuje `day_energy`; tu wyniesiona, bo potrzebuje jej też bazowy NEAT."""
+    total = 0.0
+    for a in activities:
+        if a.source != "manual" and a.kcal_garmin is not None:
+            total += max(a.kcal_garmin - _activity_resting_kcal(a, summary, bmr), 0)
+    return total
+
+
+def _baseline_neat(db: Session, user_id: int, day: date, weight_kg: float,
+                   bmr: float) -> tuple[float, int]:
+    """Zwyczajny ruch użytkownika: mediana z ostatnich `BASELINE_NEAT_DAYS`
+    domkniętych dni (przed `day`) z `kcal_active_garmin − netto aktywności`.
+    Zwraca (kcal, liczba użytych dni); przy < BASELINE_NEAT_MIN_DAYS dniach
+    fallback na DEFAULT_STEPS i 0 dni."""
+    summaries = db.scalars(
+        select(DailySummary).where(
+            DailySummary.user_id == user_id, DailySummary.date < day,
+            DailySummary.complete.is_(True), DailySummary.kcal_active_garmin.is_not(None),
+        ).order_by(DailySummary.date.desc()).limit(BASELINE_NEAT_DAYS)
+    ).all()
+    if len(summaries) < BASELINE_NEAT_MIN_DAYS:
+        return neat_from_steps(DEFAULT_STEPS, weight_kg), 0
+    dates = [s.date for s in summaries]
+    acts_by_day: dict[date, list[Activity]] = {}
+    for a in db.scalars(
+        select(Activity).where(Activity.user_id == user_id, Activity.date.in_(dates))
+    ).all():
+        acts_by_day.setdefault(a.date, []).append(a)
+    values = [
+        max(s.kcal_active_garmin - _garmin_activities_net_kcal(acts_by_day.get(s.date, []), s, bmr), 0)
+        for s in summaries
+    ]
+    return float(statistics.median(values)), len(values)
+
+
+def _sync_hour_local(summary: DailySummary | None, profile: UserProfile) -> float:
+    """Godzina (z ułamkiem) ostatniej synchronizacji w strefie użytkownika —
+    pomiar Garmina jest aktualny na ten moment, nie na „teraz"."""
+    if summary is not None and summary.sync_ts is not None:
+        ts = summary.sync_ts
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        local = ts.astimezone(user_tz(profile))
+    else:
+        local = user_now(profile)
+    return local.hour + local.minute / 60.0
 
 
 def _floor_to_50(value: float) -> int:
@@ -236,9 +297,26 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
         summary.model_checked_on = day
         db.commit()
 
+    # Cel dnia dla dnia w toku liczy się z PROGNOZY pełnej doby, nie z pomiaru
+    # „dotąd" (Garmin podaje wydatek narastająco — rano to kilkaset kcal).
+    # `kcal_out`/bilans zostają pomiarem: to fakty; prognoza dotyczy tylko celu.
+    forecast: DayForecast | None = None
+    baseline_days = 0
+    if e.out_source == "mixed" and summary is not None:
+        baseline_neat, baseline_days = _baseline_neat(db, user_id, day, weight, e.tdee.bmr)
+        # kcal_bmr_garmin bywa narastające (wtedy < Mifflin) albo całodobowe
+        # (wtedy ≈ +9% nad Mifflinem) — max wybiera właściwą interpretację.
+        bmr_full = max(float(summary.kcal_bmr_garmin or 0), e.tdee.bmr)
+        forecast = full_day_forecast(e.kcal_out, bmr_full, baseline_neat,
+                                     _sync_hour_local(summary, profile))
+        if summary.forecast_total_kcal is None:
+            summary.forecast_total_kcal = round(forecast.total)
+            db.commit()
+    forecast_kcal = forecast.total if forecast is not None else e.kcal_out
+
     calibration_factor = calibration.current_factor(db, user_id)
     calibration_state = calibration.state_view(db, user_id)
-    e_target = e.kcal_out * calibration_factor - profile.target_deficit_kcal
+    e_target = forecast_kcal * calibration_factor - profile.target_deficit_kcal
     targets = who_targets(e_target, weight, sex=profile.sex,
                           age=age_from_year(profile.birth_year, day),
                           lifestyle=profile.lifestyle or "active",
@@ -267,11 +345,24 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
         "target_deficit_kcal": profile.target_deficit_kcal,
         "target_kcal": round(e_target),
         "remaining_kcal": _floor_to_50(e_target - e.kcal_in),
+        "forecast_kcal": round(forecast_kcal),
+        "forecast": (
+            {
+                "measured": round(forecast.measured),
+                "resting_left": round(forecast.resting_left),
+                "neat_left": round(forecast.neat_left),
+                "hours_left": round(forecast.hours_left, 1),
+                "baseline_neat": round(forecast.baseline_neat),
+                "baseline_days": baseline_days,
+                "bmr_full": round(forecast.bmr_full),
+            }
+            if forecast is not None else None
+        ),
         "calibration_factor": round(calibration_factor, 4),
         "calibration_updated": calibration_state["updated_on"],
         "calibration_days_used": calibration_state["days_used"],
         "projected_weekly_change_kg": round(projected_weekly_change_kg(balance), 2),
-        "deficit_warning": deficit_warning(profile.target_deficit_kcal, e.kcal_out),
+        "deficit_warning": deficit_warning(profile.target_deficit_kcal, forecast_kcal),
         "tdee_model": {
             "bmr": round(e.tdee.bmr),
             "neat": round(e.tdee.neat),

@@ -129,6 +129,9 @@ def _migrate(engine) -> None:
         if summary_cols and "model_checked_on" not in summary_cols:
             conn.execute(text("ALTER TABLE daily_summary ADD COLUMN model_checked_on DATE"))
             conn.commit()
+        if summary_cols and "forecast_total_kcal" not in summary_cols:
+            conn.execute(text("ALTER TABLE daily_summary ADD COLUMN forecast_total_kcal INTEGER"))
+            conn.commit()
 
 
 def get_session() -> Session:
