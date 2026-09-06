@@ -504,6 +504,8 @@ const KRASNAL_STATUS = {
   nodata: "Krasnal nie ma danych — uzupełnij profil i wagę w Ustawieniach.",
   profileSaved: "Krasnal zapisał profil",
   weightSaved: "Krasnal zapisał wagę:",
+  garminNotConnected: "Krasnal nie ma połączenia z Garminem — połącz konto w Ustawieniach → Garmin Connect.",
+  garminFailed: "Krasnal nie dogadał się z Garminem — spróbuj za chwilę",
 };
 
 function krasnalSays(el, text) {
@@ -561,7 +563,10 @@ async function api(path, opts = {}) {
   if (r.status === 401) { location.href = "/login"; throw new Error("not logged in"); }
   if (!r.ok) {
     const t = await r.text().catch(() => "");
-    throw new Error(`HTTP ${r.status}: ${t.slice(0, 200)}`);
+    const err = new Error(`HTTP ${r.status}: ${t.slice(0, 200)}`);
+    err.status = r.status;
+    try { err.detail = JSON.parse(t).detail; } catch (_) { err.detail = null; }
+    throw err;
   }
   const ct = r.headers.get("content-type") || "";
   return ct.includes("json") ? r.json() : r.text();
@@ -811,7 +816,13 @@ async function doSync() {
     krasnalSays(el, KRASNAL_STATUS.synced);
     renderToday();
   } catch(e) {
-    el.textContent = "Błąd: " + e.message;
+    // 409 = brak połączonego konta Garmina (GarminNotLoggedIn) — to normalny stan
+    // użytkownika bez zegarka, nie awaria; surowe detale HTTP nie są dla niego.
+    if (e.status === 409) {
+      krasnalSays(el, KRASNAL_STATUS.garminNotConnected);
+    } else {
+      krasnalSays(el, `${KRASNAL_STATUS.garminFailed}${e.status ? ` (HTTP ${e.status})` : ""}`);
+    }
   }
 }
 
