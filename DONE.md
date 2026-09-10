@@ -10,6 +10,21 @@ listy, po tym akapicie.
 
 ---
 
+## ~~Prognoza doby: spoczynek z historii Garmina zamiast Mifflina~~ ✓ zrobione (24.9.2)
+
+**Objaw (2026-09-10, `/usage?scope=me`):** prognoza poranna 1755–1896 kcal,
+a dni bez treningu kończyły się na 2088–2236 — ~350 kcal za nisko.
+**Przyczyna:** spoczynek do prognozy brał `max(kcal_bmr_garmin z dziś, Mifflin)`;
+Garmin podaje spoczynek narastająco (rano ~680), więc zawsze wygrywał Mifflin
+(~1644), a pełnodobowy spoczynek Garmina to ~2000. **Decyzja:** `bmr_full` =
+mediana `kcal_bmr_garmin` z ostatnich 7 domkniętych dni (ta sama lista, którą
+pobiera bazowy NEAT — `day.py:_history_baselines`, zero nowych zapytań),
+fallback Mifflin przy < 3 dniach; odpowiedź `/api/day` ma `forecast.bmr_source`
+(`garmin`/`mifflin`). Treningi nadal poza bazą — cel rośnie po ich synchronizacji
+(decyzja właściciela). Testy w `test_activities_api.py`. Nota `/prywatnosc`
+bez zmian. **Właściciel:** po tygodniu sprawdź na `/usage` rozkład „prognoza
+poranna ÷ pomiar końcowy" — dni bez treningu powinny być ~1,0.
+
 ## ~~Cel dnia z prognozy pełnej doby + roszady na „Dziś"~~ ✓ zrobione (24.4.0 f0f7080, 24.5.0 1f4d59d, 24.6.0 — statystyki)
 
 **Zgłoszenie właściciela 2026-09-06, poranek:** „cel dnia 737 — to nie jest cel

@@ -86,20 +86,21 @@ def _garmin_activities_net_kcal(activities: list[Activity], summary: DailySummar
     return total
 
 
-def _baseline_neat(db: Session, user_id: int, day: date, weight_kg: float,
-                   bmr: float) -> tuple[float, int]:
-    """Zwyczajny ruch użytkownika: mediana z ostatnich `BASELINE_NEAT_DAYS`
-    domkniętych dni (przed `day`) z `kcal_active_garmin − netto aktywności`.
-    Zwraca (kcal, liczba użytych dni); przy < BASELINE_NEAT_MIN_DAYS dniach
-    fallback na DEFAULT_STEPS i 0 dni."""
+def _history_baselines(db: Session, user_id: int, day: date, weight_kg: float,
+                       bmr: float) -> tuple[float, int, float | None]:
+    """Zwyczajny ruch i spoczynek użytkownika na podstawie historii.
+    Zwraca (neat_kcal, liczba użytych dni, bmr_garmin_full)."""
     summaries = db.scalars(
         select(DailySummary).where(
             DailySummary.user_id == user_id, DailySummary.date < day,
             DailySummary.complete.is_(True), DailySummary.kcal_active_garmin.is_not(None),
         ).order_by(DailySummary.date.desc()).limit(BASELINE_NEAT_DAYS)
     ).all()
+    bmr_vals = [s.kcal_bmr_garmin for s in summaries if s.kcal_bmr_garmin]
+    bmr_garmin_full = float(statistics.median(bmr_vals)) if len(bmr_vals) >= BASELINE_NEAT_MIN_DAYS else None
+
     if len(summaries) < BASELINE_NEAT_MIN_DAYS:
-        return neat_from_steps(DEFAULT_STEPS, weight_kg), 0
+        return neat_from_steps(DEFAULT_STEPS, weight_kg), 0, bmr_garmin_full
     dates = [s.date for s in summaries]
     acts_by_day: dict[date, list[Activity]] = {}
     for a in db.scalars(
@@ -110,7 +111,7 @@ def _baseline_neat(db: Session, user_id: int, day: date, weight_kg: float,
         max(s.kcal_active_garmin - _garmin_activities_net_kcal(acts_by_day.get(s.date, []), s, bmr), 0)
         for s in summaries
     ]
-    return float(statistics.median(values)), len(values)
+    return float(statistics.median(values)), len(values), bmr_garmin_full
 
 
 def _sync_hour_local(summary: DailySummary | None, profile: UserProfile) -> float:
@@ -302,11 +303,12 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
     # `kcal_out`/bilans zostają pomiarem: to fakty; prognoza dotyczy tylko celu.
     forecast: DayForecast | None = None
     baseline_days = 0
+    bmr_source = "mifflin"
     if e.out_source == "mixed" and summary is not None:
-        baseline_neat, baseline_days = _baseline_neat(db, user_id, day, weight, e.tdee.bmr)
-        # kcal_bmr_garmin bywa narastające (wtedy < Mifflin) albo całodobowe
-        # (wtedy ≈ +9% nad Mifflinem) — max wybiera właściwą interpretację.
-        bmr_full = max(float(summary.kcal_bmr_garmin or 0), e.tdee.bmr)
+        baseline_neat, baseline_days, bmr_garmin_full = _history_baselines(db, user_id, day, weight, e.tdee.bmr)
+        # Spoczynek z historii Garmina, bo prognoza ma trafić w liczbę Garmina.
+        bmr_full = bmr_garmin_full if bmr_garmin_full is not None else e.tdee.bmr
+        bmr_source = "garmin" if bmr_garmin_full is not None else "mifflin"
         forecast = full_day_forecast(e.kcal_out, bmr_full, baseline_neat,
                                      _sync_hour_local(summary, profile))
         if summary.forecast_total_kcal is None:
@@ -358,6 +360,7 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
                 "baseline_neat": round(forecast.baseline_neat),
                 "baseline_days": baseline_days,
                 "bmr_full": round(forecast.bmr_full),
+                "bmr_source": bmr_source,
             }
             if forecast is not None else None
         ),

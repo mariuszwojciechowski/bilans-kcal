@@ -404,7 +404,8 @@ def test_day_in_progress_target_uses_full_day_forecast_with_baseline_neat(client
     assert f["measured"] == 811
     assert f["baseline_neat"] == 400 and f["baseline_days"] == 7
     assert 14 <= f["hours_left"] <= 17                  # 09:00 CEST albo 08:00 CET
-    assert f["bmr_full"] > 751                          # narastające BMR Garmina przegrywa z Mifflinem
+    assert f["bmr_full"] == 1800
+    assert f["bmr_source"] == "garmin"
     assert f["resting_left"] == round(f["bmr_full"] / 24 * f["hours_left"])
     # części są zaokrąglane osobno — suma może różnić się o 1 od zaokrąglonej całości
     assert abs(body["forecast_kcal"] - (f["measured"] + f["resting_left"] + f["neat_left"])) <= 1
@@ -447,6 +448,7 @@ def test_baseline_neat_falls_back_to_default_steps_with_little_history(clients):
     f = body["forecast"]
     assert f["baseline_days"] == 0
     assert f["baseline_neat"] == round(DEFAULT_STEPS * WEIGHT_KG * 0.00057)
+    assert f["bmr_source"] == "mifflin"                 # 1 dzień historii < minimum 3
 
 
 if __name__ == "__main__":
