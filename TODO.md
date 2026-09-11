@@ -887,17 +887,25 @@ przez właściciela, nie wolno tak zrobić. Wymagany podział:
 - Nowy, **osobny rodzaj zgody** `Consent(kind="strava")` w
   `app/services/consent.py` (stała `STRAVA = "strava"` obok `LLM_PHOTOS`) —
   dzięki partycji po `kind` jest od `llm_photos` całkiem niezależny.
-- `PRIVACY_VERSION` i tak trzeba podnieść (nota faktycznie się zmienia, i
-  tak wymaga tego zasada z góry tego pliku) — ale **w tym samym zadaniu**
-  jednorazowa migracja w `app/db.py` (wzorzec innych wpisów w `_migrate`,
-  wołana raz przy starcie, idempotentna): dla wszystkich niewycofanych
-  wierszy `Consent` z `kind="llm_photos"` i `version` różną od nowej
-  `PRIVACY_VERSION`, podbij `version` na nową — *przenieś zgodę do nowej
-  wersji noty automatycznie*, bez pytania usera ponownie, bo sekcja „Zdjęcia
-  i LLM" się nie zmieniła. To jest dokładnie „obecni użytkownicy dalej mają
-  zgodę na wszystko bez Stravy" z ustaleń właściciela — realizowane jako
-  jednorazowy backfill przy tej konkretnej zmianie, nie jako stała zmiana
-  semantyki `has_consent`.
+- `PRIVACY_VERSION` (`app/config.py`) idzie z `"2026-09-03"` na
+  `"2026-09-11"` (decyzja właściciela 2026-09-11) — nota faktycznie się
+  zmienia, wymaga tego zasada z góry tego pliku.
+- **W tym samym zadaniu**, funkcja migrująca (np. `consent.migrate_llm_photos_version`
+  w `app/services/consent.py`), wołana **bezwarunkowo przy starcie** obok
+  `garmin_provider.migrate_tokens_dirs_to_db(db)` w `app/main.py` (linia 63,
+  ten sam blok `try/finally` po `init_db()`) — wzorzec identyczny: brak
+  warunku „czy już migrowano", bezpieczne bo zapytanie po pierwszym
+  przebiegu nic nie znajduje. **Literały starej i nowej wersji zaszyte
+  wprost w kodzie tej funkcji** (`"2026-09-03"` → `"2026-09-11"`), NIE jako
+  „zawsze przypnij `llm_photos` do aktualnego `PRIVACY_VERSION`" — inaczej
+  mechanizm ponownego pytania o zgodę przy realnej zmianie sekcji LLM w
+  przyszłości przestałby działać na trwałe. Migracja: dla wszystkich
+  niewycofanych wierszy `Consent` z `kind="llm_photos"` i
+  `version == "2026-09-03"`, podbij `version` na `"2026-09-11"` — *przenieś
+  zgodę do nowej wersji noty automatycznie*, bez pytania usera ponownie, bo
+  sekcja „Zdjęcia i LLM" się nie zmieniła. To jest dokładnie „obecni
+  użytkownicy dalej mają zgodę na wszystko bez Stravy" z ustaleń
+  właściciela.
 - Nowa zgoda `kind="strava"` startuje pusta dla **wszystkich** — i obecnych,
   i nowych userów — bo to jest zgoda na nowe, opcjonalne źródło danych, nie
   coś, na co można się zgodzić z góry przy rejestracji (większość userów
@@ -914,16 +922,21 @@ przez właściciela, nie wolno tak zrobić. Wymagany podział:
 
 **Kroki dla implementującego LLM:**
 
-1. **Rejestracja aplikacji w Strava** (poza kodem, robi właściciel): Strava
-   API application (https://www.strava.com/settings/api) → `client_id` +
-   `client_secret`, scope `activity:read_only`, redirect URI
-   `https://fit.krasnal.cc/settings/strava/callback` (i lokalny
-   `http://localhost:8000/settings/strava/callback` do dev). Właściciel wkleja
-   `client_id`/`client_secret` do `.env` — nie są to sekrety per-user, więc
-   idą do `app/config.py` jak inne ustawienia procesu (wzorzec `GARMIN_TOKENS_DIR`):
-   `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET` z `os.getenv(...)`, plus
-   `STRAVA_REDIRECT_URI` (domyślnie złożone z `BASE_URL`, jeśli appka już ma
-   taką zmienną — sprawdź `config.py`; jeśli nie ma, dodaj jawny env).
+1. **Rejestracja aplikacji w Strava** — zrobione (właściciel, 2026-09-11):
+   Strava API application, `client_id = 95635`, scope `activity:read_only`.
+   `client_secret` jest już u właściciela — wkleja go **wyłącznie** do `.env`
+   na VM, nigdy do żadnego commitowanego pliku (repo jest publiczne). W
+   `app/config.py` (wzorzec `GARMIN_TOKENS_DIR`): `STRAVA_CLIENT_ID`,
+   `STRAVA_CLIENT_SECRET` z `os.getenv(...)` (bez defaultów — brak wartości
+   ma być widoczny błąd, nie cichy fallback), plus `STRAVA_REDIRECT_URI`
+   (`https://fit.krasnal.cc/settings/strava/callback` na proda, lokalny
+   `http://localhost:8000/settings/strava/callback` do dev — sprawdź, czy
+   `config.py` ma już zmienną typu `BASE_URL` do złożenia tego dynamicznie;
+   jeśli nie, dodaj jawny env `STRAVA_REDIRECT_URI`). Model per-user: appka
+   ma jeden `client_id`/`client_secret` (identyfikują "Fit Krasnal" wobec
+   Stravy), ale **każdy user przechodzi swój własny ekran zgody OAuth i
+   dostaje własny access/refresh token** — dokładnie tak jak dla Garmina,
+   `client_id`/`client_secret` nie zmieniają tego podziału.
 2. **Provider `app/providers/strava.py`** — implementuje `DataProvider`:
    - `get_daily_summary(day)` — zwraca `DailySummaryData` z samymi `None`
      (poza `date`); dzień nadal wypełnia się z ręcznych kroków, tak jak dla
