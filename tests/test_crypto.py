@@ -1,4 +1,4 @@
-"""Szyfrowanie sekretów użytkownika (TODO.md „Szyfrowanie sekretów...")."""
+"""Szyfrowanie sekretów użytkownika (DONE.md „Szyfrowanie sekretów...")."""
 from datetime import date
 
 import pytest

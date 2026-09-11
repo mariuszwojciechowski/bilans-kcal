@@ -1,5 +1,5 @@
 """Znaczniki „szacowany" na wykresach SVG (`Series.hollow`, `bar_chart(estimated=...)`)
-— patrz plan „Trendy liczą kcal inaczej niż «Dziś»" w TODO.md.
+— patrz „Trendy liczą kcal inaczej niż «Dziś»" w DONE.md.
 
 Bez tych parametrów SVG ma zostać identyczny jak przed ich dodaniem — inaczej
 istniejące wykresy (waga, spożyte) zmieniłyby wygląd bez powodu."""

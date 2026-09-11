@@ -1,4 +1,5 @@
-"""RODO: nota /prywatnosc, zgoda na LLM, retencja (TODO.md).
+"""RODO: nota /prywatnosc, zgoda na LLM, retencja (DONE.md „RODO:
+informacja, zgoda na wysyłkę zdjęć do LLM, retencja").
 
 Wzorzec `client` jak w test_birth_year.py — rejestracja przez prawdziwy
 endpoint, nie ORM wprost. `process_queue` jest testowany osobno na poziomie

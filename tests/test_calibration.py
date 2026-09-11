@@ -1,4 +1,4 @@
-"""Kalibracja adaptacyjna — filtr dzienny (TODO.md „Kalibracja adaptacyjna",
+"""Kalibracja adaptacyjna — filtr dzienny (DONE.md „Kalibracja adaptacyjna",
 Warstwa 2). Syntetyczny użytkownik: prawdziwy wydatek = 0.9 × to, co pokazuje
 Garmin (czyli poprawny `factor` to 0.9), szum wagi ±0.5 kg (seed stały)."""
 import random
@@ -188,7 +188,7 @@ def test_guard_resets_filter_to_batch_on_divergence(tmp_path, monkeypatch):
 
 
 def test_calibration_step_bumps_once_per_valid_day(tmp_path, monkeypatch):
-    """TODO.md „Statystyki: obserwowalność…" — telemetria `calibration_step`
+    """DONE.md „Statystyki: obserwowalność…" — telemetria `calibration_step`
     bumpuje się raz per ważny dzień przetworzony przez `catch_up`."""
     db = _make_db(tmp_path, "calib_telemetry_step")
     n_days = 3

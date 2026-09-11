@@ -1,4 +1,4 @@
-"""Statystyki użycia (TODO.md „Statystyki użycia — adopcja i najczęściej
+"""Statystyki użycia (DONE.md „Statystyki użycia — adopcja i najczęściej
 klikane opcje"). Wzorzec `client` jak w test_consent.py."""
 from datetime import date, timedelta
 

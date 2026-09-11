@@ -1,6 +1,6 @@
 """Sprząta liczniki statystyk użycia (UsageDaily) starsze niż retencja.
 
-Plan „Statystyki użycia" (TODO.md) mówi o dopisaniu tego do
+DONE.md „Statystyki użycia" mówi o dopisaniu tego do
 scripts/purge_deleted.py — ten skrypt jeszcze nie istnieje (plan kasowania
 konta nie jest zaimplementowany), więc na razie jest to samodzielny skrypt.
 Gdy purge_deleted.py powstanie, to wywołanie powinno się tam przenieść i ten

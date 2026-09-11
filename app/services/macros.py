@@ -93,7 +93,7 @@ class MacroTargets:
 
 
 # Próg, poniżej którego zakres celu (redukcja/masa) uznajemy za pokrywający się
-# z zakresem ze stylu życia — wtedy znacznik nie ma sensu (TODO.md „Cel białka
+# z zakresem ze stylu życia — wtedy znacznik nie ma sensu (DONE.md „Cel białka
 # zależny od bilansu").
 PROTEIN_GOAL_THRESHOLD_G_PER_KG = 0.05
 

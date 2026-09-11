@@ -52,7 +52,7 @@ def payload(db: Session, user_id: int, days: int, today: date | None = None) -> 
     trafić na różne dni o północy.
 
     `today` jako parametr ułatwi wejście punktowi „Strefa czasowa użytkownika
-    jako granica dnia" z TODO.md — wtedy zamiast `date.today()` poda się tu
+    jako granica dnia" z DONE.md — wtedy zamiast `date.today()` poda się tu
     dzień w strefie profilu.
     """
     days = clamp_days(days)
@@ -102,7 +102,7 @@ def payload(db: Session, user_id: int, days: int, today: date | None = None) -> 
 
     # Wydatek dnia liczony dokładnie jak na „Dziś" (`day_energy` — jedna funkcja
     # dla obu widoków, patrz plan „Trendy liczą kcal inaczej niż «Dziś»" w
-    # TODO.md). Waga do modelu TDEE to ta sama wygładzona wartość co „Dziś"
+    # DONE.md). Waga do modelu TDEE to ta sama wygładzona wartość co „Dziś"
     # (z pełnej historii), niezależna od dnia zakresu.
     weight_for_model = smoothed_weight(all_weights)
     kcal_out: list[tuple[date, float]] = []
@@ -146,7 +146,8 @@ def payload(db: Session, user_id: int, days: int, today: date | None = None) -> 
     if len(smoothed) >= 2:
         period_change = round(smoothed[-1][1] - smoothed[0][1], 1)
     # Średni bilans i prognoza celu liczą się tylko z dni domkniętych — dzień
-    # w toku zmienia się co godzinę i zaburzałby średnią (patrz plan w TODO.md).
+    # w toku zmienia się co godzinę i zaburzałby średnią (patrz DONE.md
+    # „Trendy liczą kcal inaczej niż «Dziś»").
     closed_balance = [(d, v) for d, v in balance if d not in estimated_days]
     avg_balance = (
         round(sum(v for _, v in closed_balance) / len(closed_balance)) if closed_balance else None

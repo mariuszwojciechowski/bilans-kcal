@@ -78,7 +78,7 @@ class DailySummary(Base):
     sync_ts: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     complete: Mapped[bool] = mapped_column(default=False)
     # Migawka modelu teoretycznego dla dnia domkniętego — zapisywana raz przez
-    # day.day_report (patrz TODO.md „Statystyki: obserwowalność…"), do
+    # day.day_report (patrz DONE.md „Statystyki: obserwowalność…"), do
     # porównania z kcal_total_garmin na /usage. Bez backfillu dla dni sprzed
     # wdrożenia tej kolumny.
     model_total_kcal: Mapped[int | None] = mapped_column(Integer)
@@ -109,7 +109,8 @@ class Activity(Base):
     source: Mapped[str] = mapped_column(String, default="garmin")  # garmin | manual
     # spoczynek zegarka za czas trwania tej aktywności (Garmin: `bmrCalories`) —
     # pozwala policzyć netto kcal aktywności (`kcal_garmin` jest brutto).
-    # Brak backfillu: stare wiersze NULL, day.py ma fallback (patrz TODO.md).
+    # Brak backfillu: stare wiersze NULL, day.py ma fallback
+    # (patrz DONE.md „Poprawa wyliczania kcal na dzień w toku").
     kcal_bmr_garmin: Mapped[int | None] = mapped_column(Integer)
     steps: Mapped[int | None] = mapped_column(Integer)  # kroki zarejestrowane przez zegarek
 
@@ -187,7 +188,7 @@ class Meal(Base):
 
 
 class UsageDaily(Base):
-    """Licznik dzienny telemetrii (plan „Statystyki użycia" w TODO.md) — jeden
+    """Licznik dzienny telemetrii (DONE.md „Statystyki użycia") — jeden
     wiersz = (pseudonim, dzień, zdarzenie, licznik). Świadomie bez FK do `user`:
     statystyki mają przeżyć skasowanie konta jako czysty agregat i nie mogą
     blokować kasacji wiersza `user`."""
@@ -204,7 +205,7 @@ class UsageDaily(Base):
 
 class CalibrationState(Base):
     """Kalibracja adaptacyjna (WYMAGANIA.md 6.2) — stan filtru dziennego,
-    jeden wiersz na użytkownika. Mechanizm opisany w TODO.md „Kalibracja
+    jeden wiersz na użytkownika. Mechanizm opisany w DONE.md „Kalibracja
     adaptacyjna" (Warstwa 2: filtr dzienny od pierwszego dnia). `trend_kg` to
     wygładzona waga (EMA), NIE to samo co `energy.smoothed_weight` (średnia
     okienkowa) używane gdzie indziej."""
@@ -238,7 +239,7 @@ class Calibration(Base):
     """Migawka wsadowa (14-dniowa) — wyłącznie do karty 6.4 (oczekiwana vs
     rzeczywista zmiana wagi) i strażnika rozjazdu z filtrem. Mechanizmem
     kalibracji na co dzień jest filtr (`CalibrationState`/`CalibrationLog`),
-    nie ta tabela — patrz TODO.md."""
+    nie ta tabela — patrz DONE.md „Kalibracja adaptacyjna"."""
 
     __tablename__ = "calibration"
 

@@ -330,7 +330,7 @@ def test_migration_adds_activity_watch_columns(tmp_path):
 
 
 def test_day_in_progress_walk_reproduces_symptom_and_uses_garmin_net(clients):
-    """Odtworzenie objawu z 2026-09-05 (patrz TODO.md „Poprawa wyliczania kcal
+    """Odtworzenie objawu z 2026-09-05 (patrz DONE.md „Poprawa wyliczania kcal
     na dzień w toku"): marsz 4,5h liczony MET 5.0 przez cały czas trwania
     zawyżał model o >1000 kcal. Dzień w toku ma teraz brać pomiar Garmina
     netto z aktywności, bez `max` z modelem teoretycznym."""

@@ -4,12 +4,12 @@ Model uczy się na danych użytkownika (jak MacroFactor): `day.day_report()`
 mnoży zmierzony wydatek (`kcal_out`) przez współczynnik `factor` zanim odejmie
 cel deficytu — patrz `current_factor()`. Mechanizm to filtr dzienny
 (uproszczony Kalman, `step_day`/`catch_up`), nie wsadowa kalibracja z pierwszej
-wersji planu — decyzja właściciela 2026-09-05 (TODO.md „Kalibracja adaptacyjna",
+wersji planu — decyzja właściciela 2026-09-05 (DONE.md „Kalibracja adaptacyjna",
 Warstwa 2): 10-14 dni czekania na pierwszy wynik było gorsze niż liczba, która
 koryguje się codziennie i wolno dochodzi do prawdy. Wsadowe `compute()` zostaje
 wyłącznie do karty w tygodniówce (6.4) i jako strażnik przed rozjazdem filtru.
 
-Wszystkie stałe filtru w jednym miejscu (jak w opisie w TODO.md) — nie
+Wszystkie stałe filtru w jednym miejscu (jak w opisie w DONE.md) — nie
 rozpraszać ich po kodzie, żeby dało się je zmienić jednym commitem.
 """
 
@@ -28,7 +28,8 @@ from .energy import smoothed_weight
 # starym modelem wydatku i nie wchodzą do kalibracji (ani wsadowej, ani filtru).
 CALIBRATION_EPOCH = date(2026, 9, 5)
 
-PRIOR_FACTOR = 0.97          # start filtru — jawny konserwatyzm (zasada w TODO.md)
+PRIOR_FACTOR = 0.97          # start filtru — jawny konserwatyzm
+                             # (zasada „Kierunek błędu w bilansie" w CLAUDE.md)
 EMA_ALPHA = 0.1              # wygładzenie wagi (konwencja Hacker's Diet)
 CLAMP_LOW = 0.85             # w dół bez ograniczeń (realnie spalasz mniej)
 CLAMP_HIGH = 1.05            # w górę tylko +5% (błąd wagi 14 dni ~0.5-1 kg)
@@ -276,7 +277,7 @@ def catch_up(db: Session, user_id: int) -> CalibrationState:
     row.updated_on = state.updated_on
     db.commit()
 
-    # Telemetria dopiero po commicie stanu (patrz TODO.md „Statystyki:
+    # Telemetria dopiero po commicie stanu (patrz DONE.md „Statystyki:
     # obserwowalność…") — `bump` otwiera własny commit na tej samej sesji.
     from . import usage
 
@@ -310,7 +311,8 @@ def maybe_snapshot(db: Session, user_id: int, min_age_days: int = 7) -> Calibrat
 
 def _guard_against_batch_divergence(db: Session, user_id: int, row: CalibrationState) -> None:
     """Filtr i wsad różnią się > 10% (błąd w filtrze albo w danych) → reset
-    filtru do wsadu, wpis w logu (patrz TODO.md „Warstwa 2")."""
+    filtru do wsadu, wpis w logu (patrz DONE.md „Kalibracja adaptacyjna",
+    Warstwa 2)."""
     batch = maybe_snapshot(db, user_id)
     if batch is None or batch.factor <= 0:
         return

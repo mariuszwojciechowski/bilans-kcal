@@ -1,5 +1,5 @@
 """Strefa czasowa użytkownika jako granica dnia — WYMAGANIA.md 8.3
-(TODO.md „Strefa czasowa użytkownika…"). Bez freezegun: `clock.datetime`
+(DONE.md „Strefa czasowa użytkownika…"). Bez freezegun: `clock.datetime`
 jest podmieniane monkeypatchem na wariant z ustalonym `.now(tz)`, więc testy
 kontrolują punkt w czasie wprost zamiast polegać na zegarze maszyny."""
 from datetime import date, datetime, timedelta, timezone

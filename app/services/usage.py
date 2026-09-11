@@ -1,4 +1,4 @@
-"""Telemetria własnej aplikacji (plan „Statystyki użycia" w TODO.md).
+"""Telemetria własnej aplikacji (DONE.md „Statystyki użycia").
 
 Liczniki dzienne, nie log zdarzeń: jeden wiersz = (pseudonim, dzień,
 zdarzenie, licznik). Bez znaczników czasu co do sekundy i bez kolejności
@@ -126,7 +126,7 @@ def dashboard_stats(db: Session, weeks: int = 12, scope: str = "others") -> dict
     (User) są dotykane tylko po to, żeby policzyć ich pseudonim i sprawdzić,
     czy dane zdarzenie dla niego wystąpiło (lejek wejścia); e-mail nigdy nie
     trafia do wyniku. `scope` wybiera, kto wchodzi do agregatów — patrz
-    TODO.md „Zakres statystyk /usage"."""
+    DONE.md „Zakres statystyk /usage"."""
     from .charts import bar_chart
 
     today = date.today()
@@ -298,7 +298,8 @@ def _event_sum(db: Session, allowed_refs: set[str], event: str, since: date, tod
 
 
 def _stats_model_vs_measurement(db: Session, allowed_ids: set[int], today: date) -> dict:
-    """Pytania 1-2 z TODO.md: czy `Activity.kcal_bmr_garmin`/`steps` w ogóle
+    """Pytania 1-2 z DONE.md „Statystyki: obserwowalność…": czy
+    `Activity.kcal_bmr_garmin`/`steps` w ogóle
     się wypełniają, i czy model teoretyczny trafia w pomiar Garmina. Ostatnie
     30 dni, jedno zapytanie per tabela."""
     since = today - timedelta(days=30)
@@ -376,7 +377,8 @@ def _stats_model_vs_measurement(db: Session, allowed_ids: set[int], today: date)
 
 def _stats_calibration(db: Session, allowed_ids: set[int], allowed_refs: set[str], today: date,
                        weeks: int, chart_start: date) -> dict:
-    """Pytania 3-4 z TODO.md: czy kalibracja się uczy i czy jest zdrowa."""
+    """Pytania 3-4 z DONE.md „Statystyki: obserwowalność…": czy kalibracja
+    się uczy i czy jest zdrowa."""
     from .calibration import CLAMP_HIGH, CLAMP_LOW, PRIOR_FACTOR
     from .charts import bar_chart
 
@@ -454,7 +456,8 @@ def _stats_calibration(db: Session, allowed_ids: set[int], allowed_refs: set[str
 
 
 def _stats_conservative_balance(db: Session, allowed_ids: set[int], today: date) -> dict:
-    """Pytanie 5 z TODO.md: czy bilans „konserwatywny" produktowo działa —
+    """Pytanie 5 z DONE.md „Statystyki: obserwowalność…": czy bilans
+    „konserwatywny" produktowo działa —
     jak często domknięty dzień z posiłkami kończy się nad celem."""
     from .calibration import PRIOR_FACTOR
 
@@ -500,7 +503,7 @@ def _stats_conservative_balance(db: Session, allowed_ids: set[int], today: date)
 
 
 def _stats_balance_goal(db: Session, allowed_ids: set[int]) -> dict:
-    """Adopcja pola „Docelowy bilans dnia" (TODO.md „Bilans zamiast deficytu"):
+    """Adopcja pola „Docelowy bilans dnia" (DONE.md „Bilans zamiast deficytu"):
     rozkład znaku wśród profili — ilu na deficycie / utrzymaniu / nadwyżce
     (`target_deficit_kcal` dodatni/zero/ujemny) i mediana wartości bezwzględnej
     ustawienia. Przed tą zmianą pole miało `min=0` — więc "nadwyżka" > 0
@@ -521,7 +524,7 @@ def _stats_balance_goal(db: Session, allowed_ids: set[int]) -> dict:
 
 
 def _stats_protein_goal(db: Session, allowed_ids: set[int], today: date) -> dict:
-    """Adopcja i funkcjonowanie celu białka zależnego od bilansu (TODO.md
+    """Adopcja i funkcjonowanie celu białka zależnego od bilansu (DONE.md
     „Cel białka zależny od bilansu"): `n_visible` = ilu profilom w ogóle
     pokazuje się znacznik (jeśli 0 — funkcja jest martwa jak martwe pole
     `protein_cut_g_per_kg` przed tym wdrożeniem); `in_goal_pct` = odsetek

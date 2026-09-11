@@ -81,7 +81,8 @@ def test_cycling_met_scales_with_speed():
 
 
 def test_cycling_top_speed_met_lowered_to_8():
-    # Garmin dla szybkiej jazdy wychodzi ~7-8 MET brutto, nie 10 (TODO.md)
+    # Garmin dla szybkiej jazdy wychodzi ~7-8 MET brutto, nie 10
+    # (DONE.md „Poprawa wyliczania kcal na dzień w toku")
     assert cycling_met(distance_m=25000, duration_s=3600) == 8.0
 
 
@@ -99,7 +100,8 @@ def test_walking_and_hiking_use_net_met():
 
 def test_hiking_checked_before_walking():
     # "hiking" nie zawiera "walking" ale test pilnuje, że gałąź hiking
-    # rzeczywiście wygrywa dla tego typu (kolejność z TODO.md)
+    # rzeczywiście wygrywa dla tego typu (kolejność z DONE.md „Poprawa
+    # wyliczania kcal na dzień w toku")
     assert activity_kcal_model("hiking", 3600, None, 90) != activity_kcal_model(
         "walking", 3600, None, 90
     )

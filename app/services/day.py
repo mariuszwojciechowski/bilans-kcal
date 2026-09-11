@@ -2,7 +2,8 @@
 
 Wyniesione z routera (`app/routers/day.py`), bo to jedyne miejsce, w które ma
 wejść współczynnik kalibracji adaptacyjnej (WYMAGANIA.md 6.2 — patrz plan
-w TODO.md). Router zostaje cienki: telemetria, mapowanie błędu na HTTP.
+w DONE.md „Kalibracja adaptacyjna"). Router zostaje cienki: telemetria,
+mapowanie błędu na HTTP.
 
 Warstwa serwisów jest wolna od FastAPI, dlatego brak danych wejściowych
 zgłaszamy `DayReportUnavailable`, a nie `HTTPException` — router zamienia to
@@ -43,7 +44,7 @@ from .macros import coverage, who_targets
 from .timeago import humanize_ago
 
 # Przybliżenie kroków w biegu/marszu — ta sama stała, z której korzysta
-# `tdee_theoretical` (patrz punkt „Tabela MET jako dane" w TODO.md).
+# `tdee_theoretical` (patrz punkt „Tabela MET jako dane" w DONE.md).
 STEPS_PER_KM = 1400
 
 
@@ -65,7 +66,7 @@ def _est_steps(activity: Activity) -> int:
 
 def _activity_resting_kcal(activity: Activity, summary: DailySummary | None, bmr: float) -> float:
     """Spoczynek zegarka za czas trwania aktywności — do odjęcia od `kcal_garmin`
-    (brutto) i uzyskania kcal netto. Kolejność fallbacków wg TODO.md („Poprawa
+    (brutto) i uzyskania kcal netto. Kolejność fallbacków wg DONE.md („Poprawa
     wyliczania kcal na dzień w toku", krok 0): per-aktywność → proporcja z
     dobowego spoczynku Garmina → model Mifflin."""
     if activity.kcal_bmr_garmin is not None:
@@ -130,7 +131,7 @@ def _sync_hour_local(summary: DailySummary | None, profile: UserProfile) -> floa
 def _floor_to_50(value: float) -> int:
     """Zaokrąglenie w dół do pełnych 50 kcal — jedyne miejsce z celowym,
     konserwatywnym przesunięciem w `remaining_kcal` (decyzja właściciela
-    2026-09-05, zasada „Kierunek błędu w bilansie" w TODO.md): przy
+    2026-09-05, zasada „Kierunek błędu w bilansie" w CLAUDE.md): przy
     niepewności pokazujemy raczej mniej pozostałych kcal, nigdy więcej.
     `math.floor` działa poprawnie w obie strony znaku (np. -113 → -150, czyli
     „jeszcze bardziej nad celem", nie „mniej")."""
@@ -143,7 +144,7 @@ class DayEnergy:
 
     Używane zarówno przez `day_report` (dzień bieżący/dowolny historyczny)
     jak i przez `trends.payload` (pętla po zakresie dni) — patrz plan „Trendy
-    liczą kcal inaczej niż «Dziś»" w TODO.md. Bez dostępu do bazy: wołający
+    liczą kcal inaczej niż «Dziś»" w DONE.md. Bez dostępu do bazy: wołający
     dostarcza już pobrane wiersze, żeby Trendy nie robiły N zapytań na N dni."""
 
     kcal_in: float
@@ -171,7 +172,7 @@ def day_energy(
     `today` jest tu na razie nieużywane wprost (dzień w toku vs domknięty
     mówi `summary.complete`, ustawiane przez `sync.py` względem realnego
     „dziś" w momencie synchronizacji) — parametr zostaje w sygnaturze pod
-    punkt „Strefa czasowa użytkownika jako granica dnia" z TODO.md."""
+    punkt „Strefa czasowa użytkownika jako granica dnia" z DONE.md."""
     kcal_in = sum(m.kcal for m in meals)
 
     steps = summary.steps if summary and summary.steps else DEFAULT_STEPS
@@ -186,7 +187,8 @@ def day_energy(
             act_dict["steps"] = a.steps
         if a.source == "manual":
             # Ręczne MET są liczone brutto w `manual_activity_kcal` — zostają tak,
-            # różnica dla typowych 30-60 min wpisów jest <10% (patrz TODO.md).
+            # różnica dla typowych 30-60 min wpisów jest <10%
+            # (patrz DONE.md „Poprawa wyliczania kcal na dzień w toku").
             if a.kcal_garmin:
                 act_dict["kcal_net"] = a.kcal_garmin
         elif a.kcal_garmin is not None:

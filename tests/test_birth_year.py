@@ -1,4 +1,5 @@
-"""Rok urodzenia zamiast pełnej daty (minimalizacja danych, TODO.md).
+"""Rok urodzenia zamiast pełnej daty (minimalizacja danych, DONE.md
+„Rok urodzenia zamiast pełnej daty").
 
 Migracja addytywna `birth_year` na starym schemacie, walidacja API, zgodność
 wstecz z klientami/plikami transferu wysyłającymi jeszcze `birth_date`,

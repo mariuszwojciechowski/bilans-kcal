@@ -142,7 +142,7 @@ def test_api_day_returns_exactly_what_service_computes(client):
 
 
 def test_day_report_saves_model_total_kcal_once_for_closed_day(client):
-    """TODO.md „Statystyki: obserwowalność…" — `model_total_kcal`/`model_checked_on`
+    """DONE.md „Statystyki: obserwowalność…" — `model_total_kcal`/`model_checked_on`
     zapisują się tylko gdy dzień jest domknięty, i tylko raz (kolejne wejścia
     na ten sam dzień nie nadpisują)."""
     _seed(client)
@@ -239,7 +239,7 @@ def test_trends_in_progress_day_matches_day_report_and_is_estimated(client):
 
     assert report["estimated"] is True
     # dzień w toku bierze pomiar Garmina (1300), bez `max` z modelem — decyzja
-    # właściciela 2026-09-05 (TODO.md „Poprawa wyliczania kcal na dzień w toku")
+    # właściciela 2026-09-05 (DONE.md „Poprawa wyliczania kcal na dzień w toku")
     assert report["balance"] > 0                       # 1600 spożyte > 1300 (pomiar) spalone
     assert round(e.kcal_in - e.kcal_out) == report["balance"]
 

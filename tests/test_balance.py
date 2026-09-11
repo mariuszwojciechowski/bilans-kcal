@@ -19,7 +19,7 @@ def test_no_garmin_falls_back_to_model():
 def test_day_in_progress_uses_measurement():
     """Dzień w toku bierze pomiar Garmina, bez `max` z modelem teoretycznym
     (decyzja właściciela 2026-09-05 — model potrafił zawyżać wydatek o >1000
-    kcal, patrz TODO.md „Poprawa wyliczania kcal na dzień w toku")."""
+    kcal, patrz DONE.md „Poprawa wyliczania kcal na dzień w toku")."""
     b = day_balance(kcal_in=1500, garmin_total=1200, model_tdee=2400, day_complete=False)
     assert b.kcal_out == 1200
     assert b.out_source == "mixed"

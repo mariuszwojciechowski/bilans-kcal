@@ -1,4 +1,4 @@
-"""Tabela MET jako dane, nie kod — WYMAGANIA.md §4 (TODO.md „Tabela MET jako
+"""Tabela MET jako dane, nie kod — WYMAGANIA.md §4 (DONE.md „Tabela MET jako
 dane…"). Wzorzec `test_macros.py`/`who_norms.json`: plik jest jedynym źródłem
 prawdy, brak/inna zawartość pliku realnie zmienia wynik."""
 import json
