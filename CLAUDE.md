@@ -6,6 +6,7 @@
 |---|---|
 | ten plik | zawsze (jest wstrzykiwany automatycznie) |
 | [TODO.md](TODO.md) | gdy szukasz zadania — sam indeks, ~90 linii |
+| [TODECIDE.md](TODECIDE.md) | pytania czekające na decyzję właściciela — **zadaj je, nie odpowiadaj za niego**; po odpowiedzi przenieś decyzję do planu i usuń pytanie |
 | `plans/<slug>.md` | gdy realizujesz konkretny punkt z TODO |
 | [DONE.md](DONE.md) | indeks zrobionych; **nie czytaj `archive/` całego** — wyciągnij sekcję: `awk '/^## <fragment>/,/^## /' archive/<plik>.md`, szukaj przez `grep -rn "<fraza>" archive/` |
 | [README.md](README.md) | co to za produkt (dla człowieka) |

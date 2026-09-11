@@ -283,15 +283,15 @@
         <label>Liczba kroków w wybranym dniu</label>
         <input type="number" id="a-steps" step="100" placeholder="5000 (default)">
         <p class="muted" id="a-steps-note" style="font-size:11px;margin:4px 0 0;display:none">Brak zapisanych kroków — pokazuję wartość domyślną (5000).</p>
-        <p class="muted" style="font-size:11px;margin:4px 0 0">Synchronizacja z Garminem nadpisze tę wartość.</p>
+        <p class="muted" id="a-steps-sync-note" style="font-size:11px;margin:4px 0 0">Synchronizacja z Garminem nadpisze tę wartość.</p>
       </div>
       <button class="primary sm" onclick="saveActivitySteps()" style="width:auto;margin-top:4px">Zapisz kroki</button>
     </div>
   </section>
 
   <section class="card">
-    <h2>Garmin</h2>
-    <button class="ghost" onclick="doSync()">Synchronizuj z Garminem</button>
+    <h2 id="a-src-title">Garmin</h2>
+    <button class="ghost" id="a-sync-btn" onclick="doSync()">Synchronizuj z Garminem</button>
     <p class="muted" id="sync-status" style="margin:4px 0 0"></p>
     <div id="a-tdee-breakdown"><p class="muted">Ładowanie…</p></div>
   </section>
@@ -344,9 +344,10 @@
     </div>
   </section>
 
-  <div id="a-garmin-warning" style="display:none;background:rgba(220,53,69,.1);border:1px solid var(--danger);padding:10px;border-radius:8px;margin:0 12px;color:var(--danger);font-size:12px">
-    ⚠ Posiadasz podłączone Garmin. Ręczne wpisy SĄ doliczane do spalonych kcal — jeśli
-    zegarek zarejestrował ten trening, skasuj wpis ręczny, inaczej policzy się podwójnie.
+  <!-- Treść wpisuje applySourceLabels() — zależy od podłączonego źródła. -->
+  <div id="a-source-warning" style="display:none;background:rgba(220,53,69,.1);border:1px solid var(--danger);padding:10px;border-radius:8px;margin:0 12px;color:var(--danger);font-size:12px">
+    ⚠ Masz podłączony Garmin. Ręczne wpisy SĄ doliczane do spalonych kcal — jeśli
+    Garmin zarejestrował ten trening, skasuj wpis ręczny, inaczej policzy się podwójnie.
   </div>
 </div>
 </div>
@@ -510,17 +511,79 @@ const r0 = (v) => Math.round(v || 0);
 // Ikonka krasnala przed komunikatami stanu (TODO/DONE „Ikona krasnala przy
 // komunikatach") — grafikę generuje scripts/make_krasnal_icon.py z
 // data/krasnal-icon-source.png. Nowe teksty „głosu krasnala" tylko tutaj.
+// Nazwy aktywnego źródła aktywności w tekstach UI — z odmianą, bo „z Garminem"
+// i „ze Stravą" różnią się nie tylko rzeczownikiem. Priorytet jak w
+// `providers.get_provider_for_user` (Garmin > Strava); bez żadnego podłączonego
+// źródła zostaje Garmin jako neutralna nazwa domyślna.
+const SOURCES = {
+  garmin: {
+    name: "Garmin",
+    withI: "z Garminem",              // synchronizuj ~, nie dogadał się ~
+    fromGen: "z Garmina",             // wrócił ~; nagłówek „Z Garmina"
+    settingsLabel: "Garmin Connect",
+    connectedPhrase: "podłączony Garmin",
+    recorded: "Garmin zarejestrował",
+    stepsNote: "Synchronizacja z Garminem nadpisze tę wartość.",
+    noMeasure: "brak pomiaru Garmina",
+  },
+  strava: {
+    name: "Strava",
+    withI: "ze Stravą",
+    fromGen: "ze Stravy",
+    settingsLabel: "Strava",
+    connectedPhrase: "podłączoną Stravę",
+    recorded: "Strava zarejestrowała",
+    // Strava nie przesyła kroków — obiecywanie, że sync je nadpisze, byłoby
+    // nieprawdą.
+    stepsNote: "Strava nie podaje kroków — wpisz je ręcznie.",
+    noMeasure: "brak dobowego pomiaru — Strava go nie podaje",
+  },
+};
+let ACTIVITY_SOURCE = "garmin";
+let SOURCE_CONNECTED = false;
+const SRC = () => SOURCES[ACTIVITY_SOURCE] || SOURCES.garmin;
+const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// Ikonka krasnala przed komunikatami stanu — teksty zależne od źródła są
+// funkcjami, bo źródło zmienia się w trakcie życia strony (po zapisie
+// ustawień); pozostałe zostają stałymi.
 const KRASNAL_STATUS = {
-  sync: "Krasnal synchronizuje z Garminem…",
-  synced: "Krasnal wrócił z Garmina ✓",
+  sync: () => `Krasnal synchronizuje ${SRC().withI}…`,
+  synced: () => `Krasnal wrócił ${SRC().fromGen} ✓`,
   estimating: "Krasnal przygląda się talerzowi…",
   queue: "Krasnal stoi w kolejce…",
   nodata: "Krasnal nie ma danych — uzupełnij profil i wagę w Ustawieniach.",
   profileSaved: "Krasnal zapisał profil",
   weightSaved: "Krasnal zapisał wagę:",
-  garminNotConnected: "Krasnal nie ma połączenia z Garminem — połącz konto w Ustawieniach → Garmin Connect.",
-  garminFailed: "Krasnal nie dogadał się z Garminem — spróbuj za chwilę",
+  sourceNotConnected: () =>
+    `Krasnal nie ma połączenia ${SRC().withI} — połącz konto w Ustawieniach → ${SRC().settingsLabel}.`,
+  sourceFailed: () => `Krasnal nie dogadał się ${SRC().withI} — spróbuj za chwilę`,
 };
+
+/** Przepisuje nazwę źródła we wszystkich stałych tekstach zakładki Aktywności. */
+function applySourceLabels() {
+  const s = SRC();
+  const title = document.getElementById("a-src-title");
+  if (title) title.textContent = s.name;
+  const btn = document.getElementById("a-sync-btn");
+  if (btn) btn.textContent = `Synchronizuj ${s.withI}`;
+  const stepsNote = document.getElementById("a-steps-sync-note");
+  if (stepsNote) stepsNote.textContent = s.stepsNote;
+  const warn = document.getElementById("a-source-warning");
+  if (warn) {
+    warn.textContent = `⚠ Masz ${s.connectedPhrase}. Ręczne wpisy SĄ doliczane do `
+      + `spalonych kcal — jeśli ${s.recorded} ten trening, skasuj wpis ręczny, `
+      + `inaczej policzy się podwójnie.`;
+  }
+}
+
+/** Aktywne źródło z `/api/settings` (Garmin ma priorytet, jak w backendzie). */
+function applySourceFromSettings(settings) {
+  SOURCE_CONNECTED = !!(settings.garmin_connected || settings.strava_connected);
+  ACTIVITY_SOURCE = settings.garmin_connected ? "garmin"
+    : settings.strava_connected ? "strava" : "garmin";
+  applySourceLabels();
+}
 
 function krasnalSays(el, text) {
   if (!el) return;
@@ -851,18 +914,19 @@ function renderMeals(meals, pending) {
 
 async function doSync() {
   const el = document.getElementById("sync-status");
-  krasnalSays(el, KRASNAL_STATUS.sync);
+  krasnalSays(el, KRASNAL_STATUS.sync());
   try {
     await api("/api/sync?days=7", {method: "POST"});
-    krasnalSays(el, KRASNAL_STATUS.synced);
+    krasnalSays(el, KRASNAL_STATUS.synced());
     renderToday();
   } catch(e) {
-    // 409 = brak połączonego konta Garmina (GarminNotLoggedIn) — to normalny stan
-    // użytkownika bez zegarka, nie awaria; surowe detale HTTP nie są dla niego.
+    // 409 = brak podłączonego źródła (Garmin bez tokenów / brak Stravy) — to
+    // normalny stan użytkownika bez zegarka, nie awaria; surowe detale HTTP
+    // nie są dla niego.
     if (e.status === 409) {
-      krasnalSays(el, KRASNAL_STATUS.garminNotConnected);
+      krasnalSays(el, KRASNAL_STATUS.sourceNotConnected());
     } else {
-      krasnalSays(el, `${KRASNAL_STATUS.garminFailed}${e.status ? ` (HTTP ${e.status})` : ""}`);
+      krasnalSays(el, `${KRASNAL_STATUS.sourceFailed()}${e.status ? ` (HTTP ${e.status})` : ""}`);
     }
   }
 }
@@ -1137,7 +1201,7 @@ async function renderTrends(days) {
       `<h3>Kalorie</h3>${d.chart_energy}` +
       `<h3>Bilans dzienny [kcal]</h3>${d.chart_balance}` +
       `<p class="muted">Dni z zapisanymi posiłkami. Jaśniejszy słupek = wydatek szacowany ` +
-      `(dzień w toku albo brak pomiaru Garmina) — tak samo jak na „Dziś".</p>`;
+      `(dzień w toku albo ${SRC().noMeasure}) — tak samo jak na „Dziś".</p>`;
   } catch(e) {
     document.getElementById("trends-charts").innerHTML =
       `<p class="muted">Błąd ładowania: ${esc(e.message)}</p>`;
@@ -1237,6 +1301,7 @@ async function renderSettings() {
       stravaEl.textContent = "Niepołączony";
     }
     applyConsentUi(settings);
+    applySourceFromSettings(settings);
     status.textContent = "";
     _settingsLoaded = true;
   } catch(e) {
@@ -1457,11 +1522,14 @@ async function loadActivityList(day) {
     const rep = await api(`/api/day/${day}`);
     const activities = rep.activities || [];
     const manual = activities.filter(a => a.source === "manual");
-    const garmin = activities.filter(a => a.source === "garmin");
+    // Wszystko, co przyszło z podłączonego źródła. Uwaga: `sync_range` nie
+    // ustawia `source`, więc aktywności ze Stravy też mają dziś "garmin" —
+    // rozdzielenie źródeł w danych jest osobnym zadaniem (TODECIDE.md).
+    const synced = activities.filter(a => a.source !== "manual");
 
     let html = "";
     if (manual.length) {
-      html += "<h3>Wprowadzone ręcznie — zakładamy, że Garmin o nich nie wie</h3>";
+      html += `<h3>Wprowadzone ręcznie — zakładamy, że ${SRC().name} o nich nie wie</h3>`;
       manual.forEach(a => {
         const dist = a.distance_m ? ` · ${(a.distance_m/1000).toFixed(1)} km` : "";
         const steps = a.est_steps ? ` (~${a.est_steps} kroków)` : "";
@@ -1475,9 +1543,9 @@ async function loadActivityList(day) {
         </div>`;
       });
     }
-    if (garmin.length) {
-      html += "<h3>Z Garmina</h3>";
-      garmin.forEach(a => {
+    if (synced.length) {
+      html += `<h3>${capitalize(SRC().fromGen)}</h3>`;
+      synced.forEach(a => {
         const dist = a.distance_m ? ` · ${(a.distance_m/1000).toFixed(1)} km` : "";
         const mins = Math.round(a.duration_s / 60);
         html += `<div class="entry" style="opacity:.7">
@@ -1488,12 +1556,16 @@ async function loadActivityList(day) {
         </div>`;
       });
     }
-    if (!manual.length && !garmin.length) {
+    if (!manual.length && !synced.length) {
       html = '<p class="muted">Brak aktywności w tym dniu.</p>';
     }
     document.getElementById("a-list").innerHTML = html;
 
-    document.getElementById("a-garmin-warning").style.display = rep.garmin_connected ? "" : "none";
+    // Ostrzeżenie o podwójnym liczeniu dotyczy każdego podłączonego źródła,
+    // nie tylko Garmina (`rep.garmin_connected` mówi wyłącznie o tokenach
+    // Garmina, więc użytkownik Stravy by go nie zobaczył).
+    document.getElementById("a-source-warning").style.display =
+      (SOURCE_CONNECTED || rep.garmin_connected) ? "" : "none";
   } catch(e) {
     document.getElementById("a-list").innerHTML = `<p class="muted">Błąd: ${e.message}</p>`;
   }
@@ -1513,7 +1585,10 @@ async function deleteActivity(id, callback) {
 document.getElementById("t-date").value = todayIso();
 show("today");
 renderToday();
-api("/api/settings").then(applyConsentUi).catch(() => {});
+api("/api/settings").then(settings => {
+  applyConsentUi(settings);
+  applySourceFromSettings(settings);
+}).catch(() => {});
 initTrendBtns([
   {days: 7, label: "Tydzień"}, {days: 30, label: "Miesiąc"},
   {days: 90, label: "Kwartał"}, {days: 180, label: "Pół roku"},
