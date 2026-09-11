@@ -10,6 +10,47 @@ listy, po tym akapicie.
 
 ---
 
+## Integracja ze Strava — dla użytkowników bez Garmina (25.0.0, e102d2f)
+
+**Implementacja:** Nowy provider Strava (`app/providers/strava.py`) z OAuth v3
+(access + refresh token). Priorytet Garmin > Strava (uniknięcie duplikatów
+— Garmin zwykle eksportuje tam automatycznie). Activity.source zawiera
+"strava" + prefiks garmin_id: "strava-{activity.id}".
+
+**RODO — nowa zgoda:** `Consent(kind="strava")` niezależna od `llm_photos`.
+Migracja w `app/db.py`: backfill starej zgody `llm_photos` na nową
+`PRIVACY_VERSION` (żeby nie tracić zgód obecnych userów — sekcja o LLM się
+nie zmienia, zmienia się sekcja o Strawie). `PRIVACY_VERSION: 2026-09-03 → 2026-09-11`.
+
+**Routing OAuth:** POST `/settings/strava/connect` (formularz z checkboxem
+zgody), GET `/settings/strava/callback` (token exchange), POST
+`/settings/strava/disconnect` (deauthorize + cleanup).
+
+**Funkcjonalność:** `get_provider_for_user()` w `app/providers/__init__.py`
+wybiera providera (Garmin > Strava > None). `sync.py: maybe_sync()` i
+`profile.py: sync()` używają tego zamiast GarminProvider na sztywno.
+Strava pobiera aktywności — typ, czas, dystans, kalorie, tętno (bez wagi,
+bez dziennego podsumowania, bo tam ich nie ma).
+
+**Statystyki:** Nowe eventy w `usage.EVENTS`: `strava_connect_ok`,
+`strava_disconnect`, `strava_sync_ok`, `strava_sync_error`.
+
+**Nota `/prywatnosc`:** Nowa sekcja `#strava` z wyjaśnieniem co się synchronizuje,
+że OAuth (nie login), że token szyfrowany, że Garmin ma priorytet, że zgodę
+można wycofać.
+
+**Testy:** `tests/test_strava.py` (7 testów) — tokeny, provider selection,
+consent independence, daily summary (None), weights (empty), missing tokens.
+
+**Co nie wchodzi:** UI w templates (commit 2), stats na `/usage` (commit 2),
+inne producenci (Polar, Oura, Whoop, Apple Health, Health Connect — na liście
+w TODO).
+
+**Co robi właściciel:** Rejestracja w https://www.strava.com/settings/api,
+wklejenie client_id/secret do .env, potwierdzenie zgody userów.
+
+**Bez pushu, bez pełnej suity testów** (per plan TODO.md).
+
 ## ~~Prognoza doby: spoczynek z historii Garmina zamiast Mifflina~~ ✓ zrobione (24.9.2)
 
 **Objaw (2026-09-10, `/usage?scope=me`):** prognoza poranna 1755–1896 kcal,
