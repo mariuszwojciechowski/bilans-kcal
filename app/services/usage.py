@@ -21,6 +21,7 @@ from ..models import (
     UserProfile, WeightLog,
 )
 from ..providers.garmin import GARMIN_TOKENS_KEY
+from ..providers import strava as strava_provider
 
 logger = logging.getLogger(__name__)
 
@@ -178,6 +179,11 @@ def dashboard_stats(db: Session, weeks: int = 12, scope: str = "others") -> dict
         .where(AppSetting.key == GARMIN_TOKENS_KEY,
                AppSetting.user_id.in_(allowed_ids))
     ) or 0
+    with_strava = db.scalar(
+        select(func.count(func.distinct(AppSetting.user_id)))
+        .where(AppSetting.key == strava_provider.STRAVA_TOKENS_KEY,
+               AppSetting.user_id.in_(allowed_ids))
+    ) or 0
     with_meal = db.scalar(
         select(func.count(func.distinct(Meal.user_id)))
         .where(Meal.user_id.in_(allowed_ids))
@@ -190,7 +196,7 @@ def dashboard_stats(db: Session, weeks: int = 12, scope: str = "others") -> dict
     returned_week2 = sum(1 for _, d0, d1 in meal_span if (d1 - d0).days >= 7)
 
     funnel = {"accounts": total_accounts, "profile": with_profile, "llm_key": with_llm_key,
-              "garmin": with_garmin, "first_meal": with_meal, "returned_week2": returned_week2}
+              "garmin": with_garmin, "strava": with_strava, "first_meal": with_meal, "returned_week2": returned_week2}
 
     totals: dict[str, dict] = {}
     for ref, _, event, count in rows:
