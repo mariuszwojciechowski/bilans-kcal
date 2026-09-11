@@ -143,9 +143,9 @@ def _migrate(engine) -> None:
             # Backfill: dla każdego wariantu (user_id, kind, version != PRIVACY_VERSION),
             # jeśli withdrawn_at jest NULL (aktywna), podbij wersję na bieżącą.
             conn.execute(text(
-                "UPDATE consent SET version = ? "
-                "WHERE kind = 'llm_photos' AND version != ? AND withdrawn_at IS NULL"
-            ), [PRIVACY_VERSION, PRIVACY_VERSION])
+                "UPDATE consent SET version = :new_version "
+                "WHERE kind = 'llm_photos' AND version != :new_version AND withdrawn_at IS NULL"
+            ).bindparams(new_version=PRIVACY_VERSION))
             conn.commit()
 
 
