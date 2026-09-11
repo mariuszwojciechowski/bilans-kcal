@@ -873,6 +873,45 @@ auto-sync (dzisiejszy stan, tylko ręcznie). To jest jedyny mechanizm
 antyduplikacyjny w tym planie — nie projektuj dopasowywania po
 czasie/dystansie/nazwie, to nadmiarowe wobec przyjętej reguły.
 
+**Decyzja o zgodzie RODO (wiążąca — właściciel 2026-09-11): nie wolno
+odwoływać dotychczasowej zgody userów przy tej zmianie.** Dziś jest jeden
+rodzaj zgody, `Consent(kind="llm_photos")`, i jedna globalna
+`PRIVACY_VERSION` (`app/config.py`) — `consent_service.has_consent` uznaje
+zgodę za aktualną tylko gdy `Consent.version == PRIVACY_VERSION` (patrz
+`app/services/consent.py`). Zwykłe podniesienie `PRIVACY_VERSION` przy
+dopisywaniu sekcji o Stravie **odwołałoby przy okazji** zgodę na wysyłanie
+zdjęć do LLM wszystkim obecnym userom (nic w tamtej sekcji się nie zmienia,
+a i tak dostaliby ponownie ekran zgody) — to jest efekt wprost zakazany
+przez właściciela, nie wolno tak zrobić. Wymagany podział:
+
+- Nowy, **osobny rodzaj zgody** `Consent(kind="strava")` w
+  `app/services/consent.py` (stała `STRAVA = "strava"` obok `LLM_PHOTOS`) —
+  dzięki partycji po `kind` jest od `llm_photos` całkiem niezależny.
+- `PRIVACY_VERSION` i tak trzeba podnieść (nota faktycznie się zmienia, i
+  tak wymaga tego zasada z góry tego pliku) — ale **w tym samym zadaniu**
+  jednorazowa migracja w `app/db.py` (wzorzec innych wpisów w `_migrate`,
+  wołana raz przy starcie, idempotentna): dla wszystkich niewycofanych
+  wierszy `Consent` z `kind="llm_photos"` i `version` różną od nowej
+  `PRIVACY_VERSION`, podbij `version` na nową — *przenieś zgodę do nowej
+  wersji noty automatycznie*, bez pytania usera ponownie, bo sekcja „Zdjęcia
+  i LLM" się nie zmieniła. To jest dokładnie „obecni użytkownicy dalej mają
+  zgodę na wszystko bez Stravy" z ustaleń właściciela — realizowane jako
+  jednorazowy backfill przy tej konkretnej zmianie, nie jako stała zmiana
+  semantyki `has_consent`.
+- Nowa zgoda `kind="strava"` startuje pusta dla **wszystkich** — i obecnych,
+  i nowych userów — bo to jest zgoda na nowe, opcjonalne źródło danych, nie
+  coś, na co można się zgodzić z góry przy rejestracji (większość userów
+  nigdy nie połączy Stravy). Rejestracja (`auth.py: register_submit`) się
+  nie zmienia — checkbox `consent_llm_photos` dalej gwarantuje wyłącznie
+  `kind="llm_photos"`, granted z aktualnym (już podniesionym)
+  `PRIVACY_VERSION` — to jest „nowi użytkownicy zgadzają się potwierdzając
+  nową wersję noty", już istniejące zachowanie, bez zmian.
+- Zgodę `kind="strava"` user daje **w momencie łączenia konta**, nie
+  wcześniej — patrz punkt 3 i 6 niżej (link do konkretnej sekcji noty +
+  wyraźne zdanie, że kliknięcie = zgoda). To dotyczy identycznie obecnych
+  i nowych userów: „obecni użytkownicy łącząc Stravę potwierdzają zgodę na
+  notę w najnowszej wersji" z ustaleń właściciela.
+
 **Kroki dla implementującego LLM:**
 
 1. **Rejestracja aplikacji w Strava** (poza kodem, robi właściciel): Strava
@@ -919,7 +958,14 @@ czasie/dystansie/nazwie, to nadmiarowe wobec przyjętej reguły.
      "expires_at"}` (epoch), zapisywany/czytany przez `settings_service.set_setting`
      / `get_setting` tak jak `garmin_tokens` — bez nowej tabeli.
    - `app/routers/settings.py`:
-     - `GET /settings/strava/connect` — redirect 302 na
+     - `POST /settings/strava/connect` (formularz z checkboxem zgody, patrz
+       punkt 6 — **nie** `GET`/link bezpośredni, bo samo kliknięcie linku nie
+       może być jednocześnie „udzieleniem zgody"): jeśli brak aktualnej zgody
+       `has_consent(db, user.id, consent_service.STRAVA)`, waliduj że
+       checkbox zgody był zaznaczony (422 jeśli nie) i
+       `consent_service.grant(db, user.id, consent_service.STRAVA)`; potem
+       (albo od razu, jeśli zgoda z tego kind już była — np. user się
+       rozłączył i łączy ponownie) redirect 302 na
        `https://www.strava.com/oauth/authorize?client_id=...&redirect_uri=...
        &response_type=code&scope=activity:read_only&approval_prompt=auto`.
      - `GET /settings/strava/callback?code=...` — wymienia `code` na tokeny
@@ -969,8 +1015,16 @@ czasie/dystansie/nazwie, to nadmiarowe wobec przyjętej reguły.
 6. **UI ustawień (`app/templates/settings.html`, `mobile.html` sekcja
    „Konto"/integracje).** Obok istniejącej karty „Garmin" nowa karta „Strava":
    - Gdy brak `garmin_connected` i brak `strava_connected`: dwa przyciski
-     połączenia (Garmin — formularz e-mail/hasło jak dziś; Strava — link
-     „Połącz ze Strava" na `/settings/strava/connect`).
+     połączenia (Garmin — formularz e-mail/hasło jak dziś; Strava — **nie**
+     goły link, ale mały formularz w karcie: checkbox „Zgadzam się na
+     przetwarzanie danych ze Stravy zgodnie z
+     [notą prywatności](/prywatnosc#strava)" (link otwiera dokładnie tę
+     sekcję, patrz punkt 8) + zdanie pod checkboxem „Klikając „Połącz ze
+     Strava" potwierdzasz tę zgodę" + przycisk „Połącz ze Strava", `POST` na
+     `/settings/strava/connect`). Jeśli `has_consent(..., STRAVA)` jest już
+     `True` (user się rozłączył i łączy ponownie), checkbox i zdanie nie są
+     potrzebne — sam przycisk wystarcza, zgoda z tego `kind` już jest na
+     koncie.
    - Gdy `garmin_connected` jest `True`: karta Stravy wyszarzona/zwinięta
      z tekstem „Masz połączony Garmin — ma priorytet, Strava nie jest używana
      do synchronizacji, dopóki nie odłączysz Garmina." (żeby user nie myślał,
@@ -978,7 +1032,8 @@ czasie/dystansie/nazwie, to nadmiarowe wobec przyjętej reguły.
    - Gdy tylko `strava_connected`: pokaż to jako aktywne źródło aktywności,
      z przyciskiem odłączenia.
    - Kontekst szablonu (`GET /settings`, `app/routers/settings.py`) dostaje
-     dodatkowo `"strava_connected": strava_provider.tokens_present(db, user.id)`.
+     dodatkowo `"strava_connected": strava_provider.tokens_present(db, user.id)`
+     i `"strava_consent_granted": consent_service.has_consent(db, user.id, consent_service.STRAVA)`.
 7. **Statystyki na `/usage`** (patrz [[feedback-plans-include-stats]] — każdy
    plan ma mówić, co zliczać): dodaj do `EVENTS` w `app/services/usage.py`:
    `"strava_connect_ok"`, `"strava_sync_ok"`, `"strava_sync_error"`,
@@ -991,11 +1046,22 @@ czasie/dystansie/nazwie, to nadmiarowe wobec przyjętej reguły.
    OK/błąd — M/K" tak jak istnieje dla Garmina, żeby było widać, czy
    integracja faktycznie działa u kogoś, nie tylko że kod się kompiluje.
 8. **Nota `/prywatnosc`** (zasada z góry tego pliku — każda zmiana zakresu
-   danych aktualizuje notę w tym samym zadaniu): dopisz Stravę jako
-   opcjonalne źródło danych o aktywnościach, analogicznie do akapitu o
-   Garminie — jakie pola są odczytywane (aktywności: typ, czas, dystans,
-   kalorie, tętno), że to OAuth (nie hasło), i że token jest szyfrowany tak
-   jak token Garmina.
+   danych aktualizuje notę w tym samym zadaniu): dodaj nową sekcję
+   `<h2 id="strava">Dane ze Stravy (opcjonalnie, jeśli połączysz konto)</h2>`
+   (osobna sekcja z własnym `id`, nie tylko dopisek w `#dane` — potrzebny
+   konkretny link do niej z ekranu łączenia konta, patrz punkt 6), treścią
+   analogiczna do istniejącego akapitu o Garminie w `#dane`: jakie pola są
+   odczytywane (aktywności: typ, czas trwania, dystans, kalorie, tętno —
+   bez wagi, bez podsumowania dnia, patrz kontekst wyżej), że to OAuth (nie
+   login/hasło do Stravy — appka nigdy ich nie widzi), że token jest
+   szyfrowany tak jak token Garmina, że przy połączonym Garminie Strava nie
+   jest używana do synchronizacji (priorytet Garmina) oraz że zgodę na tę
+   sekcję (RODO, `kind="strava"`) można wycofać odłączając konto w
+   Ustawieniach. Podnieś `PRIVACY_VERSION` w `.env`/`app/config.py` — patrz
+   decyzja o zgodzie RODO wyżej, to wymaga migracji przenoszącej stare zgody
+   `llm_photos` na nową wersję **w tym samym zadaniu**, inaczej obecni
+   userzy dostaną niezasłużony ekran „wyraź zgodę ponownie" przy zapisywaniu
+   posiłku ze zdjęcia.
 9. **Testy `tests/test_strava.py`** (wzorzec `tests/test_garmin_sync.py` jeśli
    istnieje, inaczej `tests/test_sync.py`): `StravaProvider.get_activities`
    na zmockowanym HTTP (bez realnego wywołania Stravy); `get_provider_for_user`
@@ -1004,6 +1070,14 @@ czasie/dystansie/nazwie, to nadmiarowe wobec przyjętej reguły.
    tylko ona; `None` gdy żaden; odświeżanie tokenu przy `expires_at` w
    przeszłości woła refresh i zapisuje nowy blob; `disconnect` kasuje ustawienie
    nawet gdy wywołanie `deauthorize` do Stravy rzuci wyjątkiem (sieć/4xx).
+   Dodatkowo `tests/test_consent.py` (albo rozszerzenie istniejącego, jeśli
+   jest): `POST /settings/strava/connect` bez zaznaczonego checkboxa zgody →
+   422, nic nie zapisane, brak redirectu do Stravy; z zaznaczonym → `Consent
+   (kind="strava")` zapisana z aktualną `PRIVACY_VERSION`, redirect 302 do
+   Stravy; migracja podbijająca wersję `llm_photos` — user z istniejącą
+   zgodą w starej wersji ma po migracji `has_consent(..., LLM_PHOTOS)` wciąż
+   `True` (nie musi zgadzać się ponownie), a `has_consent(..., STRAVA)`
+   nadal `False` (nowa zgoda się nie backfilluje — musi ją dać explicit).
 
 Weryfikacja: **nie puszczaj pełnej suity testów automatycznie** — zgodnie z
 zasadą na początku tego pliku, czekaj na zgodę właściciela. Nowe testy
