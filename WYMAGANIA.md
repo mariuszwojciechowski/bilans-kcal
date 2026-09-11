@@ -1,5 +1,11 @@
 # Fit Krasnal — wymagania (v2)
 
+> **Dokument historyczny (2026-08-13, sprzed multi-user).** Opisuje pierwotny
+> kontrakt i historię decyzji, **nie stan kodu** — odniesienia do „single-user"
+> i do `docs/` jako kolejki offline są nieaktualne. Do pracy nad zadaniem czytaj
+> [CLAUDE.md](CLAUDE.md) i [TODO.md](TODO.md); tutaj zaglądaj tylko po pierwotne
+> ustalenia i nie aktualizuj bez potrzeby.
+
 Cel produktu: **wsparcie odchudzania przez rzetelny dzienny bilans energetyczny** —
 realnie zmierzony wydatek (Garmin) kontra oszacowane spożycie (zdjęcia posiłków),
 z modelem teoretycznym jako punktem odniesienia i mechanizmem kalibracji.

@@ -1,174 +1,125 @@
 # Kontekst dla nowej sesji
 
-Ten plik ma pomóc nowej sesji Claude Code szybko wejść w projekt bez
-kilkuset requestów rekonesansu. Nie jest publiczną dokumentacją —
-o produkcie mówi [README.md](README.md), o wymaganiach [WYMAGANIA.md](WYMAGANIA.md),
-o rzeczach do zrobienia [TODO.md](TODO.md), o już zrobionych [DONE.md](DONE.md),
-o wdrożeniu [deploy/README.md](deploy/README.md), o wersjonowaniu
-[VERSIONING.md](VERSIONING.md).
+## Mapa dokumentów — co czytać, czego nie
 
-**Każda zmiana w kodzie musi podnosić wersję aplikacji** (plik `VERSION`) wg
-zasad w [VERSIONING.md](VERSIONING.md) — to część definicji "done", nie
-opcjonalny krok.
+| Plik | Kiedy czytać |
+|---|---|
+| ten plik | zawsze (jest wstrzykiwany automatycznie) |
+| [TODO.md](TODO.md) | gdy szukasz zadania — sam indeks, ~90 linii |
+| `plans/<slug>.md` | gdy realizujesz konkretny punkt z TODO |
+| [DONE.md](DONE.md) | indeks zrobionych; **nie czytaj `archive/` całego** — wyciągnij sekcję: `awk '/^## <fragment>/,/^## /' archive/<plik>.md`, szukaj przez `grep -rn "<fraza>" archive/` |
+| [README.md](README.md) | co to za produkt (dla człowieka) |
+| [VERSIONING.md](VERSIONING.md) | jak podnieść `VERSION` (X/Y/Z) |
+| [deploy/README.md](deploy/README.md) | wdrożenie, VM, onboarding testera |
+| [WYMAGANIA.md](WYMAGANIA.md) | **dokument historyczny** (sprzed multi-user) — tylko gdy szukasz pierwotnego kontraktu; nie aktualizuj |
 
-## Stan bieżący (stan na sierpień 2026)
+**Każda zmiana w kodzie podnosi `VERSION`** wg [VERSIONING.md](VERSIONING.md) —
+to część „done", nie opcjonalny krok.
 
-- Produkcja: **https://fit.krasnal.cc** (multi-user, pilot, ~10 testerów).
-- Landing: https://krasnal.cc.
-- Backend: Python 3.13 + FastAPI + SQLite + Jinja2, jeden proces uvicorn
-  (single-worker) na maszynie e2-micro w GCP.
-- Auth: sesja w podpisanym ciasteczku (Starlette `SessionMiddleware`),
-  hasła w bcrypt. Kod zaproszenia `FIT_KRASNAL_INVITE_CODE` gatuje rejestrację.
-- Konto admin: **krasnal@krasnal.cc** (twarda referencja w kilku miejscach
-  planowana — patrz TODO "Statystyki użycia"). Kontakt do testerów: ten sam alias.
+## Stan bieżący
+
+- Produkcja **https://fit.krasnal.cc** (multi-user, pilot ~10 testerów),
+  landing https://krasnal.cc. Konto admin i kontakt: **krasnal@krasnal.cc**.
+- Python 3.13 + FastAPI + SQLite + Jinja2, jeden proces uvicorn (single-worker)
+  na e2-micro w GCP. Sesja w podpisanym ciasteczku (`SessionMiddleware`),
+  hasła bcrypt, rejestracja za kodem `FIT_KRASNAL_INVITE_CODE`.
 - Deploy: `git push` na `main` → GitHub Actions → SSH na VM (`deploy/deploy.sh`)
-  → restart systemd. Sekret SSH w GitHub Secrets. Testy przechodzą przed
-  deployem — czerwony pytest = brak deploya.
+  → restart systemd. **Czerwony pytest = brak deploya. Nie ma staging'u:
+  regresja w main = regresja u testerów.**
 
-## Struktura repo
+## Struktura repo (tylko rzeczy nieoczywiste)
 
-- `app/main.py` — tworzenie `FastAPI()`, middleware sesji, mount `/static`,
-  `startup` (migracje, sprzątanie kolejki), globalny exception handler 401→login,
-  `app.include_router(...)` dla każdego routera z `app/routers/`.
-- `app/deps.py` — współdzielone `Depends` i obiekty: `templates`, `STATIC_DIR`,
-  `require_llm_consent`, `require_admin`. **Importuje FastAPI**, więc serwisy
-  nie mogą z niego brać nic (dlatego `humanize_ago` mieszka w
-  `services/timeago.py`).
-- `app/routers/` — route'y podzielone tematycznie (był jeden plik `main.py`
-  na ~1300 linii, rozbity 2026-09-03):
-  - `auth.py` — login/register/logout, `/prywatnosc`.
-  - `profile.py` — `GET/PUT /api/profile`, `/profile-form`, `POST /api/sync`.
-  - `day.py` — waga/kroki, `GET /api/day/{day}` (liczy
-    `services/day.py:day_report`, mapuje `DayReportUnavailable` na 409),
-    ręczne aktywności (`/api/activities`).
-  - `meals.py` — zdjęcie/tekst posiłku, zapis/usunięcie, kolejka offline
-    (`/api/queue/*`), zapisane posiłki (`/api/saved-meals/*`).
-  - `dashboard.py` — `/` i `/mobile`.
-  - `settings.py` — strona `/settings` + formularze `settings/*` + JSON API
-    `/api/settings/*`.
-  - `transfer.py` — eksport/import danych.
-  - `trends.py` — `/trends` + `/api/trends`.
-  - `usage.py` — `/usage`, `/admin/consents`, `/api/usage` (tylko admin).
-  - `pwa.py` — manifest, service worker.
-- `app/auth.py` — hash/verify hasła, sesja, `current_user` dependency, throttle
-  nieudanych logowań i nieprawidłowych kodów zaproszenia (`AttemptThrottle`).
-- `app/config.py` — env vars, ścieżki, `garmin_tokens_dir(user_id)`.
-- `app/db.py` — silnik SQLite, `_migrate()` z addytywnymi migracjami.
-- `app/models.py` — SQLAlchemy: `User`, `UserProfile`, `WeightLog`, `Meal`,
-  `PendingMeal`, `AppSetting`, `DailySummary`, `Activity`. Model **od początku
-  multi-user** (każda tabela domenowa ma `user_id`).
-- `app/providers/garmin.py` — nieoficjalne API Garmin (`garminconnect`).
-  Tokeny per user w `GARMIN_TOKENS_DIR/<user_id>/`, `_mfa_state: dict[int, ...]`.
-- `app/services/` — `energy` (BMR, TDEE, kroki), `macros` (WHO + `bar_pct`),
-  `meal_vision` (Gemini/Claude vision), `meal_queue` (kolejka offline),
-  `balance`, `charts`, `quips`, `settings` (`get_llm_keys` per user),
-  `sync` (throttled Garmin sync), `transfer` (export/import JSON),
-  `day` (`day_report` — raport dnia), `trends` (`payload` — jedno źródło dla
-  `/trends` i `/api/trends`), `timeago` (`humanize_ago`), `forecast`, `consent`,
-  `crypto`, `usage`.
-  **Warstwa serwisów jest wolna od FastAPI** — brak danych zgłasza wyjątkiem
-  domenowym (wzorzec: `day.DayReportUnavailable` → router robi z tego 409),
-  nigdy `HTTPException`. Pilnuje tego test w `tests/test_day_trends_services.py`.
-- `app/templates/` — Jinja2. Server-rendered: `dashboard.html`, `settings.html`,
-  `trends.html`, `login.html`, `register.html`. SPA-lite dla telefonu:
-  `mobile.html` (fetch do `/api/*`, ta sama sesja).
-- `app/resources/` — normy WHO (`who_norms.json`), teksty krasnala (`quips.json`).
-- `deploy/` — `fit-krasnal.service` (systemd), `setup-vm.sh` (bootstrap),
-  `deploy.sh` (uruchamiany z Actions), `landing/index.html` (strona `krasnal.cc`),
-  `README.md` (procedura + onboarding testera).
-- `scripts/` — `garmin_login.py` (CLI, legacy desktop), `adopt_local_user.py`
-  (migracja starego `local@fit-krasnal` na prawdziwe konto), `start_backend.sh`,
-  `stop_backend.sh`.
-- `tests/` — pytest, `conftest.py` ustawia `FIT_KRASNAL_DEBUG=1` (bez tego
-  TestClient traci ciasteczka Secure).
+- `app/main.py` — `FastAPI()`, sesja, `/static`, startup (migracje, kolejka),
+  globalny handler 401 → `/login`, `include_router` dla `app/routers/*`.
+- `app/routers/` — tematycznie: `auth` (+`/prywatnosc`), `profile` (+`/api/sync`),
+  `day`, `meals` (+kolejka offline, zapisane posiłki), `dashboard` (`/` i
+  `/mobile`), `settings`, `transfer`, `trends`, `usage` (admin), `pwa`.
+- `app/deps.py` — `templates`, `STATIC_DIR`, `require_llm_consent`,
+  `require_admin`. **Importuje FastAPI**, więc serwisy nie mogą z niego brać nic
+  (dlatego `humanize_ago` mieszka w `services/timeago.py`).
+- `app/services/` — **warstwa wolna od FastAPI**: brak danych zgłasza wyjątkiem
+  domenowym (`day.DayReportUnavailable` → router mapuje na 409), nigdy
+  `HTTPException`. Pilnuje tego `tests/test_day_trends_services.py`.
+  Jedno źródło prawdy per temat: `day.day_report`, `trends.payload`.
+- `app/templates/` — `mobile.html` to **jedyny widok aplikacji** (responsive,
+  SPA-lite na `/api/*`); osobno server-rendered `settings.html`, `trends.html`,
+  `login/register`, `privacy.html`, `usage.html`.
+- `app/models.py` — od początku multi-user: każda tabela domenowa ma `user_id`.
+- `app/resources/` — normy WHO, tabela MET, teksty krasnala (dane, nie kod).
+- `scripts/` — `garmin_login.py` (CLI, legacy single-user),
+  `adopt_local_user.py`, `start_backend.sh`, `stop_backend.sh`.
+- `tests/conftest.py` ustawia `FIT_KRASNAL_DEBUG=1` (bez tego `TestClient`
+  gubi ciasteczka `Secure`).
 
-## Kluczowe konwencje
+## Konwencje
 
-**Auth per request:** wszystkie route'y biorące dane usera mają
+**Auth per request:** każdy route z danymi usera ma
 `user: User = Depends(auth.current_user)`. Bez sesji: 401 dla `/api/*`,
-redirect 303 na `/login` dla stron HTML (globalny exception handler w
-`main.py`). Nigdy nie używaj `local_user()` — została usunięta.
+303 na `/login` dla stron. `local_user()` została usunięta — nie wracaj do niej.
 
-**Klucze LLM per user:** `settings.get_llm_keys(db, user_id) → LlmKeys(gemini, anthropic)`.
-Przekazuj jako parametry do `meal_vision.pick_backend / llm_configured /
-estimate_from_photo / estimate_from_text`. NIE mutuj `os.environ`
-(`apply_llm_env` jest legacy, dla starych testów). Ten sam wzorzec w
-`meal_queue.process_queue`.
+**Klucze LLM per user:** `settings.get_llm_keys(db, user_id) → LlmKeys`,
+przekazywane parametrem do `meal_vision.*`. **Nie mutuj `os.environ`**
+(`apply_llm_env` jest legacy). Ten sam wzorzec w `meal_queue.process_queue`.
 
-**Garmin per user:** `GarminProvider(user_id, db)`, `tokens_present(db, user_id)`,
-`interactive_login_start(db, email, password, user_id)`,
-`interactive_login_mfa(db, code, user_id)`. Tokeny leżą zaszyfrowane w
-`AppSetting` (klucz `garmin_tokens`), nie jako pliki — materializują się do
-katalogu tymczasowego tylko na czas logowania (`GarminProvider._client()`),
-kasowanego natychmiast po. `GARMIN_TOKENS_DIR`/pliki na dysku istnieją już
-tylko w `scripts/garmin_login.py` (CLI, jednoosobowy lokalny użytek, poza
-multi-user).
+**Providery per user:** `GarminProvider(user_id, db)` / `StravaProvider(...)`,
+wybór przez `providers.get_provider_for_user` (Garmin > Strava > None). Tokeny
+leżą zaszyfrowane w `AppSetting`, nie jako pliki; materializują się do katalogu
+tymczasowego tylko na czas logowania do Garmina.
 
-**Sekrety użytkownika (klucze LLM, tokeny Garmina) trzymamy TYLKO przez
-`settings_service.get_setting/set_setting/all_settings`** — nigdy wprost w
-`AppSetting.value`. `SECRET_SETTING_KEYS` w `app/services/settings.py`
-decyduje, co jest szyfrowane (`app/services/crypto.py`, Fernet,
-`FIT_KRASNAL_ENC_KEY`). Dodając nowy sekret — dopisz jego klucz do tego
-zbioru, nie wymyślaj osobnej ścieżki szyfrowania.
+**Sekrety użytkownika (klucze LLM, tokeny) TYLKO przez
+`settings_service.get_setting/set_setting/all_settings`** — nigdy wprost
+w `AppSetting.value`. Co jest szyfrowane, decyduje `SECRET_SETTING_KEYS`
+(`services/crypto.py`, Fernet, `FIT_KRASNAL_ENC_KEY`). Nowy sekret = dopisanie
+klucza do tego zbioru, nie osobna ścieżka szyfrowania.
 
-**Migracje:** addytywne, w `app/db.py:_migrate()`. Wzorzec: `PRAGMA table_info`
-+ `ALTER TABLE ADD COLUMN`. Bez Alembic. Migracja nowej kolumny musi umieć
-backfill'ować istniejące wiersze (patrz `external_id` w `Meal`).
+**Migracje:** addytywne, w `db.py:_migrate()` (`PRAGMA table_info` +
+`ALTER TABLE ADD COLUMN`), bez Alembic. Nowa kolumna musi umieć backfillować
+istniejące wiersze (wzór: `external_id` w `Meal`).
 
-**Testy:** `.venv/bin/python -m pytest` — wszystko musi być zielone,
-inaczej deploy się nie zbuduje.
+**Rok urodzenia, nie data:** profil trzyma `birth_year`, wiek liczy
+`energy.age_from_year` (1 lipca). `birth_date` zostaje w schemacie jako
+pochodna, nic jej nie czyta; `ProfileIn` przyjmuje ją tylko dla starych
+klientów i plików transferu.
 
-**Nota `/prywatnosc` musi być zgodna ze stanem kodu.** Każda zmiana, która
-wpływa na to, co zbieramy/przetwarzamy/wysyłamy albo na okresy retencji,
-aktualizuje `app/templates/privacy.html` w tym samym zadaniu — i odnotowuje
-to w opisie zmiany (commit / wpis DONE.md). To jest publiczne zobowiązanie
-wobec testerów, nie dokumentacja wewnętrzna — nie może się rozjechać z kodem.
+**Nota `/prywatnosc` musi być zgodna z kodem.** Zmiana tego, co zbieramy,
+przetwarzamy, wysyłamy albo jak długo trzymamy → aktualizacja
+`app/templates/privacy.html` w tym samym zadaniu + zdanie o tym we wpisie
+DONE.md. Nowy odbiorca danych = bump `PRIVACY_VERSION` (= ponowna zgoda
+testerów). To publiczne zobowiązanie, nie dokumentacja wewnętrzna.
 
-**Rok urodzenia, nie data:** profil trzyma `birth_year: int`, wiek liczy
-`energy.age_from_year` (konwencja środka roku: 1 lipca). `birth_date` w
-`UserProfile` zostaje w schemacie jako pochodna (`date(birth_year, 7, 1)`),
-ale nic w kodzie jej nie czyta — pełna data urodzenia to niepotrzebny
-identyfikator (minimalizacja danych, WYMAGANIA.md 3.1 jest w tym miejscu
-nieaktualne, patrz TODO.md „Rok urodzenia zamiast pełnej daty"). `ProfileIn`
-przyjmuje `birth_date` wyłącznie jako wejście zgodnościowe (stary klient,
-stary plik transferu) — nowe UI i eksport używają tylko `birth_year`.
+**Kierunek błędu w bilansie** (decyzja właściciela 2026-09-05): przy
+niepewności pokazuj **mniej** pozostałych kcal, nigdy więcej. Skala rzędu
+3–5% wydatku (~100–150 kcal), **jawnie i w jednym miejscu** (zaokrąglenie
+budżetu w dół, asymetryczny clamp kalibracji) — nigdy ukryta w stałych MET
+czy wzorze BMR, bo ukrytego przesunięcia nie da się skalibrować.
 
-**Deployment jest bezpośredni:** commit → push → produkcja. Nie ma
-staging'u. Regresja w main = regresja u testerów. Testy muszą chronić.
+**Krok „Statystyki" w każdym planie** (decyzja właściciela 2026-09-05): co
+zliczać i jak pokazać na `/usage`, żeby po wdrożeniu było widać **adopcję**
+funkcji i jej **funkcjonowanie**.
 
-## Rzeczy do NIE odtworzenia / uważaj
+## Rzeczy do NIE odtworzenia
 
-- **`docs/` została świadomie usunięta** (commit `091844d`). Był to
-  równoległy klient PWA na GitHub Pages, duplikował logikę backendu (13
-  commitów podwójnego utrzymania). Zamiast tego jest `app/templates/mobile.html`
-  serwowany z tego samego backendu pod `GET /mobile`. W `docs/` leżą dziś
-  **wyłącznie dwa pliki-nagrobki** (`index.html` + kill switch `sw.js`), które
-  nadpisują tamtą wersję u testerów, sprzątają po niej `localStorage`
-  (w tym klucz API!), IndexedDB i cache, i przekierowują na `/mobile` —
-  patrz wpis „Stara wersja na GitHub Pages" w [DONE.md](DONE.md). **Nie
-  dopisuj tam logiki aplikacji.**
-- **WYMAGANIA.md jest sprzed multi-user** (sierpień 2026-08-13). Fakty
-  produktowe są aktualne, ale odniesienia do "single-user" i "docs/index.html
-  jako kolejka offline" są nieaktualne w kodzie. Nie aktualizuj bez potrzeby
-  — dokument opisuje pierwotny kontrakt, historię decyzji, nie stan kodu.
-- **Nie ustaw uvicorn workers > 1** bez zmiany kilku rzeczy (throttle
-  `_last_attempt` w `sync.py`, throttle `_failed` w `auth.py`, `_mfa_state`
-  w `garmin.py` — dziś to dict-y w pamięci procesu, przy wielu workerach
-  będą się rozjeżdżać).
+- **`docs/` została świadomie usunięta** (`091844d`) — był tam równoległy klient
+  PWA na GitHub Pages, duplikat logiki backendu. Zostały **dwa pliki-nagrobki**
+  (`index.html` + kill switch `sw.js`), które sprzątają po tamtej wersji
+  (`localStorage` z kluczem API, IndexedDB, cache) i przekierowują na `/mobile`.
+  **Nie dopisuj tam logiki aplikacji.**
+- **Nie ustawiaj uvicorn `workers > 1`** bez przebudowy throttli trzymanych
+  w pamięci procesu: `_last_attempt` (`sync.py`), `_failed` (`auth.py`),
+  `_mfa_state` (`garmin.py`).
+- Historia decyzji multi-user (kroki 1–9, sekcje A–F):
+  [deploy/multi-user-plan.md](deploy/multi-user-plan.md).
 
-## Preferencje współpracy (obowiązkowe dla każdej sesji)
+## Preferencje współpracy (obowiązkowe)
 
-- **Przed kodowaniem zawsze pytaj** — opisz co zamierzasz zrobić i poczekaj na
-  potwierdzenie. Nie zaczynaj implementacji bez zgody.
-- **Commit i push bez pytania** — po skończonej pracy wykonuj od razu.
-- **Oznaczaj zrealizowane punkty w TODO.md** — format:
-  `## ~~Tytuł~~ ✓ zrobione (commit <sha>)`. Rób to w tym samym commicie co
-  implementacja lub osobno, ale zawsze. Gotową sekcję przenieś w całości
-  na początek listy w [DONE.md](DONE.md) (pod akapitem wstępnym) — w TODO.md
-  zostają wyłącznie rzeczy do zrobienia.
-
-## Historia decyzji
-
-Plan wdrożenia multi-user (kroki 1-9): [deploy/multi-user-plan.md](deploy/multi-user-plan.md).
-Zapisany chronologicznie z uzasadnieniem każdej decyzji — patrz sekcje A-F
-plus aktualizacja z 2026-08-27 o usunięciu `docs/`.
+- **Przed kodowaniem zawsze pytaj** — opisz zamiar i poczekaj na potwierdzenie.
+- **Commituj często** (każda istotna zmiana, łatwiejszy `git revert`),
+  **nie pushuj** — push robi właściciel.
+- **Pełną suitę `pytest` puszczaj dopiero za zgodą właściciela.** Testy
+  zmienianego pliku (`pytest tests/test_x.py`) — na bieżąco.
+- **Zrealizowany punkt:** usuń go z [TODO.md](TODO.md) (razem z
+  `plans/<slug>.md`, jeśli był) i dopisz wpis na początek właściwej listy
+  w [DONE.md](DONE.md) + pełną treść na początek pliku w `archive/`.
+  Wpis archiwalny: tytuł + **max 5 punktów**; szczegóły zostają w commicie.
+- **Nowy plan dłuższy niż ~60 linii** ląduje w `plans/<slug>.md`, a w TODO.md
+  zostaje tytuł, złożoność i 2–3 zdania.

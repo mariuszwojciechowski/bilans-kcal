@@ -5,7 +5,11 @@ Aplikacja wspierająca odchudzanie przez rzetelny dzienny bilans energetyczny:
 z teoretycznym modelem energetycznym jako punktem odniesienia i normami makro wg WHO.
 
 Etap 1: web app (walidacja pomysłu). Etap 2: aplikacja mobilna (Android, docelowo też iOS).
-Pełne wymagania: [WYMAGANIA.md](WYMAGANIA.md).
+Pełne wymagania: [WYMAGANIA.md](WYMAGANIA.md) (dokument historyczny).
+
+Dokumentacja: [CLAUDE.md](CLAUDE.md) — mapa dokumentów i konwencje kodu,
+[TODO.md](TODO.md) — indeks zadań (plany w `plans/`), [DONE.md](DONE.md) —
+indeks zrobionego (pełne wpisy w `archive/`).
 
 **Publiczna instancja pilotowa:** https://fit.krasnal.cc (multi-user, wymaga
 kodu zaproszenia do rejestracji; szczegóły wdrożenia w [deploy/README.md](deploy/README.md)).
