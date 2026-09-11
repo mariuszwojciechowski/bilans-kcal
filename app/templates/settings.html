@@ -91,6 +91,25 @@
   {% endif %}
 </section>
 
+<section class="card" id="strava-card">
+  <h2>Strava (alternatywa dla Garmin)</h2>
+  {% if garmin_connected %}
+  <p class="muted">Masz połączony Garmin — ma priorytet, Strava nie jest używana do synchronizacji, dopóki nie odłączysz Garmina.</p>
+  {% elif strava_connected %}
+  <p>Status: <b class="ok">połączone</b></p>
+  <form method="post" action="/settings/strava/disconnect" style="margin-top:10px">
+    <button class="primary">Odłącz Stravę</button>
+  </form>
+  {% else %}
+  <p class="muted">Jeśli nie masz Garmina, możesz połączyć Stravę — aplikacja będzie pobierać Twoje aktywności automatycznie.</p>
+  <form method="post" action="/settings/strava/connect" style="margin-top:10px">
+    <label><input type="checkbox" name="consent_granted" required> Zgadzam się na przetwarzanie danych ze Stravy zgodnie z <a href="/prywatnosc#strava" target="_blank">notą prywatności</a></label>
+    <p class="muted">Klikając poniżej potwierdzasz tę zgodę (RODO).</p>
+    <button class="primary">Połącz ze Strava</button>
+  </form>
+  {% endif %}
+</section>
+
 <section class="card">
   <h2>Styl życia (zakresy makroskładników)</h2>
   <form method="post" action="/settings/lifestyle">

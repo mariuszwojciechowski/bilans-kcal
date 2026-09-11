@@ -434,6 +434,14 @@
     </a>
   </section>
 
+  <section class="card" id="strava-section">
+    <h2>Strava (alternatywa)</h2>
+    <p class="muted" id="strava-status">sprawdzanie…</p>
+    <a href="/settings#strava-card" style="display:block;margin-top:4px">
+      Zarządzaj połączeniem ze Strava →
+    </a>
+  </section>
+
   <section class="card">
     <h2>Prywatność</h2>
     <p class="muted">Zgoda na wysyłanie zdjęć/opisów posiłków do LLM: <span id="s-consent-status">—</span></p>
@@ -1220,6 +1228,14 @@ async function renderSettings() {
       settings.backend ? `backend: ${settings.backend}` : "brak klucza";
     document.getElementById("s-garmin-status").textContent =
       settings.garmin_connected ? "Połączony ✓" : "Niepołączony";
+    const stravaEl = document.getElementById("strava-status");
+    if (settings.garmin_connected) {
+      stravaEl.textContent = "Masz Garmin — ma priorytet";
+    } else if (settings.strava_connected) {
+      stravaEl.textContent = "Połączony ✓";
+    } else {
+      stravaEl.textContent = "Niepołączony";
+    }
     applyConsentUi(settings);
     status.textContent = "";
     _settingsLoaded = true;
