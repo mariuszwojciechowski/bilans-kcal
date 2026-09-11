@@ -184,7 +184,12 @@ def settings_strava_connect(consent_granted: bool = Form(False),
         f"?client_id={STRAVA_CLIENT_ID}"
         f"&redirect_uri={STRAVA_REDIRECT_URI}"
         f"&response_type=code"
-        f"&scope=activity:read_only"
+        # Strava zna tylko: read, read_all, profile:read_all, profile:write,
+        # activity:read, activity:read_all, activity:write. Wcześniejsze
+        # `activity:read_only` nie istnieje — Strava odrzucała autoryzację
+        # (`field: scope, code: invalid`). `read_all` obejmuje też aktywności
+        # prywatne („Tylko ja"): brakująca aktywność = zafałszowany bilans.
+        f"&scope=activity:read_all"
         f"&approval_prompt=auto"
         f"&state={state}",
         status_code=302
