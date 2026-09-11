@@ -7,7 +7,7 @@ Działanie:
 """
 
 import json
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import cast
 
 import httpx
@@ -19,6 +19,11 @@ from . import ActivityData, DailySummaryData, WeightData
 
 STRAVA_TOKENS_KEY = "strava_tokens"
 STRAVA_API_BASE = "https://www.strava.com/api/v3"
+
+# Ile aktywności w jednym syncu wolno dociągnąć szczegółami (po kcal).
+# Limity Stravy: 100 requestów / 15 min, 1000 / dobę, a `maybe_sync` leci
+# najwyżej raz na 10 min — 40 zostawia zapas na paginację i odświeżanie tokenu.
+DETAIL_FETCH_LIMIT = 40
 
 # Mapowanie sport_type Stravy na typy aktywności aplikacji (jak w energy.py)
 STRAVA_SPORT_TYPE_MAP = {
@@ -108,22 +113,46 @@ class StravaProvider:
         """Strava nie jest źródłem wagi."""
         return []
 
+    def _detail_calories(self, activity_id: int, headers: dict[str, str]) -> int | None:
+        """`calories` z DetailedActivity (`/activities/{id}`). Błąd pojedynczej
+        aktywności nie może wywrócić całego syncu — wtedy None."""
+        try:
+            resp = httpx.get(
+                f"{STRAVA_API_BASE}/activities/{activity_id}",
+                headers=headers,
+                params={"include_all_efforts": "false"},
+                timeout=10,
+            )
+            resp.raise_for_status()
+        except Exception:
+            return None
+        value = resp.json().get("calories")
+        return round(value) if value else None
+
     def get_activities(self, start: date, end: date) -> list[ActivityData]:
         """Pobiera aktywności z Stravy za dany zakres dat."""
         access_token = self._get_token()
+        headers = {"Authorization": f"Bearer {access_token}"}
         activities: list[ActivityData] = []
+
+        # Strava filtruje po epochu UTC, a zakres dostajemy w dobach lokalnych
+        # użytkownika — bierzemy dobę marginesu z każdej strony, a o dniu
+        # aktywności decyduje `start_date_local` niżej.
+        after = int((datetime(start.year, start.month, start.day, tzinfo=timezone.utc)
+                     - timedelta(days=1)).timestamp())
+        before = int((datetime(end.year, end.month, end.day, tzinfo=timezone.utc)
+                      + timedelta(days=2)).timestamp())
 
         # Paginacja — Strava zwraca po 30 na request
         page = 1
         per_page = 30
-        after = int(start.timestamp()) if start else None
-        before = int((end.replace(day=31) if end.month == 12 else end.replace(month=end.month + 1, day=1)).timestamp())
+        raw: list[dict] = []
 
         while True:
             try:
                 resp = httpx.get(
                     f"{STRAVA_API_BASE}/athlete/activities",
-                    headers={"Authorization": f"Bearer {access_token}"},
+                    headers=headers,
                     params={
                         "after": after,
                         "before": before,
@@ -141,34 +170,51 @@ class StravaProvider:
             data = resp.json()
             if not data:
                 break
-
-            for item in data:
-                activity_date = date.fromisoformat(item["start_date"][:10])
-
-                # Typ aktywności — mapowanie
-                sport_type = item.get("sport_type", "unknown")
-                activity_type = STRAVA_SPORT_TYPE_MAP.get(sport_type, "other")
-
-                # Kalorie (zwraca int albo None; może być 0 dla niektórych aktywności)
-                kcal = item.get("calories")
-                if kcal == 0:
-                    kcal = None  # Zero znaczy brak danych
-
-                activities.append(ActivityData(
-                    garmin_id=f"strava-{item['id']}",
-                    date=activity_date,
-                    type=activity_type,
-                    duration_s=int(item.get("elapsed_time", 0)),
-                    distance_m=item.get("distance"),
-                    kcal=kcal,
-                    avg_hr=item.get("average_heartrate"),
-                    kcal_bmr=None,  # Strava nie podaje BMR
-                    steps=None,  # Strava nie podaje kroków dla większości aktywności
-                ))
+            raw.extend(data)
 
             if len(data) < per_page:
                 break
             page += 1
+
+        details_left = DETAIL_FETCH_LIMIT
+        for item in raw:
+            # Dzień z czasu lokalnego aktywności — `start_date` jest w UTC,
+            # więc wieczorny trening wpadałby użytkownikowi na następny dzień.
+            stamp = item.get("start_date_local") or item["start_date"]
+            activity_date = date.fromisoformat(stamp[:10])
+
+            # Typ aktywności — mapowanie
+            sport_type = item.get("sport_type", "unknown")
+            activity_type = STRAVA_SPORT_TYPE_MAP.get(sport_type, "other")
+
+            # `/athlete/activities` zwraca SummaryActivity, które **nie ma**
+            # pola `calories` — jest tylko w DetailedActivity. Bez kcal
+            # aktywność nie wchodzi do wydatku (`day.py`), więc dociągamy
+            # szczegóły per aktywność (limit requestów Stravy — stąd
+            # DETAIL_FETCH_LIMIT). Gdy się nie uda, zostaje `kilojoules`
+            # (praca mechaniczna, sensowne przybliżenie dla kolarstwa).
+            kcal = item.get("calories")
+            if kcal is None and details_left > 0:
+                details_left -= 1
+                kcal = self._detail_calories(item["id"], headers)
+            if kcal is None and item.get("kilojoules"):
+                kcal = round(item["kilojoules"])
+            if not kcal:
+                kcal = None  # 0 znaczy brak danych, nie zero spalonych kcal
+
+            avg_hr = item.get("average_heartrate")
+
+            activities.append(ActivityData(
+                garmin_id=f"strava-{item['id']}",
+                date=activity_date,
+                type=activity_type,
+                duration_s=int(item.get("elapsed_time", 0)),
+                distance_m=item.get("distance"),
+                kcal=kcal,
+                avg_hr=round(avg_hr) if avg_hr else None,
+                kcal_bmr=None,  # Strava nie podaje BMR
+                steps=None,  # Strava nie podaje kroków dla większości aktywności
+            ))
 
         return activities
 
