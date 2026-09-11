@@ -41,3 +41,16 @@ class DataProvider(Protocol):
     def get_weights(self, start: date, end: date) -> list[WeightData]: ...
 
     def get_activities(self, start: date, end: date) -> list[ActivityData]: ...
+
+
+def get_provider_for_user(db, user_id) -> "DataProvider | None":
+    """Wybór providera dla usera (priorytet: Garmin > Strava > None).
+    Garmin ma priorytet, aby uniknąć duplikatów (Garmin zwykle eksportuje do Stravy)."""
+    from . import garmin as garmin_provider
+    from . import strava as strava_provider
+
+    if garmin_provider.tokens_present(db, user_id):
+        return garmin_provider.GarminProvider(user_id, db)
+    if strava_provider.tokens_present(db, user_id):
+        return strava_provider.StravaProvider(user_id, db)
+    return None

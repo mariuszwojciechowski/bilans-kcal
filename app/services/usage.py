@@ -40,6 +40,7 @@ EVENTS: set[str] = {
     "transfer_export", "transfer_import",
     "llm_key_save",
     "garmin_connect_ok", "garmin_mfa",
+    "strava_connect_ok", "strava_disconnect", "strava_sync_ok", "strava_sync_error",
     "profile_save", "goal_save", "lifestyle_save",
     "trends_view", "trends_7", "trends_30", "trends_90", "trends_180",
     "login",

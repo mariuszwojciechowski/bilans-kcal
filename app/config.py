@@ -70,10 +70,20 @@ USAGE_SALT = os.getenv("FIT_KRASNAL_USAGE_SALT")
 # 404 (nie 403 — nie ma po co ogłaszać, że taki widok istnieje).
 ADMIN_EMAIL = os.getenv("FIT_KRASNAL_ADMIN_EMAIL", "krasnal@krasnal.cc")
 
-# RODO: wersja noty informacyjnej (/prywatnosc) i zgody na LLM. Zmiana wersji
+# Strava OAuth — zmienne do rejestracji aplikacji w https://www.strava.com/settings/api
+# Brak zmiennych = opcja Stravy nie pojawia się w UI.
+STRAVA_CLIENT_ID = os.getenv("FIT_KRASNAL_STRAVA_CLIENT_ID")
+STRAVA_CLIENT_SECRET = os.getenv("FIT_KRASNAL_STRAVA_CLIENT_SECRET")
+# URL zwrotny dla OAuth (domyślnie z BASE_URL aplikacji; jeśli BASE_URL nie istnieje,
+# pobiera z env; jeśli żaden, jest jawnie nieskonfigurowany).
+_BASE_URL = os.getenv("FIT_KRASNAL_BASE_URL", "https://fit.krasnal.cc")
+STRAVA_REDIRECT_URI = os.getenv("FIT_KRASNAL_STRAVA_REDIRECT_URI",
+                                f"{_BASE_URL}/settings/strava/callback")
+
+# RODO: wersja noty informacyjnej (/prywatnosc) i zgody na LLM/Strava. Zmiana wersji
 # unieważnia istniejące zgody (consent.has_consent porównuje wersje) — bumpować
 # tylko przy realnej zmianie treści noty, nie przy każdej literówce.
-PRIVACY_VERSION = os.getenv("FIT_KRASNAL_PRIVACY_VERSION", "2026-09-03")
+PRIVACY_VERSION = os.getenv("FIT_KRASNAL_PRIVACY_VERSION", "2026-09-11")
 # Termin dla istniejących testerów (baner, potem bramka) — data wdrożenia + 14 dni.
 CONSENT_DEADLINE = date(2026, 9, 17)
 

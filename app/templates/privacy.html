@@ -59,6 +59,7 @@ bo skala pilota tego nie wymaga. Jeśli coś jest niejasne, napisz:
   <ol>
     <li><a href="#dane">Jakie dane zbieramy</a></li>
     <li><a href="#llm">Zdjęcia i opisy posiłków — wysyłka do zewnętrznego modelu (LLM)</a></li>
+    <li><a href="#strava">Dane ze Stravy (opcjonalnie, jeśli połączysz konto)</a></li>
     <li><a href="#gdzie">Gdzie leżą dane</a></li>
     <li><a href="#retencja">Ile czasu trzymamy dane</a></li>
     <li><a href="#prawa">Twoje prawa</a></li>
@@ -117,6 +118,25 @@ przez konto administratora. Co ważne dla oceny ryzyka:</p>
 <p class="muted">Te ustalenia mogą się zmienić — jeśli dostawcy zmienią
 zasady, postaramy się zaktualizować tę notę i podniesiemy jej wersję (co poprosi
 ponownie o zgodę).</p>
+
+<h2 id="strava">Dane ze Stravy (opcjonalnie, jeśli połączysz konto)</h2>
+<p>Jeśli nie masz Garmina, możesz połączyć swoje konto Stravy — aplikacja
+będzie pobierać Twoje aktywności (typ, czas trwania, dystans, kalorie, średnie
+tętno) automatycznie. <b>Bez wagi i bez dziennego podsumowania spalonych kcal —
+dla Stravy takie dane się nie przesyłają.</b> Login i hasło do Stravy nigdy nie
+trafiają do aplikacji — korzystamy z OAuth, czyli autoryzacji przez Stravę
+(podobnie jak logowanie przez Google czy Facebook gdzie indziej). Twój token
+dostępu jest zaszyfrowany i przechowywany w bazie, nikt w tym administrator go
+nie widzi jawnie.</p>
+<p><b>Jeśli masz połączony zarówno Garmin, jak i Stravę:</b> Garmin ma priorytet.
+Synchronizujemy tylko z Garmina — Strava jest pomijana (Garmin zwykle
+automatycznie eksportuje aktywności do Stravy, synchronizacja obu dawałaby
+duplikaty). Aby używać Stravy, musisz najpierw odłączyć Garmina.</p>
+<p><b>Zgoda na przetwarzanie danych ze Stravy:</b> jest osobna i niezależna od
+zgody na LLM i zdjęcia. Zanim połączysz Stravę, musisz wyrazić zgodę w
+Ustawieniach (przycisk pokazuje link do tej sekcji). Wycofanie zgody w każdej
+chwili — odłączę Twoje konto w Ustawieniach — kasuje przechowywane tokeny
+Stravy (nie poprzednie aktywności, które już zostały zsynchronizowane).</p>
 
 <h2 id="gdzie">Gdzie leżą dane</h2>
 <p>Baza danych i zdjęcia (tymczasowo) leżą na jednej maszynie wirtualnej

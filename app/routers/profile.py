@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from .. import auth
 from ..db import db_session
 from ..models import User, UserProfile
-from ..providers.garmin import GarminNotLoggedIn, GarminProvider
+from ..providers import get_provider_for_user
+from ..providers.garmin import GarminNotLoggedIn
 from ..services import usage as usage_service
 from ..services.clock import user_today
 from ..services.macros import lifestyle_options
@@ -126,8 +127,10 @@ def sync(days: int = 7, db: Session = Depends(db_session),
     mark_attempt(user.id)
     usage_service.bump(db, user.id, "sync_manual")
     profile = db.get(UserProfile, user.id)
+    provider = get_provider_for_user(db, user.id)
+    if provider is None:
+        raise HTTPException(409, "Brak podłączonego źródła danych (Garmin albo Strava)")
     try:
-        return sync_range(db, GarminProvider(user.id, db), user.id, days=days,
-                          today=user_today(profile))
+        return sync_range(db, provider, user.id, days=days, today=user_today(profile))
     except GarminNotLoggedIn as exc:
         raise HTTPException(409, str(exc))

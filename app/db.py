@@ -133,6 +133,21 @@ def _migrate(engine) -> None:
             conn.execute(text("ALTER TABLE daily_summary ADD COLUMN forecast_total_kcal INTEGER"))
             conn.commit()
 
+        # Migracja RODO decyzja 2026-09-11: nowa zgoda kind="strava" niezależna od llm_photos.
+        # Backfill istniejących zgód llm_photos na nową PRIVACY_VERSION, żeby nie tracić
+        # zgód przy podnoszeniu wersji noty (sekcja o Strava się pojawia, ale sekcja
+        # o LLM się nie zmienia — present users powinni zadać zgodę tylko na Strava).
+        from .config import PRIVACY_VERSION
+        consent_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(consent)"))]
+        if consent_cols:
+            # Backfill: dla każdego wariantu (user_id, kind, version != PRIVACY_VERSION),
+            # jeśli withdrawn_at jest NULL (aktywna), podbij wersję na bieżącą.
+            conn.execute(text(
+                "UPDATE consent SET version = ? "
+                "WHERE kind = 'llm_photos' AND version != ? AND withdrawn_at IS NULL"
+            ), [PRIVACY_VERSION, PRIVACY_VERSION])
+            conn.commit()
+
 
 def get_session() -> Session:
     get_engine()

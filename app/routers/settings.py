@@ -1,18 +1,21 @@
 """Ustawienia: strona HTML (formularze) i JSON API dla mobilnego SPA."""
+import json
 from datetime import date
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
+import httpx
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .. import auth
-from ..config import ADMIN_EMAIL, CONSENT_DEADLINE, PRIVACY_VERSION
+from ..config import ADMIN_EMAIL, CONSENT_DEADLINE, PRIVACY_VERSION, STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_REDIRECT_URI
 from ..db import db_session
 from ..deps import STATIC_DIR, templates
 from ..models import DailySummary, PendingMeal, User, UserProfile
 from ..providers import garmin as garmin_provider
+from ..providers import strava as strava_provider
 from ..services import consent as consent_service
 from ..services import meal_queue, meal_vision
 from ..services import settings as settings_service
@@ -38,12 +41,15 @@ def settings_page(request: Request, db: Session = Depends(db_session),
         select(func.count(PendingMeal.id)).where(PendingMeal.user_id == user.id)
     )
     consent_row = consent_service.current(db, user.id)
+    strava_consent = consent_service.current(db, user.id, consent_service.STRAVA)
     return templates.TemplateResponse(
         request,
         "settings.html",
         {
             "is_admin": user.email == ADMIN_EMAIL,
             "garmin_connected": garmin_provider.tokens_present(db, user.id),
+            "strava_connected": strava_provider.tokens_present(db, user.id),
+            "strava_consent_granted": strava_consent is not None,
             "last_sync_ago": humanize_ago(last_sync),
             "gemini_masked": settings_service.masked(stored.get("gemini_api_key")),
             "claude_masked": settings_service.masked(stored.get("anthropic_api_key")),
@@ -151,6 +157,107 @@ def settings_garmin_mfa(code: str = Form(...), db: Session = Depends(db_session)
     return RedirectResponse("/settings?saved=1", status_code=303)
 
 
+# ── Strava OAuth ─────────────────────────────────────────────────────────
+
+@router.post("/settings/strava/connect")
+def settings_strava_connect(consent_granted: bool = Form(False),
+                            db: Session = Depends(db_session),
+                            user: User = Depends(auth.current_user)):
+    """Inicjacja OAuth do Stravy. Waliduje checkbox zgody, granting się dzieje
+    w callbacku. Jeśli zgoda już istnieje, bypass checkbox."""
+    has_consent = consent_service.has_consent(db, user.id, consent_service.STRAVA)
+    if not has_consent and not consent_granted:
+        return RedirectResponse("/settings?error=ConsentRequired", status_code=303)
+
+    if not has_consent:
+        consent_service.grant(db, user.id, consent_service.STRAVA)
+
+    # Redirect do Stravy
+    if not STRAVA_CLIENT_ID or not STRAVA_CLIENT_SECRET:
+        return RedirectResponse("/settings?error=StravaNotConfigured", status_code=303)
+
+    import secrets
+    state = secrets.token_urlsafe(32)
+    # Stan trzymamy w sesji (w Stravie nie jest bezpieczne, ale MVP)
+    return RedirectResponse(
+        f"https://www.strava.com/oauth/authorize"
+        f"?client_id={STRAVA_CLIENT_ID}"
+        f"&redirect_uri={STRAVA_REDIRECT_URI}"
+        f"&response_type=code"
+        f"&scope=activity:read_only"
+        f"&approval_prompt=auto"
+        f"&state={state}",
+        status_code=302
+    )
+
+
+@router.get("/settings/strava/callback")
+def settings_strava_callback(code: str = Query(...), error: str | None = Query(None),
+                             db: Session = Depends(db_session),
+                             user: User = Depends(auth.current_user)):
+    """Callback OAuth z Stravy — wymienia code na tokeny i zapisuje je."""
+    if error:
+        return RedirectResponse(f"/settings?error=StravaOAuth", status_code=303)
+
+    if not STRAVA_CLIENT_ID or not STRAVA_CLIENT_SECRET:
+        return RedirectResponse("/settings?error=StravaNotConfigured", status_code=303)
+
+    try:
+        resp = httpx.post(
+            "https://www.strava.com/oauth/token",
+            data={
+                "client_id": STRAVA_CLIENT_ID,
+                "client_secret": STRAVA_CLIENT_SECRET,
+                "code": code,
+                "grant_type": "authorization_code",
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
+        token_data = resp.json()
+
+        # Zapis tokens (access_token, refresh_token, expires_at)
+        blob = {
+            "access_token": token_data.get("access_token"),
+            "refresh_token": token_data.get("refresh_token"),
+            "expires_at": token_data.get("expires_at"),
+            "scope": token_data.get("scope"),
+        }
+        settings_service.set_setting(db, user.id, strava_provider.STRAVA_TOKENS_KEY, json.dumps(blob))
+        usage_service.bump(db, user.id, "strava_connect_ok")
+        return RedirectResponse("/settings?saved=1", status_code=303)
+    except Exception as exc:
+        return RedirectResponse(f"/settings?error={exc.__class__.__name__}", status_code=303)
+
+
+@router.post("/settings/strava/disconnect")
+def settings_strava_disconnect(db: Session = Depends(db_session),
+                               user: User = Depends(auth.current_user)):
+    """Odłączenie konta Stravy. Kasuje tokeny i opcjonalnie woła deauthorize u Stravy."""
+    # Pobranie tokenu przed skasowaniem
+    blob_str = settings_service.get_setting(db, user.id, strava_provider.STRAVA_TOKENS_KEY)
+
+    # Kasowanie lokalnie
+    settings_service.set_setting(db, user.id, strava_provider.STRAVA_TOKENS_KEY, None)
+    usage_service.bump(db, user.id, "strava_disconnect")
+
+    # Opcjonalny deauthorize do Stravy (Strava wymaga tego w ToS)
+    if blob_str:
+        try:
+            blob = json.loads(blob_str)
+            access_token = blob.get("access_token")
+            if access_token:
+                httpx.post(
+                    "https://www.strava.com/oauth/deauthorize",
+                    data={"access_token": access_token},
+                    timeout=5,
+                )
+        except Exception:
+            pass  # Błąd deauthorize nie blokuje lokalnego usunięcia
+
+    return RedirectResponse("/settings?saved=1", status_code=303)
+
+
 # ── Ustawienia API (JSON) — dla mobilnego SPA ─────────────────────────────
 
 @router.get("/api/settings")
@@ -159,6 +266,7 @@ def api_get_settings(db: Session = Depends(db_session),
     stored = settings_service.all_settings(db, user.id)
     keys = settings_service.get_llm_keys(db, user.id)
     consent_row = consent_service.current(db, user.id)
+    strava_consent = consent_service.current(db, user.id, consent_service.STRAVA)
     today = date.today()
     return {
         "gemini_masked": settings_service.masked(stored.get("gemini_api_key")),
@@ -166,6 +274,8 @@ def api_get_settings(db: Session = Depends(db_session),
         "backend": (meal_vision.pick_backend(keys.gemini, keys.anthropic)
                     if meal_vision.llm_configured(keys.gemini, keys.anthropic) else None),
         "garmin_connected": garmin_provider.tokens_present(db, user.id),
+        "strava_connected": strava_provider.tokens_present(db, user.id),
+        "strava_consent_granted": strava_consent is not None,
         "lifestyle_options": lifestyle_options(),
         "consent_llm_photos": consent_row is not None,
         "consent_granted_at": consent_row.granted_at.isoformat() if consent_row else None,

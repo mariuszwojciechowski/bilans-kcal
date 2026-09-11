@@ -11,6 +11,7 @@ from ..config import PRIVACY_VERSION
 from ..models import Consent, User
 
 LLM_PHOTOS = "llm_photos"
+STRAVA = "strava"
 
 
 def has_consent(db: Session, user_id: int, kind: str = LLM_PHOTOS) -> bool:

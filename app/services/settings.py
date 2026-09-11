@@ -26,7 +26,7 @@ LLM_KEYS = {
 
 # Wartości tych kluczy leżą w bazie zaszyfrowane (crypto.encrypt/decrypt) —
 # sekrety użytkownika trzymamy TYLKO przez ten serwis, nigdy wprost w AppSetting.
-SECRET_SETTING_KEYS = {"gemini_api_key", "anthropic_api_key", "garmin_tokens"}
+SECRET_SETTING_KEYS = {"gemini_api_key", "anthropic_api_key", "garmin_tokens", "strava_tokens"}
 
 
 def get_setting(db: Session, user_id: int, key: str) -> str | None:

@@ -105,14 +105,29 @@ def maybe_sync(user_id: int, days: int = 7, force: bool = False) -> None:
         _last_attempt[user_id] = datetime.utcnow()  # liczy się próba, nie sukces
 
     from ..db import get_session
-    from ..providers.garmin import GarminProvider
+    from ..providers import get_provider_for_user
+    from . import usage as usage_service
 
     db = get_session()
     try:
+        provider = get_provider_for_user(db, user_id)
+        if provider is None:
+            return
         today = user_today(db.get(UserProfile, user_id))
-        result = sync_range(db, GarminProvider(user_id, db), user_id, days=days, today=today)
-        logger.info("Auto-sync Garmin: %s", result)
+        result = sync_range(db, provider, user_id, days=days, today=today)
+        logger.info("Auto-sync %s: %s", provider.__class__.__name__, result)
+
+        # Statystyki
+        provider_name = provider.__class__.__name__.lower()  # GarminProvider -> garminprovider
+        if "strava" in provider_name:
+            usage_service.bump(db, user_id, "strava_sync_ok")
     except Exception as exc:
-        logger.warning("Auto-sync Garmin nieudany: %s", crypto.scrub(str(exc)))
+        logger.warning("Auto-sync nieudany: %s", crypto.scrub(str(exc)))
+        # Log błędu Stravy
+        if "strava" in str(exc.__class__).lower():
+            try:
+                usage_service.bump(db, user_id, "strava_sync_error")
+            except Exception:
+                pass
     finally:
         db.close()
