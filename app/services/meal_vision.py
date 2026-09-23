@@ -75,6 +75,18 @@ class MealVisionNotConfigured(RuntimeError):
     pass
 
 
+def classify_error(exc: Exception) -> str:
+    """Krótka kategoria błędu do wyświetlenia nad kolejką (PendingMeal
+    .last_error_kind) — rozróżnia sprawy, które użytkownik może naprawić
+    (klucz), od przejściowych (limit/przeciążenie), gdzie trzeba tylko czekać."""
+    text = str(exc)
+    if "API_KEY_INVALID" in text or "API key not valid" in text:
+        return "invalid_key"
+    if "RESOURCE_EXHAUSTED" in text or "429" in text:
+        return "rate_limited"
+    return "error"
+
+
 def _env_gemini_key() -> str | None:
     return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
@@ -104,7 +116,9 @@ def llm_configured(gemini_key: str | None = None, anthropic_key: str | None = No
 
 def estimate_from_photo(image_bytes: bytes, ext: str, note: str | None = None,
                         gemini_key: str | None = None,
-                        anthropic_key: str | None = None) -> MealEstimate:
+                        anthropic_key: str | None = None) -> tuple[MealEstimate, str]:
+    """Zwraca (oszacowanie, nazwa modelu, który je wyprodukował) — model do
+    wyświetlenia na ekranie „sprawdź i popraw" (nie do zapisu w Meal)."""
     media_type = MEDIA_TYPES.get(ext.lower().lstrip("."))
     if media_type is None:
         raise ValueError(f"Nieobsługiwany format zdjęcia: {ext}")
@@ -118,7 +132,7 @@ def estimate_from_photo(image_bytes: bytes, ext: str, note: str | None = None,
 
 def estimate_from_text(description: str,
                         gemini_key: str | None = None,
-                        anthropic_key: str | None = None) -> MealEstimate:
+                        anthropic_key: str | None = None) -> tuple[MealEstimate, str]:
     prompt = f"Oszacuj wartości odżywcze posiłku: {description}"
     if pick_backend(gemini_key, anthropic_key) == "gemini":
         return _estimate_gemini(prompt, api_key=gemini_key)
@@ -130,7 +144,7 @@ def estimate_from_text(description: str,
 def _estimate_claude(
     prompt: str, image_bytes: bytes | None = None, media_type: str | None = None,
     api_key: str | None = None,
-) -> MealEstimate:
+) -> tuple[MealEstimate, str]:
     import anthropic
 
     try:
@@ -168,7 +182,7 @@ def _estimate_claude(
     estimate = response.parsed_output
     if estimate is None:
         raise RuntimeError("Nie udało się sparsować odpowiedzi modelu.")
-    return estimate
+    return estimate, VISION_MODEL
 
 
 # ── Backend: Gemini (Google AI Studio, darmowy tier) ──────────────────────
@@ -176,7 +190,7 @@ def _estimate_claude(
 def _estimate_gemini(
     prompt: str, image_bytes: bytes | None = None, media_type: str | None = None,
     api_key: str | None = None,
-) -> MealEstimate:
+) -> tuple[MealEstimate, str]:
     key = api_key or _env_gemini_key()
     if not key:
         raise MealVisionNotConfigured(
@@ -208,5 +222,5 @@ def _estimate_gemini(
             logger.info("Gemini: model %s niedostępny (%s) — próbuję następny z kaskady.",
                         model, crypto.scrub(str(exc)))
             continue
-        return estimate
+        return estimate, model
     raise last_exc

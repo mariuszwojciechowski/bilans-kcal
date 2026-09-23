@@ -26,10 +26,10 @@ router = APIRouter()
 
 def _queue_meal(db: Session, user_id: int, day: date, reason: str,
                 description: str | None = None, note: str | None = None,
-                photo_bytes: bytes | None = None) -> dict:
+                photo_bytes: bytes | None = None, error_kind: str | None = None) -> dict:
     profile = db.get(UserProfile, user_id)
     meal_queue.enqueue(db, user_id, day, user_time(profile), description=description,
-                       note=note, photo_bytes=photo_bytes)
+                       note=note, photo_bytes=photo_bytes, error_kind=error_kind)
     return {
         "queued": True,
         "message": f"Posiłek zapisany do kolejki ({reason}). Zostanie przetworzony "
@@ -62,20 +62,20 @@ async def estimate_meal_photo(
     target_day = day or user_today(db.get(UserProfile, user.id))
     if not meal_vision.llm_configured(keys.gemini, keys.anthropic):
         return _queue_meal(db, user.id, target_day, "brak klucza LLM",
-                           note=note, photo_bytes=data)
+                           note=note, photo_bytes=data, error_kind="no_key")
     try:
-        estimate = meal_vision.estimate_from_photo(data, ext, note,
-                                                    gemini_key=keys.gemini,
-                                                    anthropic_key=keys.anthropic)
+        estimate, model = meal_vision.estimate_from_photo(data, ext, note,
+                                                           gemini_key=keys.gemini,
+                                                           anthropic_key=keys.anthropic)
     except ValueError as exc:
         raise HTTPException(422, str(exc))
     except Exception as exc:
         logger.warning("Posiłek (zdjęcie, live): szacowanie nie powiodło się: %s",
                         crypto.scrub(str(exc)))
         return _queue_meal(db, user.id, target_day, "szacowanie nie powiodło się",
-                           note=note, photo_bytes=data)
+                           note=note, photo_bytes=data, error_kind=meal_vision.classify_error(exc))
     # zdjęcia nie przechowujemy — po przetworzeniu jest niepotrzebne (decyzja: retencja tylko w kolejce)
-    return {"photo_path": None, "kcal": round(estimate.kcal), **estimate.model_dump()}
+    return {"photo_path": None, "kcal": round(estimate.kcal), "model": model, **estimate.model_dump()}
 
 
 @router.post("/api/meals/text", dependencies=[Depends(require_llm_consent)])
@@ -92,17 +92,18 @@ def estimate_meal_text(
     keys = settings_service.get_llm_keys(db, user.id)
     target_day = day or user_today(db.get(UserProfile, user.id))
     if not meal_vision.llm_configured(keys.gemini, keys.anthropic):
-        return _queue_meal(db, user.id, target_day, "brak klucza LLM", description=description)
+        return _queue_meal(db, user.id, target_day, "brak klucza LLM", description=description,
+                           error_kind="no_key")
     try:
-        estimate = meal_vision.estimate_from_text(description,
-                                                   gemini_key=keys.gemini,
-                                                   anthropic_key=keys.anthropic)
+        estimate, model = meal_vision.estimate_from_text(description,
+                                                          gemini_key=keys.gemini,
+                                                          anthropic_key=keys.anthropic)
     except Exception as exc:
         logger.warning("Posiłek (tekst, live): szacowanie nie powiodło się: %s",
                         crypto.scrub(str(exc)))
         return _queue_meal(db, user.id, target_day, "szacowanie nie powiodło się",
-                           description=description)
-    return {"photo_path": None, "kcal": round(estimate.kcal), **estimate.model_dump()}
+                           description=description, error_kind=meal_vision.classify_error(exc))
+    return {"photo_path": None, "kcal": round(estimate.kcal), "model": model, **estimate.model_dump()}
 
 
 class MealIn(BaseModel):

@@ -22,3 +22,14 @@ def humanize_ago(dt: datetime | None) -> str | None:
         parts.append(f"{hours}h")
     parts.append(f"{minutes}m")
     return " ".join(parts) + " temu"
+
+
+def humanize_in(dt: datetime | None) -> str | None:
+    """'za 4 min' — licznik do następnej próby przetworzenia kolejki
+    (PendingMeal.next_attempt_at). Z dokładnością do minut."""
+    if dt is None:
+        return None
+    seconds = (dt - datetime.utcnow()).total_seconds()
+    if seconds <= 0:
+        return "za chwilę"
+    return f"za {max(int(seconds // 60), 1)} min"

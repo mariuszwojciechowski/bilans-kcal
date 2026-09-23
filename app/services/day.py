@@ -41,7 +41,7 @@ from .energy import (
 BASELINE_NEAT_DAYS = 7
 BASELINE_NEAT_MIN_DAYS = 3
 from .macros import coverage, who_targets
-from .timeago import humanize_ago
+from .timeago import humanize_ago, humanize_in
 
 # Przybliżenie kroków w biegu/marszu — ta sama stała, z której korzysta
 # `tdee_theoretical` (patrz punkt „Tabela MET jako dane" w DONE.md).
@@ -401,6 +401,8 @@ def day_report(db: Session, user_id: int, day: date) -> dict:
                 "time": p.time.isoformat() if p.time else None,
                 "label": p.description or (p.note or "zdjęcie"),
                 "has_photo": bool(p.photo_path),
+                "error_kind": p.last_error_kind,
+                "next_attempt_in": humanize_in(p.next_attempt_at),
             }
             for p in pending
         ],

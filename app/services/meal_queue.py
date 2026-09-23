@@ -52,6 +52,7 @@ def enqueue(
     description: str | None = None,
     note: str | None = None,
     photo_bytes: bytes | None = None,
+    error_kind: str | None = None,
 ) -> PendingMeal:
     photo_path = None
     if photo_bytes is not None:
@@ -59,7 +60,7 @@ def enqueue(
         photo_path = f"pending_{datetime.now():%Y%m%d_%H%M%S_%f}.jpg"
         (PHOTOS_DIR / photo_path).write_bytes(downscale_photo(photo_bytes))
     row = PendingMeal(user_id=user_id, date=day, time=at, description=description,
-                      note=note, photo_path=photo_path)
+                      note=note, photo_path=photo_path, last_error_kind=error_kind)
     db.add(row)
     db.commit()
     return row
@@ -135,17 +136,19 @@ def process_queue(user_id: int) -> dict:
             try:
                 if row.photo_path:
                     photo = (PHOTOS_DIR / row.photo_path).read_bytes()
-                    estimate = meal_vision.estimate_from_photo(
+                    estimate, _model = meal_vision.estimate_from_photo(
                         photo, "jpg", row.note,
                         gemini_key=keys.gemini, anthropic_key=keys.anthropic)
                     source = "photo"
                 else:
-                    estimate = meal_vision.estimate_from_text(
+                    estimate, _model = meal_vision.estimate_from_text(
                         row.description or "",
                         gemini_key=keys.gemini, anthropic_key=keys.anthropic)
                     source = "text"
             except meal_vision.MealVisionNotConfigured:
                 logger.info("Kolejka: LLM nieskonfigurowany — przerywam.")
+                row.last_error_kind = "no_key"
+                db.commit()
                 break
             except FileNotFoundError:
                 _delete_photo(row.photo_path)
@@ -153,8 +156,11 @@ def process_queue(user_id: int) -> dict:
                 db.commit()
                 continue
             except Exception as exc:
-                logger.warning("Kolejka: posiłek %s nieprzetworzony: %s", row.id, crypto.scrub(str(exc)))
+                kind = meal_vision.classify_error(exc)
+                logger.warning("Kolejka: posiłek %s nieprzetworzony (%s): %s",
+                                row.id, kind, crypto.scrub(str(exc)))
                 row.next_attempt_at = now + timedelta(minutes=RETRY_BACKOFF_MINUTES)
+                row.last_error_kind = kind
                 db.commit()
                 failed += 1
                 continue

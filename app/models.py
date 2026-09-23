@@ -143,6 +143,10 @@ class PendingMeal(Base):
     # bez tego odpytywałby ten sam, wciąż zawodzący wpis w każdym przebiegu —
     # przy skromnych darmowych limitach Gemini (RPM/RPD) to samo dobija budżet).
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime)
+    # Kategoria ostatniego błędu ("no_key" | "invalid_key" | "rate_limited" |
+    # "error") — do wyświetlenia ostrzeżenia nad kolejką (patrz meal_vision
+    # .classify_error). None, gdy wpis jeszcze nie był próbowany.
+    last_error_kind: Mapped[str | None] = mapped_column(String)
 
 
 class SavedMeal(Base):

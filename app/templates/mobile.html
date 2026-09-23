@@ -902,14 +902,30 @@ function renderMeals(meals, pending) {
           <button class="x" onclick="delMeal(${m.id})">✕</button>
         </div>`).join("")
     : '<p class="muted">Brak posiłków dziś.</p>';
-  document.getElementById("t-pending").innerHTML = (pending && pending.length) ? `
-    <p class="muted" style="margin:10px 0 4px;font-weight:600">W kolejce (czeka na LLM)</p>` +
+  document.getElementById("t-pending").innerHTML = (pending && pending.length) ?
+    queueWarningBanner(pending) +
+    `<p class="muted" style="margin:10px 0 4px;font-weight:600">W kolejce (czeka na LLM)</p>` +
     pending.map(p => `
       <div class="entry">
-        <div style="flex:1"><div class="muted">${esc(p.label)}${p.has_photo ? " 📷" : ""}</div></div>
+        <div style="flex:1"><div class="muted">${esc(p.label)}${p.has_photo ? " 📷" : ""}${
+          p.next_attempt_in ? ` · kolejna próba ${p.next_attempt_in}` : ""}</div></div>
         <button class="ghost" style="flex:none;padding:6px 10px;margin:0;width:auto" onclick="playPending(${p.id})">▶</button>
         <button class="x" onclick="delPending(${p.id})">✕</button>
       </div>`).join("") : "";
+}
+
+// Ostrzeżenie nad kolejką, gdy powodem zalegania jest klucz LLM (nie limit/przeciążenie
+// — to się sam naprawi, klucza nikt za użytkownika nie poprawi). Jeden komunikat na
+// najgorszy z obecnych powodów, nie po jednym na wpis — to samo dla całej kolejki.
+function queueWarningBanner(pending) {
+  const kind = pending.some(p => p.error_kind === "invalid_key") ? "invalid_key"
+    : pending.some(p => p.error_kind === "no_key") ? "no_key" : null;
+  if (!kind) return "";
+  const msg = kind === "invalid_key"
+    ? "⚠️ Klucz LLM w Ustawieniach jest nieprawidłowy — posiłki nie zostaną przetworzone, dopóki go nie poprawisz."
+    : "⚠️ Brak klucza LLM w Ustawieniach — posiłki będą czekać w kolejce, dopóki go nie dodasz.";
+  return `<p style="background:rgba(220,53,69,.1);border:1px solid var(--danger);padding:8px 10px;` +
+    `border-radius:8px;color:var(--danger);font-size:12px;margin:10px 0">${msg}</p>`;
 }
 
 async function doSync() {
@@ -1040,7 +1056,7 @@ function showDraft(e) {
   document.getElementById("d-fiber").value = sum("fiber_g").toFixed(1);
   document.getElementById("d-sugars").value = sum("sugars_g").toFixed(1);
   document.getElementById("d-range").textContent =
-    `Przedział: ${r0(e.kcal_min)}–${r0(e.kcal_max)} kcal`;
+    `Przedział: ${r0(e.kcal_min)}–${r0(e.kcal_max)} kcal` + (e.model ? ` · ${e.model}` : "");
 }
 
 function showManual() {

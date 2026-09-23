@@ -137,6 +137,9 @@ def _migrate(engine) -> None:
         if pending_meal_cols and "next_attempt_at" not in pending_meal_cols:
             conn.execute(text("ALTER TABLE pending_meal ADD COLUMN next_attempt_at DATETIME"))
             conn.commit()
+        if pending_meal_cols and "last_error_kind" not in pending_meal_cols:
+            conn.execute(text("ALTER TABLE pending_meal ADD COLUMN last_error_kind VARCHAR"))
+            conn.commit()
 
         # Migracja RODO decyzja 2026-09-11: nowa zgoda kind="strava" niezależna od llm_photos.
         # Backfill istniejących zgód llm_photos na nową PRIVACY_VERSION, żeby nie tracić

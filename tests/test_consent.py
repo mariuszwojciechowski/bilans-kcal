@@ -89,7 +89,7 @@ def test_meal_text_after_grant_is_not_409(client, monkeypatch):
             items=[MealItem(name="jajko", mass_g=60, kcal=90, protein_g=7,
                             fat_g=6.5, carbs_g=0.5, confidence="high")],
             assumptions=[], kcal_min=80, kcal_max=100,
-        )
+        ), "gemini-3.5-flash"
 
     monkeypatch.setattr("app.services.meal_vision.llm_configured", lambda *a, **kw: True)
     monkeypatch.setattr("app.services.meal_vision.estimate_from_text", _fake_estimate)
