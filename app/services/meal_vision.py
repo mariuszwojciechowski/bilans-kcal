@@ -5,16 +5,22 @@ kcal_min–kcal_max i listą założeń do weryfikacji przez użytkownika.
 
 Backend wymienny (FIT_KRASNAL_LLM = auto | claude | gemini):
 - claude — Anthropic API (ANTHROPIC_API_KEY),
-- gemini — Google AI Studio (GEMINI_API_KEY / GOOGLE_API_KEY; ma darmowy tier).
+- gemini — Google AI Studio (GEMINI_API_KEY / GOOGLE_API_KEY; ma darmowy tier,
+  z kaskadą modeli od najlepszego do najbardziej wydajnego limitami — patrz
+  config.GEMINI_MODELS i _estimate_gemini).
 W trybie auto wybierany jest gemini, jeśli jego klucz jest ustawiony, inaczej claude."""
 
 import base64
+import logging
 import os
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from ..config import GEMINI_MODEL, LLM_BACKEND, VISION_MODEL
+from ..config import GEMINI_MODELS, LLM_BACKEND, VISION_MODEL
+from . import crypto
+
+logger = logging.getLogger(__name__)
 
 MEDIA_TYPES = {
     "jpg": "image/jpeg",
@@ -184,17 +190,23 @@ def _estimate_gemini(
     if image_bytes is not None:
         contents.append(types.Part.from_bytes(data=image_bytes, mime_type=media_type))
     contents.append(prompt)
-
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=contents,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM,
-            response_mime_type="application/json",
-            response_schema=MealEstimate,
-        ),
+    config = types.GenerateContentConfig(
+        system_instruction=SYSTEM,
+        response_mime_type="application/json",
+        response_schema=MealEstimate,
     )
-    estimate = response.parsed
-    if estimate is None:
-        raise RuntimeError("Nie udało się sparsować odpowiedzi modelu Gemini.")
-    return estimate
+
+    last_exc: Exception = RuntimeError("Brak modeli Gemini do wypróbowania (GEMINI_MODELS).")
+    for model in GEMINI_MODELS:
+        try:
+            response = client.models.generate_content(model=model, contents=contents, config=config)
+            estimate = response.parsed
+            if estimate is None:
+                raise RuntimeError(f"Nie udało się sparsować odpowiedzi modelu Gemini ({model}).")
+        except Exception as exc:
+            last_exc = exc
+            logger.info("Gemini: model %s niedostępny (%s) — próbuję następny z kaskady.",
+                        model, crypto.scrub(str(exc)))
+            continue
+        return estimate
+    raise last_exc

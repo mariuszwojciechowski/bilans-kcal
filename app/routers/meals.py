@@ -1,5 +1,6 @@
 """Posiłki: zapis (zdjęcie/tekst/ręcznie), kolejka offline, zapisane szablony."""
 import json
+import logging
 from datetime import date, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
@@ -12,11 +13,13 @@ from ..config import MAX_PHOTO_BYTES
 from ..db import db_session
 from ..deps import require_llm_consent
 from ..models import Meal, PendingMeal, SavedMeal, User, UserProfile
-from ..services import meal_queue, meal_vision
+from ..services import crypto, meal_queue, meal_vision
 from ..services import settings as settings_service
 from ..services import usage as usage_service
 from ..services.clock import user_time, user_today
 from ..services.sync import maybe_sync
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -66,7 +69,9 @@ async def estimate_meal_photo(
                                                     anthropic_key=keys.anthropic)
     except ValueError as exc:
         raise HTTPException(422, str(exc))
-    except Exception:
+    except Exception as exc:
+        logger.warning("Posiłek (zdjęcie, live): szacowanie nie powiodło się: %s",
+                        crypto.scrub(str(exc)))
         return _queue_meal(db, user.id, target_day, "szacowanie nie powiodło się",
                            note=note, photo_bytes=data)
     # zdjęcia nie przechowujemy — po przetworzeniu jest niepotrzebne (decyzja: retencja tylko w kolejce)
@@ -92,7 +97,9 @@ def estimate_meal_text(
         estimate = meal_vision.estimate_from_text(description,
                                                    gemini_key=keys.gemini,
                                                    anthropic_key=keys.anthropic)
-    except Exception:
+    except Exception as exc:
+        logger.warning("Posiłek (tekst, live): szacowanie nie powiodło się: %s",
+                        crypto.scrub(str(exc)))
         return _queue_meal(db, user.id, target_day, "szacowanie nie powiodło się",
                            description=description)
     return {"photo_path": None, "kcal": round(estimate.kcal), **estimate.model_dump()}

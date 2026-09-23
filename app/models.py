@@ -139,6 +139,10 @@ class PendingMeal(Base):
     note: Mapped[str | None] = mapped_column(String)        # uwaga do zdjęcia
     photo_path: Mapped[str | None] = mapped_column(String)  # wariant zdjęciowy (zredukowany JPEG)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # Backoff: kiedy wolno spróbować znowu (timer kolejki chodzi co minutę, ale
+    # bez tego odpytywałby ten sam, wciąż zawodzący wpis w każdym przebiegu —
+    # przy skromnych darmowych limitach Gemini (RPM/RPD) to samo dobija budżet).
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
 class SavedMeal(Base):

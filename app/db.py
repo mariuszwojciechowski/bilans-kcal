@@ -133,6 +133,11 @@ def _migrate(engine) -> None:
             conn.execute(text("ALTER TABLE daily_summary ADD COLUMN forecast_total_kcal INTEGER"))
             conn.commit()
 
+        pending_meal_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(pending_meal)"))]
+        if pending_meal_cols and "next_attempt_at" not in pending_meal_cols:
+            conn.execute(text("ALTER TABLE pending_meal ADD COLUMN next_attempt_at DATETIME"))
+            conn.commit()
+
         # Migracja RODO decyzja 2026-09-11: nowa zgoda kind="strava" niezależna od llm_photos.
         # Backfill istniejących zgód llm_photos na nową PRIVACY_VERSION, żeby nie tracić
         # zgód przy podnoszeniu wersji noty (sekcja o Strava się pojawia, ale sekcja

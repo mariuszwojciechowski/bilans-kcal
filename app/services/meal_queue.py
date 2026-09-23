@@ -25,6 +25,11 @@ logger = logging.getLogger(__name__)
 RETENTION_DAYS = 21
 MAX_EDGE_PX = 1280
 JPEG_QUALITY = 82
+# Timer kolejki chodzi co minutę (M4b), ale odpytywanie każdego zawodzącego
+# wpisu w każdym przebiegu dobija skromne darmowe limity Gemini (RPM/RPD) —
+# jeden zawodzący posiłek potrafi w kilka minut zjeść cały dzienny budżet
+# i zablokować nowe, żywe próby. Stąd backoff: wpis czeka między próbami.
+RETRY_BACKOFF_MINUTES = 5
 
 
 def downscale_photo(image_bytes: bytes) -> bytes:
@@ -119,9 +124,12 @@ def process_queue(user_id: int) -> dict:
             return {"processed": 0, "failed": 0}
         keys = settings_service.get_llm_keys(db, user_id)
         purge_expired(db)
+        now = datetime.utcnow()
         pending = db.scalars(
-            select(PendingMeal).where(PendingMeal.user_id == user_id)
-            .order_by(PendingMeal.created_at)
+            select(PendingMeal).where(
+                PendingMeal.user_id == user_id,
+                (PendingMeal.next_attempt_at.is_(None)) | (PendingMeal.next_attempt_at <= now),
+            ).order_by(PendingMeal.created_at)
         ).all()
         for row in pending:
             try:
@@ -146,6 +154,8 @@ def process_queue(user_id: int) -> dict:
                 continue
             except Exception as exc:
                 logger.warning("Kolejka: posiłek %s nieprzetworzony: %s", row.id, crypto.scrub(str(exc)))
+                row.next_attempt_at = now + timedelta(minutes=RETRY_BACKOFF_MINUTES)
+                db.commit()
                 failed += 1
                 continue
             db.add(meal_from_estimate(user_id, row.date, row.time, estimate, source))
