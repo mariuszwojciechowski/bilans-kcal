@@ -10,6 +10,14 @@ Złożoność 1–10: **1** = wpisanie punktu zajmuje tyle co zrobienie, **3** k
 godzin, **5** wieczór–dzień, **7** kilka dni, **10** tygodnie + rzeczy poza
 kodem. Zrealizowane punkty → [DONE.md](DONE.md) (indeks) + `archive/`.
 
+## Merge the bobert-bag-bounty fork: Android shell, Google login, Vertex, hardening (4/10)
+
+→ [plans/merge-bobert-fork.md](plans/merge-bobert-fork.md). Fast-forward merge
+of fork commit `5005879` on a branch, then fixes: CSP blocks the Strava redirect,
+re-consent grace period until 2026-12-31 (otherwise the version bump blocks photos
+for everyone right after deploy), new `photo_too_large` counter, docs.
+Owner decisions are already in the plan.
+
 ## Pochodne naprawy czerwonego CI z 2026-09-06
 
 Hotfix zrobiony (DONE.md „Testy: «dziś» ze strefy użytkownika…"); zostało:
