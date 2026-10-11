@@ -31,9 +31,9 @@ What the fork brings (all reviewed 2026-10-09, 288 tests green):
   (Z for fixes, Y for step 3), following `VERSIONING.md`.
 - Run tests for the changed files freely. Run the full `pytest` **only after
   the owner says yes** (step 8).
-- Write everything in the repo (code, comments, .md, commits) in **English**.
+- Write everything in the repo (code, comments, .md, commits) in **Polish**.
   Existing Polish text you touch may stay Polish if you are only moving it.
-- End commit messages with: `Co-Authored-By: Claude <noreply@anthropic.com>`
+- End commit messages with: `Krasnal`
   (the fork author's commits keep their own authorship; do not rewrite them).
 
 ## What to read (and what not to)
