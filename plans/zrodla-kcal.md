@@ -311,7 +311,7 @@ Apple **nie ma web API** — dane HealthKit żyją na iPhonie. Trzy drogi:
   suma → „Get Contents of URL") wysyłający nasz znormalizowany JSON z części 0
   pkt 6. Szablon skrótu do pobrania w `deploy/README.md`; nie robimy dla niego
   osobnego parsera — celuje wprost w format znormalizowany.
-- **(E3, docelowo)** natywna aplikacja / Flutter `health` → punkt „Aplikacja
+- **(E3, docelowo)** natywna aplikacja / Health Connect (Capacitor) → punkt „Aplikacja
   mobilna (Etap 2)". Poza zakresem tego planu.
 
 1. **`app/providers/apple.py`** — nie `DataProvider` (nic nie pobiera), tylko
@@ -347,7 +347,7 @@ Apple **nie ma web API** — dane HealthKit żyją na iPhonie. Trzy drogi:
 ### Część F — Health Connect (Android): Samsung, Xiaomi, Huawei, Pixel (5/10 + osobno per producent instrukcja)
 
 Health Connect to **API na telefonie**, bez chmury — z serwera nic nie
-pobierzemy. Do czasu Etapu 2 (własna apka Flutter z pakietem `health`) jedyna
+pobierzemy. Do czasu Etapu 2 (własna apka Capacitor z Health Connect) jedyna
 droga to aplikacja-most na telefonie, która czyta Health Connect i POST-uje do
 `POST /api/ingest/health_connect` (część 0 pkt 6). Kandydaci: open-source
 **health-connect-webhook** (https://github.com/mcnaveen/health-connect-webhook —

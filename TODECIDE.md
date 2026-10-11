@@ -99,8 +99,6 @@ naprawy pomyłki.
 Pytania z wycofanego planu `publikacja-i-przekazanie.md`; bez odpowiedzi,
 rekomendacja w nawiasie tam, gdzie była.
 
-- **Flutter czy Capacitor** jako docelowa aplikacja mobilna? Działa PoC
-  Capacitora ([android-app/README.md](android-app/README.md)).
 - **Nazwa pakietu:** zostaje `cc.krasnal.fit` (użyta w PoC i testowym APK)?
   W Google Play nie da się jej później zmienić.
 - **Health Connect: waga.** Manifest i `android-app/README.md` obiecują

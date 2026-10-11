@@ -60,17 +60,17 @@ historia 3 dni; kasujemy wiersze naprawdę, a kopię zrzucamy w formacie
 transferu (odzysk = `import_payload`). Plan wchłonął dwa wcześniejsze punkty
 listy (kasowanie konta, czyszczenie historii) — nie implementuj ich osobno.
 
-## Aplikacja mobilna (Etap 2) — Flutter (10/10)
+## Aplikacja mobilna (Etap 2) — Capacitor (6/10)
 
-→ [plans/mobile-flutter.md](plans/mobile-flutter.md). Nie jest planem
-implementacji, tylko listą warunków wejścia (token urządzenia zamiast
-ciasteczka, Health Connect/HealthKit, kasowanie konta, nazwa pakietu,
-formularze sklepowe). Dopóki pilot działa na `/mobile` jako PWA, nie jest
-na ścieżce krytycznej. Istnieje działający PoC powłoki Capacitor
-([android-app/README.md](android-app/README.md)) — PoC i testowy APK używają
-identyfikatora `cc.krasnal.fit`. Wybór **Flutter vs Capacitor** i ostateczna
-nazwa pakietu zostają decyzją autora — pytania w
-[TODECIDE.md](TODECIDE.md) „Pozostałości po forku".
+→ [plans/mobile-capacitor.md](plans/mobile-capacitor.md). **Decyzja
+(2026-10-11): zostajemy przy Capacitorze** — powłoka
+([android-app/README.md](android-app/README.md)) już działa, a interfejs
+zostaje jednym `mobile.html`, więc odpada przebudowa na natywnego klienta
+(token urządzenia, drugi UI). Do zrobienia: nazwa pakietu, kasowanie konta,
+Health Connect (waga, aktywności), build wydaniowy i formularze sklepowe.
+Nie jest planem implementacji, tylko listą warunków wejścia; dopóki pilot
+działa na `/mobile` jako PWA, nie jest na ścieżce krytycznej. Pozostałe
+pytania: [TODECIDE.md](TODECIDE.md) „Pozostałości po forku".
 
 ## Prawdziwe „zapomniałem hasła" (mailem) (8/10)
 

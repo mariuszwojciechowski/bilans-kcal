@@ -1,7 +1,14 @@
 <!-- Plan wyniesiony z TODO.md (indeks). Po realizacji: wpis do DONE.md + archive/, ten plik usuń. -->
-# Aplikacja mobilna (Etap 2) — Flutter — WYMAGANIA.md 8.2 / D7 (10/10)
+# Aplikacja mobilna (Etap 2) — Capacitor — WYMAGANIA.md 8.2 / D7 (6/10)
 
-Etap 2 z wymagań: jeden kod na Android + iOS, backend zostaje źródłem prawdy
+> **Decyzja 2026-10-11:** zostajemy przy **Capacitorze** zamiast Fluttera
+> (D7 z WYMAGANIA.md jest w tym punkcie nieaktualne). Powłoka Android działa
+> (`android-app/`), a UI zostaje jednym `mobile.html` na backendzie. Skutki dla
+> warunków niżej: punkt 1 (token urządzenia) **odpada**, dopóki aplikacja jest
+> WebView-em z ciasteczkiem; punkt 4 realizuje wtyczka Health Connect
+> (`capacitor-health`), nie pakiet Fluttera. iOS (HealthKit) poza zakresem.
+
+Etap 2 z wymagań: aplikacja na Androida (Capacitor), backend zostaje źródłem prawdy
 (sync, kalibracja, LLM), a apka dostarcza dane zdrowotne z urządzenia zamiast
 nieoficjalnego API Garmina. Ten punkt świadomie **nie jest** planem
 implementacji — przed startem trzeba osobnego planu, bo połowa pracy leży poza
@@ -9,7 +16,7 @@ kodem apki. Istnieje, żeby nie zgubić warunków wejścia.
 
 **Warunki wstępne po stronie backendu (dziś niespełnione):**
 
-1. **Uwierzytelnianie inne niż ciasteczko.** `app/auth.py` trzyma sesję
+1. ~~**Uwierzytelnianie inne niż ciasteczko.**~~ (odpada przy Capacitorze — WebView trzyma ciasteczko) `app/auth.py` trzyma sesję
    w podpisanym ciasteczku (`SessionMiddleware`) — klient mobilny potrzebuje
    tokenu urządzenia (tabela tokenów + nagłówek `Authorization`, unieważnianie
    per urządzenie). To przebudowa `current_user`, nie dopisek.
@@ -21,7 +28,7 @@ kodem apki. Istnieje, żeby nie zgubić warunków wejścia.
 4. **Health Connect / HealthKit zamiast `garminconnect`.** Interfejs
    `app/providers/DataProvider` jest już na to przygotowany
    (`get_daily_summary`, `get_weight`, `get_activities`) — D4 był świadomym
-   długiem MVP, formalnie poza ToS Garmina. Pakiet `health` po stronie Fluttera.
+   długiem MVP, formalnie poza ToS Garmina. Po stronie powłoki: wtyczka `capacitor-health`.
 5. **Nazwa pakietu** — nieodwracalna, patrz punkt „Nazwa pakietu i domena…".
 6. **Formularze sklepowe.** `/prywatnosc` już jest publiczną notą, ale sklepy
    wymagają osobno *Data safety* (Play) / *App Privacy* (App Store) spójnych
