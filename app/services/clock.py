@@ -13,6 +13,8 @@ Znaczniki czasu w bazie zostają w UTC (`sync_ts`, `created_at`,
 from datetime import date, datetime, time
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from sqlalchemy.orm import Session
+
 from ..models import UserProfile
 
 DEFAULT_TZ = "Europe/Warsaw"
@@ -43,3 +45,8 @@ def user_time(profile: UserProfile | None) -> time:
     """Bieżąca godzina (bez daty) w strefie użytkownika — do znaczników
     czasu w ciągu dnia (godzina wpisu posiłku)."""
     return user_now(profile).time()
+
+
+def user_today_for(db: Session, user_id: int) -> date:
+    """`user_today` dla kodu, który ma tylko `user_id` (serwisy bez profilu pod ręką)."""
+    return user_today(db.get(UserProfile, user_id))

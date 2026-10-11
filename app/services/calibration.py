@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import Activity, Calibration, CalibrationLog, CalibrationState, DailySummary, Meal, WeightLog
+from . import clock
 from .activity_dedup import without_manual_duplicates
 from .balance import KCAL_PER_KG_FAT
 from .energy import smoothed_weight
@@ -127,7 +128,7 @@ def state_view(db: Session, user_id: int) -> dict:
 def compute(db: Session, user_id: int, period_days: int = 14) -> Calibration | None:
     """Migawka wsadowa dla karty 6.4 i strażnika — NIE mechanizm kalibracji
     na co dzień (to robi `step_day`/`catch_up`). Okres kończy się wczoraj."""
-    period_end = date.today() - timedelta(days=1)
+    period_end = clock.user_today_for(db, user_id) - timedelta(days=1)
     period_start = max(period_end - timedelta(days=period_days - 1), CALIBRATION_EPOCH)
     if period_start > period_end:
         return None
@@ -219,7 +220,7 @@ def catch_up(db: Session, user_id: int) -> CalibrationState:
         (row.updated_on + timedelta(days=1)) if row.updated_on else CALIBRATION_EPOCH,
         CALIBRATION_EPOCH,
     )
-    end_day = date.today() - timedelta(days=1)
+    end_day = clock.user_today_for(db, user_id) - timedelta(days=1)
     if start_day > end_day:
         db.commit()
         return row
@@ -326,7 +327,7 @@ def maybe_snapshot(db: Session, user_id: int, min_age_days: int = 7) -> Calibrat
     (albo nie istnieje) — throttle, żeby nie pisać nowego wiersza przy każdym
     wywołaniu `catch_up` (raz dziennie z dashboardu)."""
     latest = latest_snapshot(db, user_id)
-    if latest is not None and (date.today() - latest.period_end).days < min_age_days:
+    if latest is not None and (clock.user_today_for(db, user_id) - latest.period_end).days < min_age_days:
         return latest
     fresh = compute(db, user_id)
     return fresh if fresh is not None else latest

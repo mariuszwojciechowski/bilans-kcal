@@ -63,7 +63,7 @@ def test_bump_creates_row_and_increments_same_day(tmp_path):
     assert len(rows) == 1
     assert rows[0].count == 2
     assert rows[0].event == "login"
-    assert rows[0].date == date.today()
+    assert rows[0].date == date.today()  # dzień serwera
 
 
 def test_user_ref_stable_and_distinct_per_user():
@@ -194,7 +194,7 @@ def test_dashboard_stats_model_ratio_and_clamp_counts_use_constants(tmp_path, mo
     db.add(User(id=1, email="alice@example.com"))
     db.commit()
 
-    today = date.today()
+    today = date.today()  # dzień serwera
     d0 = today - timedelta(days=1)
     d1 = today - timedelta(days=2)
     # d0: rozjazd modelu > 15% (model 3000 vs garmin 2000 -> ratio 1.5);

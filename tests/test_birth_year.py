@@ -100,7 +100,7 @@ def test_put_profile_without_birth_year_or_date_422(client):
 def test_put_profile_birth_year_out_of_range_422(client):
     r = client.put("/api/profile", json={"birth_year": 1850, "sex": "M", "height_cm": 180})
     assert r.status_code == 422
-    r = client.put("/api/profile", json={"birth_year": date.today().year + 1,
+    r = client.put("/api/profile", json={"birth_year": app_today().year + 1,
                                          "sex": "M", "height_cm": 180})
     assert r.status_code == 422
 

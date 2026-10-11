@@ -15,6 +15,7 @@ from app import auth, db as app_db
 from app.db import Base, db_session
 from app.models import PendingMeal, User
 from app.services import consent, meal_queue
+from tests.conftest import app_today
 from app.services.meal_vision import MealEstimate, MealItem
 
 INVITE = "test-invite-code"
@@ -238,7 +239,7 @@ def test_process_queue_skips_without_consent(tmp_path, monkeypatch):
     db.add(User(email="t@t"))
     db.commit()
     user_id = db.scalar(select(User.id))
-    meal_queue.enqueue(db, user_id, date.today(), time(12, 0), description="kanapka")
+    meal_queue.enqueue(db, user_id, app_today(), time(12, 0), description="kanapka")
     db.close()
     monkeypatch.setattr("app.config.CONSENT_DEADLINE", date(2000, 1, 1))  # po okresie przejściowym
 

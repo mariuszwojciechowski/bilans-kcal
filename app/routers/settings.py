@@ -16,6 +16,7 @@ from ..deps import STATIC_DIR, templates
 from ..models import DailySummary, PendingMeal, User, UserProfile
 from ..providers import garmin as garmin_provider
 from ..providers import strava as strava_provider
+from ..services import clock
 from ..services import consent as consent_service
 from ..services import meal_queue, meal_vision
 from ..services import settings as settings_service
@@ -271,9 +272,9 @@ def api_get_settings(db: Session = Depends(db_session),
                      user: User = Depends(auth.current_user)):
     stored = settings_service.all_settings(db, user.id)
     keys = settings_service.get_llm_keys(db, user.id)
-    consent_row = consent_service.effective(db, user.id)
+    today = clock.user_today_for(db, user.id)
+    consent_row = consent_service.effective(db, user.id, today=today)
     strava_consent = consent_service.current(db, user.id, consent_service.STRAVA)
-    today = date.today()
     return {
         "gemini_masked": settings_service.masked(stored.get("gemini_api_key")),
         "anthropic_masked": settings_service.masked(stored.get("anthropic_api_key")),
@@ -286,7 +287,7 @@ def api_get_settings(db: Session = Depends(db_session),
         "consent_llm_photos": consent_row is not None,
         # zgoda ze starszej wersji noty w okresie przejściowym — baner prosi o potwierdzenie
         # brak decyzji + okres przejściowy: szacowanie działa, baner prosi o zgodę
-        "consent_grace": consent_row is None and consent_service.in_grace(db, user.id),
+        "consent_grace": consent_row is None and consent_service.in_grace(db, user.id, today=today),
         "consent_reconfirm": (consent_row is not None
                               and consent_service.current(db, user.id) is None),
         "consent_granted_at": consent_row.granted_at.isoformat() if consent_row else None,

@@ -20,20 +20,10 @@ DAILY_BALANCE = KCAL_IN - TRUE_KCAL_OUT          # -250 kcal/dzień
 START_WEIGHT = 90.0
 
 
-class _FrozenToday:
-    """Podmienia `calibration.date` tak, by `.today()` zwracało ustaloną datę —
-    dane syntetyczne w testach są zakotwiczone w `CALIBRATION_EPOCH`, nie w
-    zegarze maszyny uruchamiającej testy."""
-
-    def __init__(self, fixed: date):
-        self._fixed = fixed
-
-    def today(self) -> date:
-        return self._fixed
-
-
 def _freeze_today(monkeypatch, fixed: date) -> None:
-    monkeypatch.setattr(calibration, "date", _FrozenToday(fixed))
+    """Ustala „dziś" kalibracji (`clock.user_today_for`) — dane syntetyczne w
+    testach są zakotwiczone w `CALIBRATION_EPOCH`, nie w zegarze maszyny."""
+    monkeypatch.setattr(calibration.clock, "user_today_for", lambda db, user_id: fixed)
 
 
 def _make_db(tmp_path, name="calib"):
