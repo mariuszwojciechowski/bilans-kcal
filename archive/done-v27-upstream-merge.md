@@ -2,6 +2,21 @@
 
 Najnowsze u góry.
 
+## Scalenie forka bobert-bag-bounty (27.0.0–27.1.2)
+
+- Scalony fork `5005879`: powłoka Android (Capacitor), logowanie Google za
+  `FIT_KRASNAL_AUTH`, backend `vertex`, `app/middleware.py` (CSP, CSRF po origin,
+  filtr Host, limit body 8 MB — aktywne na produkcji bez flagi), Terraform.
+- Naprawa: CSP `form-action` blokowałoby przekierowanie na strava.com
+  („Połącz ze Stravą"); host dopisany + test (27.0.1).
+- Nota prywatności zmieniona (Google przy logowaniu, Vertex AI),
+  `PRIVACY_VERSION` = 2026-10-11. Do 31.12.2026 nic nie blokuje szacowania LLM:
+  działają zgody w starszej wersji noty i brak decyzji; wycofanie blokuje zawsze
+  (`consent.effective` / `in_grace`, pole `consent_reconfirm` w `/api/settings`).
+- Nowy licznik `/usage` `photo_too_large` (odrzucenia 413 przy limicie 8 MB);
+  wersja zgody widoczna w `/admin/consents`.
+- Dokumenty: repo nie jest „forkiem"; pytania po forku w `TODECIDE.md`.
+
 ## Scalenie z upstreamem (18 commitów, 27.0.0)
 
 - Z upstreamu (18 commitów `a393061..26.2.5`, przyjęte jako nowe, nie kolidujące
