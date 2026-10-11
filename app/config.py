@@ -52,9 +52,14 @@ INVITE_CODE = os.getenv("FIT_KRASNAL_INVITE_CODE", "")
 #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ENC_KEY = os.getenv("FIT_KRASNAL_ENC_KEY")
 
-# Backend LLM do szacowania posiłków: auto | claude | gemini
-# auto = gemini, jeśli jest GEMINI_API_KEY/GOOGLE_API_KEY; w przeciwnym razie claude.
+# Backend LLM do szacowania posiłków: auto | claude | gemini | vertex
+# auto = gemini przy kluczu użytkownika; inaczej vertex, gdy jest
+# FIT_KRASNAL_VERTEX_PROJECT; inaczej gemini z klucza w env; inaczej claude.
+# vertex = Gemini przez Vertex AI z Application Default Credentials konta
+# serwera (rola roles/aiplatform.user) — bez żadnych kluczy API.
 LLM_BACKEND = os.getenv("FIT_KRASNAL_LLM", "auto")
+VERTEX_PROJECT = os.getenv("FIT_KRASNAL_VERTEX_PROJECT")
+VERTEX_LOCATION = os.getenv("FIT_KRASNAL_VERTEX_LOCATION", "europe-west1")
 VISION_MODEL = os.getenv("FIT_KRASNAL_VISION_MODEL", "claude-opus-5")
 
 # Kaskada modeli Gemini: flash (nowsze wersje najpierw) → flash-lite (dużo
@@ -73,7 +78,17 @@ GEMINI_MODELS = [
     ).split(",") if m.strip()
 ]
 
-MAX_PHOTO_BYTES = 15 * 1024 * 1024
+# Limit zdjęcia posiłku; middleware odrzuca po Content-Length, endpoint czyta
+# najwyżej tyle+1 (Camera.getPhoto w powłoce daje ~200–400 kB, 8 MB to zapas).
+MAX_PHOTO_BYTES = 8 * 1024 * 1024
+# Ciasteczko sesji: 14 dni (tester nie loguje się codziennie), potem ponowne logowanie.
+SESSION_MAX_AGE_S = 14 * 24 * 3600
+
+# Nagłówek Host, jaki akceptujemy (TrustedHostMiddleware) — lista po przecinku.
+# Nieustawione = "*" (dev i testy). Produkcja: własna domena, np. fit-<ip>.sslip.io.
+ALLOWED_HOSTS = [
+    h.strip() for h in os.getenv("FIT_KRASNAL_ALLOWED_HOSTS", "*").split(",") if h.strip()
+] or ["*"]
 
 # Pseudonimizacja statystyk użycia (plan „Statystyki użycia") — sól HMAC do
 # hashowania user_id na pseudonim w tabeli UsageDaily. Stała: zmiana zrywa
@@ -95,10 +110,27 @@ _BASE_URL = os.getenv("FIT_KRASNAL_BASE_URL", "https://fit.krasnal.cc")
 STRAVA_REDIRECT_URI = os.getenv("FIT_KRASNAL_STRAVA_REDIRECT_URI",
                                 f"{_BASE_URL}/settings/strava/callback")
 
+# Publiczny adres aplikacji (bez końcowego „/") — używany do budowy adresów
+# zwrotnych OAuth. Dla wdrożenia GCP z sslip.io np. https://fit-<ip>.sslip.io.
+PUBLIC_URL = os.getenv("FIT_KRASNAL_PUBLIC_URL", _BASE_URL).rstrip("/")
+
+# Logowanie przez Google (OIDC, authlib). Tryb:
+#   password (domyślnie) — tylko e-mail + hasło, jak dotąd,
+#   oidc — tylko „Zaloguj przez Google" (POST /login i /register → 404),
+#   both — oba sposoby na stronie logowania.
+# Allowlist e-maili (małe litery, po przecinku) — konto spoza listy dostaje 403
+# i nic nie jest tworzone. Pusta lista w trybie oidc/both = nikt nie wejdzie.
+AUTH_MODE = os.getenv("FIT_KRASNAL_AUTH", "password").strip().lower() or "password"
+GOOGLE_CLIENT_ID = os.getenv("FIT_KRASNAL_GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("FIT_KRASNAL_GOOGLE_CLIENT_SECRET")
+ALLOWED_EMAILS = frozenset(
+    e.strip().lower() for e in os.getenv("FIT_KRASNAL_ALLOWED_EMAILS", "").split(",") if e.strip()
+)
+
 # RODO: wersja noty informacyjnej (/prywatnosc) i zgody na LLM/Strava. Zmiana wersji
 # unieważnia istniejące zgody (consent.has_consent porównuje wersje) — bumpować
 # tylko przy realnej zmianie treści noty, nie przy każdej literówce.
-PRIVACY_VERSION = os.getenv("FIT_KRASNAL_PRIVACY_VERSION", "2026-09-11")
+PRIVACY_VERSION = os.getenv("FIT_KRASNAL_PRIVACY_VERSION", "2026-09-16")
 # Termin dla istniejących testerów (baner, potem bramka) — data wdrożenia + 14 dni.
 CONSENT_DEADLINE = date(2026, 9, 17)
 

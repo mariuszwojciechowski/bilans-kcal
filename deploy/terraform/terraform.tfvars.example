@@ -1,0 +1,9 @@
+# Skopiuj do terraform.tfvars w tym katalogu (plik jest w .gitignore) i uzupełnij.
+project_id     = "my-gcp-project"
+region         = "us-central1"
+zone           = "us-central1-a"
+domain         = "fit.example.com"
+allowed_emails = ["you@example.com", "tester@example.com"]
+apk_viewers    = ["you@example.com", "tester@example.com"]
+apk_bucket_name = "my-unique-apk-bucket"
+# vertex_location = "europe-west1"

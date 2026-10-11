@@ -14,6 +14,10 @@ początek odpowiedniego pliku w `archive/` (najnowsze u góry). Format wpisu
 w archiwum: tytuł + **maksymalnie 5 punktów**; szczegóły implementacji zostają
 w komunikacie commita, nie tutaj.
 
+## Scalenie z upstreamem — [archive/done-v27-upstream-merge.md](archive/done-v27-upstream-merge.md)
+
+- Scalenie z upstreamem (18 commitów, 27.0.0)
+
 ## Kcal accuracy audit 2026-10 — [archive/done-kcal-audit-2026-10.md](archive/done-kcal-audit-2026-10.md)
 
 - Forecast expects 75% of the usual workout — explicit conservative shift (26.1.0)
@@ -26,6 +30,12 @@ w komunikacie commita, nie tutaj.
 
 ## v24–v25 — [archive/done-v24-v25.md](archive/done-v24-v25.md)
 
+- Infrastruktura forka na GCP: Terraform (SA bez kluczy, SSH tylko IAP, bucket APK, sekret OAuth), allowlista z metadanych VM, Vertex pod endpointem `global`; nota prywatności o regionie wg operatora; porządki po audycie przed publikacją (25.6.1)
+- Logowanie Google wewnątrz powłoki Android (`accounts.google.com` w `allowNavigation`; pełny przepływ i zdjęcie→Vertex zweryfikowane na telefonie) + klient OAuth w Secret Manager z loaderem na VM (25.6.0)
+- Utwardzenie publicznych interfejsów: nagłówki + CSP, CSRF po origin, filtr Host, limit zdjęcia 8 MB (25.5.0)
+- Gemini przez Vertex AI z konta serwera (backend `vertex`, bez kluczy API) (25.4.0)
+- Logowanie przez Google (OIDC, authlib) z allowlistą e-maili — wariant GCP dla jednego testera (25.3.0)
+- Most natywny w `mobile.html` dla powłoki Android (Capacitor): aparat, wibracje, Health Connect (25.2.0–25.2.2)
 - Integracja ze Strava — dla użytkowników bez Garmina (25.0.0, e102d2f)
 - Prognoza doby: spoczynek z historii Garmina zamiast Mifflina (24.9.2)
 - Cel dnia z prognozy pełnej doby + roszady na „Dziś" (24.4.0 f0f7080, 24.5.0 1f4d59d, 24.6.0)

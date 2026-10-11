@@ -4,14 +4,29 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from .config import DEBUG, DEV_SECRET_KEY, ENC_KEY, SECRET_KEY, USAGE_SALT, ensure_dirs
+from .config import (ALLOWED_HOSTS, DEBUG, DEV_SECRET_KEY, ENC_KEY, MAX_PHOTO_BYTES,
+                     SECRET_KEY, SESSION_MAX_AGE_S, USAGE_SALT, ensure_dirs)
 from .db import get_session, init_db
 from .deps import STATIC_DIR
 from .providers import garmin as garmin_provider
-from .routers import (auth as auth_router, dashboard, day, meals, profile, pwa,
+from .routers import (auth as auth_router, dashboard, day, meals, oidc, profile, pwa,
                       settings, transfer, trends, usage)
+from .middleware import BodyLimitMiddleware, SameOriginMiddleware, SecurityHeadersMiddleware
 from .services import crypto, meal_queue
+
+
+def install_hardening(app: FastAPI, *, debug: bool, allowed_hosts: list[str],
+                      photo_limit: int = MAX_PHOTO_BYTES) -> None:
+    """Middleware utwardzające (app/middleware.py). Osobna funkcja, żeby testy
+    mogły zbudować małą aplikację z tą samą konfiguracją. `add_middleware`
+    owija od zewnątrz: ostatni dodany działa pierwszy."""
+    app.add_middleware(BodyLimitMiddleware, limit=photo_limit, paths=("/api/meals/photo",))
+    app.add_middleware(SameOriginMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware, hsts=not debug)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+
 
 app = FastAPI(title="Fit Krasnal")
 app.add_middleware(
@@ -19,10 +34,13 @@ app.add_middleware(
     secret_key=SECRET_KEY,
     https_only=not DEBUG,   # lokalny dev po http potrzebuje https_only=False
     same_site="lax",
+    max_age=SESSION_MAX_AGE_S,
 )
+install_hardening(app, debug=DEBUG, allowed_hosts=ALLOWED_HOSTS)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 app.include_router(auth_router.router)
+app.include_router(oidc.router)
 app.include_router(profile.router)
 app.include_router(day.router)
 app.include_router(meals.router)

@@ -97,6 +97,17 @@ def test_api_usage_known_event_bumps_counter(client):
     db.close()
 
 
+@pytest.mark.parametrize("event", [
+    "native_app_open", "photo_native_camera", "photo_native_gallery", "steps_health_connect",
+])
+def test_api_usage_accepts_native_bridge_events(client, event):
+    """Zdarzenia powłoki Android (mobile.html, sekcja „most natywny") muszą
+    być zarejestrowane w EVENTS — inaczej /usage nie pokaże adopcji."""
+    _register(client)
+    r = client.post("/api/usage", json={"event": event})
+    assert r.status_code == 204
+
+
 def test_usage_page_for_non_admin_is_404(client):
     _register(client, email="alice@example.com")
     r = client.get("/usage")

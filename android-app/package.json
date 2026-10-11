@@ -1,0 +1,30 @@
+{
+  "name": "android-app",
+  "version": "1.0.0",
+  "description": "Powłoka Capacitor (Android) dla fit.krasnal.cc",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "sync": "cap sync android",
+    "build": "cd android && ./gradlew assembleDebug",
+    "open": "cap open android"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/camera": "^8.2.4",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
+    "capacitor-health": "^8.2.0"
+  },
+  "private": "true",
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

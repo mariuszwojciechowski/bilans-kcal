@@ -140,9 +140,14 @@
   <p class="muted">Wystarczy jeden z kluczy. Aktywny backend:
     {% if backend %}<b class="ok">{{ backend }}</b>{% else %}<b class="bad">brak — posiłki trafiają do kolejki</b>{% endif %}</p>
   <form method="post" action="/settings/llm">
+    {% if vertex_active %}
+    <p class="muted"><b>Szacowanie działa przez konto serwera (Vertex AI)</b> — własny
+      klucz Gemini nie jest potrzebny.</p>
+    {% else %}
     <label>Gemini API key <span class="muted">(zalecane — darmowy tier)</span>
       {% if gemini_masked %}<span class="ok">· zapisany: {{ gemini_masked }}</span>{% endif %}</label>
     <input name="gemini_api_key" type="password" placeholder="AIza... / AQ.…" autocomplete="off">
+    {% endif %}
     <label>Claude API key <span class="muted">(alternatywa, płatny)</span>
       {% if claude_masked %}<span class="ok">· zapisany: {{ claude_masked }}</span>{% endif %}</label>
     <input name="anthropic_api_key" type="password" placeholder="sk-ant-..." autocomplete="off">

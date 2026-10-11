@@ -26,6 +26,7 @@ jobs:
 
   deploy:
     needs: test               # zły kod nie trafia na serwer
+    if: github.repository == 'mariuszwojciechowski/bilans-kcal'   # forki: tylko testy
     runs-on: ubuntu-latest
     steps:
       - name: Wdrożenie przez SSH

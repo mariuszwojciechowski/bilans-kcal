@@ -15,20 +15,108 @@ Deploy uruchamia się automatycznie po pushu na `main`.
 
 Dane leżą **poza katalogiem repo**, więc `git reset --hard` przy deployu ich nie rusza.
 
-## 1. Bootstrap maszyny (raz)
+## 0. Infrastruktura GCP (Terraform)
 
-Po SSH na VM:
+Katalog `deploy/terraform/` opisuje całą infrastrukturę: włączenie API,
+konto usługi VM (tylko `roles/aiplatform.user` + `roles/logging.logWriter`,
+bez kluczy), regionalny adres statyczny (tier STANDARD), reguły firewalla
+(80/443 z internetu, 22 **tylko** z zakresu IAP `35.235.240.0/20`) i VM
+`e2-micro` (free tier w `us-central1`, 30 GB pd-standard, Debian 12,
+Shielded VM, OS Login). **Prawdziwe wartości (`terraform.tfvars`), stan i
+notatki (`NOTES.local.md`) leżą obok konfiguracji w `deploy/terraform/` i są
+w `.gitignore`** — nigdy nie trafiają do repo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mariuszwojciechowski/bilans-kcal/main/deploy/setup-vm.sh | sudo bash
+cd deploy/terraform
+cp terraform.tfvars.example terraform.tfvars      # uzupełnij
+terraform init -backend-config="path=terraform.tfstate"
+terraform plan  -var-file=terraform.tfvars
+terraform apply -var-file=terraform.tfvars
 ```
 
-Skrypt: instaluje pakiety, zakłada użytkownika `fitkrasnal`, klonuje repo, robi venv,
-generuje `FIT_KRASNAL_SECRET_KEY`, `FIT_KRASNAL_ENC_KEY` i `FIT_KRASNAL_USAGE_SALT`,
-wstawia usługę systemd i wąską regułę sudo (pozwala CI tylko na restart tej jednej
-usługi, nie na cokolwiek innego), a także timer `fit-krasnal-queue.timer`, który co
-minutę woła `scripts/process_meal_queue.py` (przetwarza zaległe posiłki offline dla
-wszystkich użytkowników — patrz `app/services/meal_queue.py`).
+Jeśli adres statyczny albo API istniały wcześniej (ręcznie), zaimportuj je
+przed `apply`, żeby stan się zgadzał:
+
+```bash
+terraform import -var-file=... 'google_project_service.apis["compute.googleapis.com"]' <project>/compute.googleapis.com
+terraform import -var-file=... google_compute_address.ip projects/<project>/regions/<region>/addresses/<nazwa>
+# sekret OAuth utworzony wcześniej ręcznie (gcloud secrets create …) i jego binding:
+terraform import -var-file=... google_secret_manager_secret.oauth projects/<project>/secrets/fit-krasnal-oauth
+terraform import -var-file=... google_secret_manager_secret_iam_member.oauth_vm_accessor \
+  "projects/<project>/secrets/fit-krasnal-oauth roles/secretmanager.secretAccessor serviceAccount:<sa-email>"
+```
+
+SSH wyłącznie tunelem IAP (output `ssh_command`):
+
+```bash
+gcloud compute ssh fit-krasnal --project <project> --zone <zone> --tunnel-through-iap
+```
+
+Uwaga: domyślna VPC ma regułę `default-allow-ssh` (22 z `0.0.0.0/0`, bez
+tagów), która obejmuje **każdą** VM w sieci — dopóki istnieje, port 22 jest
+widoczny z internetu mimo reguły IAP. Terraform jej nie rusza; usuń ją
+świadomie (`gcloud compute firewall-rules delete default-allow-ssh`).
+
+Ekran zgody OAuth i klient OAuth (Web application, origin
+`https://<FIT_DOMAIN>`, redirect `https://<FIT_DOMAIN>/auth/google/callback`)
+powstają ręcznie w Console i nie są w Terraformie.
+
+### Allowlista logowania w metadanych VM
+
+Lista e-maili dopuszczonych do logowania (`FIT_KRASNAL_ALLOWED_EMAILS`)
+**nie** mieszka w `/etc/fit-krasnal/env`, tylko w metadanych instancji
+(klucz `fit-krasnal-allowed-emails`, zmienna `allowed_emails` w Terraformie).
+Unit `fit-krasnal.service` woła przed startem `deploy/fetch-metadata-env.sh`,
+który przepisuje ją do `/run/fit-krasnal/env` (drugi `EnvironmentFile`,
+nadpisuje `/etc`). Dodanie testera bez Terraforma:
+
+```bash
+gcloud compute instances add-metadata fit-krasnal --zone <zone> \
+  --metadata fit-krasnal-allowed-emails=a@example.com,b@example.com
+gcloud compute ssh fit-krasnal --zone <zone> --tunnel-through-iap -- sudo systemctl restart fit-krasnal
+```
+
+Potem dopisz ten sam e-mail do `allowed_emails` w tfvars, inaczej następny
+`terraform plan` pokaże dryf i `apply` go cofnie.
+
+### Bucket na APK
+
+`google_storage_bucket.apk` (domyślnie `fit-krasnal-apk`): prywatny,
+`uniform_bucket_level_access`, `public_access_prevention = enforced`,
+`roles/storage.objectViewer` tylko dla kont z `apk_viewers` — nic więcej.
+Wgranie i link do pobrania (wymaga zalogowania kontem z listy):
+
+```bash
+gcloud storage cp android-app/dist/fit-krasnal-debug.apk gs://<bucket>/fit-krasnal.apk
+# https://storage.cloud.google.com/<bucket>/fit-krasnal.apk
+```
+
+## 1. Bootstrap maszyny (raz)
+
+Po SSH na VM (skrypt jest idempotentny, można go powtarzać):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/<owner>/bilans-kcal/main/deploy/setup-vm.sh \
+  | sudo FIT_DOMAIN=fit.example.com FIT_AUTH=oidc FIT_ALLOWED_EMAILS=you@example.com \
+         FIT_LLM=vertex FIT_VERTEX_PROJECT=<project> FIT_VERTEX_LOCATION=europe-west1 bash
+```
+
+Parametry: `FIT_DOMAIN` (wymagane), `FIT_REPO_URL` (domyślnie fork
+`bobert-bag-bounty/bilans-kcal`), `FIT_BRANCH`, `FIT_PYTHON` (domyślnie 3.12),
+oraz opcjonalne `FIT_AUTH`, `FIT_ALLOWED_EMAILS`, `FIT_LLM`,
+`FIT_VERTEX_PROJECT`, `FIT_VERTEX_LOCATION`, które przy pierwszym uruchomieniu
+trafiają do `/etc/fit-krasnal/env`.
+
+Skrypt: instaluje pakiety (w tym `caddy` i `unattended-upgrades`), zakłada
+użytkownika `fitkrasnal`, klonuje repo, instaluje Pythona ≥ 3.12 przez `uv`
+do `/opt/uv-python` (poza `/home`, bo usługa ma `ProtectHome=true`), robi
+venv, generuje `FIT_KRASNAL_SECRET_KEY`, `FIT_KRASNAL_ENC_KEY`
+i `FIT_KRASNAL_USAGE_SALT`, pisze `/etc/caddy/Caddyfile` (HTTPS z Let's
+Encrypt dla `FIT_DOMAIN`, `reverse_proxy 127.0.0.1:8321`, nagłówek `Server`
+usunięty, bez rate-limitu — limituje aplikacja), wstawia usługę systemd
+i wąską regułę sudo (CI może tylko restartować tę jedną usługę), a także timer
+`fit-krasnal-queue.timer`, który co minutę woła `scripts/process_meal_queue.py`
+(patrz `app/services/meal_queue.py`).
 
 Trzy zmienne, których brak boli inaczej: bez `FIT_KRASNAL_SECRET_KEY` (własnego)
 i `FIT_KRASNAL_ENC_KEY` proces **nie wstanie** (świadomie — lepiej awaria niż ciche
@@ -37,14 +125,25 @@ statystyki użycia nie zapiszą ani jednego zdarzenia i `/usage` zostanie puste 
 w logu jest wtedy ostrzeżenie przy starcie. Sól jest **stała**: jej zmiana zrywa
 ciągłość statystyk (ten sam użytkownik dostaje nowy pseudonim).
 
-Potem ustaw kod zaproszenia:
+Potem uzupełnij logowanie: dla `FIT_KRASNAL_AUTH=oidc` wpisz
+`FIT_KRASNAL_GOOGLE_CLIENT_ID/SECRET`, dla `password` — kod zaproszenia:
 
 ```bash
-sudo nano /etc/fit-krasnal/env      # wpisz FIT_KRASNAL_INVITE_CODE=...
+sudo nano /etc/fit-krasnal/env
 sudo systemctl restart fit-krasnal
 ```
 
 ## 2. Klucz SSH dla GitHub Actions
+
+> **W wariancie Terraform (sekcja 0) ten krok nie ma zastosowania.** Firewall
+> dopuszcza port 22 **tylko** z zakresu IAP (`35.235.240.0/20`) — o ile
+> usunięto regułę `default-allow-ssh` (sekcja 0) — więc runner GitHub Actions
+> nie dosięgnie VM i automatyczny deploy przez SSH nie zadziała.
+> Zamiast niego wdrażaj ręcznie tunelem IAP:
+> `gcloud compute ssh <vm> --tunnel-through-iap --zone <zone> --command 'bash /opt/fit-krasnal/deploy/deploy.sh'`.
+> Otwarcie 22 dla GitHuba (dodatkowa reguła firewalla na IP runnerów i klucz
+> jak niżej) to **świadoma decyzja**, nie stan domyślny. Poniższy podrozdział
+> opisuje właśnie ten wariant z otwartym 22.
 
 **Na swoim komputerze** (nie na VM) wygeneruj parę tylko do deployu:
 
@@ -74,7 +173,8 @@ z `authorized_keys` na VM i wygeneruj nową parę.
 
 ## 3. Caddy
 
-`/etc/caddy/Caddyfile` — strona-rozdzielnik na domenie głównej plus aplikacja:
+`setup-vm.sh` pisze minimalny `/etc/caddy/Caddyfile` dla `FIT_DOMAIN`. Wariant
+z domeną główną (landing) plus aplikacją wygląda tak:
 
 ```
 krasnal.cc {
@@ -173,6 +273,98 @@ wypisany nowy klucz jako `FIT_KRASNAL_ENC_KEY` ręcznie i
 starego klucza (zgodnie z wypisanym środowiskiem `EnvironmentFile`), a baza
 ma już sekrety zaszyfrowane nowym — restart jest częścią rotacji, nie
 opcjonalnym krokiem.
+
+## Wariant GCP z logowaniem Google
+
+Fork dla jednego testera na własnym projekcie GCP: zamiast kodu zaproszenia
+i hasła — logowanie kontem Google (OIDC) z allowlistą adresów. Żadnych
+wartości nie ma w repo, wszystko przez zmienne środowiskowe w
+`/etc/fit-krasnal/env`:
+
+| Zmienna | Znaczenie |
+|---|---|
+| `FIT_KRASNAL_PUBLIC_URL` | publiczny adres aplikacji, np. `https://fit-<ip>.sslip.io` |
+| `FIT_KRASNAL_AUTH` | `oidc` (tylko Google) albo `both` (Google + hasło) |
+| `FIT_KRASNAL_GOOGLE_CLIENT_ID` / `_SECRET` | klient OAuth 2.0 „Web application" z Google Cloud Console |
+| `FIT_KRASNAL_ALLOWED_EMAILS` | lista e-maili (małe litery, po przecinku), którym wolno się zalogować |
+| `FIT_KRASNAL_ALLOWED_HOSTS` | lista hostów akceptowanych w nagłówku `Host` (domyślnie `*`) |
+| `FIT_KRASNAL_VERTEX_PROJECT` / `_LOCATION` | Gemini przez Vertex AI z konta serwera (ADC), bez kluczy API. Kod domyślnie `europe-west1`; **najnowsze modele (np. `gemini-3.5-flash`) bywają dostępne tylko pod `global`** — fork używa `global`. Nota `/prywatnosc` upstreamu mówi o regionie UE; operator, który wybiera `global`, powinien ją dopasować |
+| `FIT_KRASNAL_GEMINI_MODEL` | model Gemini (kod domyślnie `gemini-3.5-flash`). Obserwacja 2026-10-08: w `europe-west1` ten model zwracał `404 Publisher model … was not found`, pod `global` działa; `gemini-2.5-flash` działa w obu. Proces WWW przy błędzie LLM po cichu odkłada posiłek do kolejki — treść błędu zobaczysz w `journalctl -u fit-krasnal-queue`. Gdy model zwraca 404: najpierw `FIT_KRASNAL_VERTEX_LOCATION=global`, potem dopiero starszy model |
+
+W konsoli Google (APIs & Services → Credentials) adres zwrotny (redirect URI)
+klienta musi być dokładnie `<FIT_KRASNAL_PUBLIC_URL>/auth/google/callback`.
+Konto usługi VM potrzebuje roli `roles/aiplatform.user`, jeśli używasz Vertex AI.
+
+### Klient OAuth w Secret Manager
+
+Klient OAuth nie leży w repo ani w stanie Terraforma. Terraform
+(`deploy/terraform`) tworzy tylko pusty sekret o nazwie z `var.oauth_secret_name`
+(domyślnie `fit-krasnal-oauth`) i daje kontu usługi VM rolę
+`roles/secretmanager.secretAccessor`. Wersję sekretu dodaje operator; payload
+to dokładnie dwie linie w formacie pliku env:
+
+```
+FIT_KRASNAL_GOOGLE_CLIENT_ID=...
+FIT_KRASNAL_GOOGLE_CLIENT_SECRET=...
+```
+
+Na VM wczytuje je skrypt [`deploy/load-oauth-secret.sh`](load-oauth-secret.sh).
+Root uruchamia **kopię spoza checkoutu** (`/opt/fit-krasnal` należy do
+użytkownika usługi, który robi tam `git pull` — skrypt z checkoutu mógłby
+zostać podmieniony). `gcloud` jest na obrazie Debiana z GCE; skrypt używa go
+z pustym `CLOUDSDK_CONFIG`, więc widzi tylko konto usługi VM z serwera
+metadanych (projekt też stamtąd). Pobiera wersję `latest` do pliku 0600 na
+tmpfs, sprawdza — bez wypisywania wartości — że są dokładnie dwie linie
+`ID`/`SECRET` ze znakami `[A-Za-z0-9._-]`, podmienia w `/etc/fit-krasnal/env`
+dwie puste linie zostawione przez `setup-vm.sh` (zachowując
+`root:fitkrasnal 640`) i restartuje usługę:
+
+```bash
+sudo install -o root -g root -m 0755 /opt/fit-krasnal/deploy/load-oauth-secret.sh /usr/local/sbin/load-oauth-secret
+sudo /usr/local/sbin/load-oauth-secret            # [nazwa-sekretu], domyślnie fit-krasnal-oauth
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' <FIT_KRASNAL_PUBLIC_URL>/auth/google
+# 302 https://accounts.google.com/… = OK; 503 = brak klienta w env; 404 = FIT_KRASNAL_AUTH bez oidc
+```
+
+Nie wypisuj zawartości sekretu na terminal (`cat`, `gcloud … access` bez
+przekierowania); sprawdzaj obecność, nie wartości:
+`sudo grep -c '^FIT_KRASNAL_GOOGLE_CLIENT_\(ID\|SECRET\)=.' /etc/fit-krasnal/env` → `2`.
+
+Sekret ma `prevent_destroy`: zmiana jego nazwy albo replikacji wymaga
+świadomego usunięcia tego bloku (stare wersje przepadają), zmiana etykiety
+zasobu w HCL — `terraform state mv`.
+
+### Kreator: klient OAuth i wersja sekretu (konsola, działa z telefonu)
+
+Etykiety podane po angielsku (konsola w tym języku jest stabilniejsza; po
+polsku są tłumaczone 1:1). Wklejanie z telefonu: uważaj na autokorektę
+i „inteligentne" cudzysłowy — skrypt z poprzedniego podrozdziału odrzuci
+payload, w którym brakuje którejś linii, ale nie wykryje literówki w wartości.
+
+1. https://console.cloud.google.com/auth/overview → wybierz projekt → jeśli
+   to pierwszy raz: *Get started* → App name „Fit Krasnal", support e-mail,
+   Audience **External**, contact e-mail → *Create*. Potem *Audience* →
+   *Test users* → *Add users* → e-maile z allowlisty (w trybie *Testing*
+   tylko oni mogą się zalogować). Zakresów (*Data access*) nie dodawaj —
+   `openid email profile` są domyślne.
+2. https://console.cloud.google.com/auth/clients → *+ Create client* →
+   Application type **Web application**, Name np. „fit-krasnal-web".
+3. *Authorized redirect URIs* → *+ Add URI* → dokładnie
+   `<FIT_KRASNAL_PUBLIC_URL>/auth/google/callback` (ten sam host, co
+   `FIT_KRASNAL_PUBLIC_URL`, `https`, bez ukośnika na końcu). *Authorized
+   JavaScript origins* zostaw puste. *Create*.
+4. W oknie „OAuth client created" skopiuj *Client ID* i *Client secret*
+   (sekret widać też później w szczegółach klienta). Nie pobieraj pliku JSON;
+   jeśli pobrałeś — usuń go po wklejeniu do Secret Managera.
+5. https://console.cloud.google.com/security/secret-manager → sekret
+   `fit-krasnal-oauth` (istnieje po `terraform apply`) → *+ New version*.
+6. *Secret value* → wklej dokładnie dwie linie
+   `FIT_KRASNAL_GOOGLE_CLIENT_ID=<id>` i
+   `FIT_KRASNAL_GOOGLE_CLIENT_SECRET=<sekret>` (bez spacji wokół `=`, bez
+   cudzysłowów, każda w osobnej linii) → *Add new version*.
+7. Na VM: komenda z `terraform output oauth_secret_load_command` (kopia
+   skryptu do `/usr/local/sbin` + uruchomienie). Test:
+   `<FIT_KRASNAL_PUBLIC_URL>/login` → „Zaloguj przez Google".
 
 ## Onboarding testera
 

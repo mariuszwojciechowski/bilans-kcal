@@ -55,6 +55,7 @@ def settings_page(request: Request, db: Session = Depends(db_session),
             "claude_masked": settings_service.masked(stored.get("anthropic_api_key")),
             "backend": (meal_vision.pick_backend(keys.gemini, keys.anthropic)
                          if meal_vision.llm_configured(keys.gemini, keys.anthropic) else None),
+            "vertex_active": meal_vision.pick_backend(keys.gemini, keys.anthropic) == "vertex",
             "pending_count": pending_count or 0,
             "retention_days": meal_queue.RETENTION_DAYS,
             "target_weight_kg": profile.target_weight_kg if profile else None,

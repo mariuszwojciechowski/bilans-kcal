@@ -52,9 +52,11 @@ async def estimate_meal_photo(
     background.add_task(maybe_sync, user.id)
     usage_service.bump(db, user.id, "meal_photo")
     keys = settings_service.get_llm_keys(db, user.id)
-    data = await photo.read()
+    # Content-Length sprawdza już BodyLimitMiddleware; tu czytamy najwyżej
+    # limit+1 bajtów, żeby żądanie bez Content-Length też nie wciągnęło całości.
+    data = await photo.read(MAX_PHOTO_BYTES + 1)
     if len(data) > MAX_PHOTO_BYTES:
-        raise HTTPException(413, "Zdjęcie za duże (limit 15 MB)")
+        raise HTTPException(413, f"Zdjęcie za duże (limit {MAX_PHOTO_BYTES // (1024 * 1024)} MB)")
     try:
         data = await run_in_threadpool(meal_queue.downscale_photo, data)
     except Exception as exc:

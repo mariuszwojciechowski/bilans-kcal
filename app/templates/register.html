@@ -84,5 +84,19 @@
     <a href="/prywatnosc">Prywatność</a> · Kontakt: <a href="mailto:krasnal@krasnal.cc">krasnal@krasnal.cc</a>
   </p>
 </main>
+<script>
+// Powłoka Android (UA „FitKrasnalApp"): po nawigacji formularzem (POST → 303 → GET)
+// WebView ładuje stronę bez mostka Capacitora — jednorazowy reload go przywraca.
+(function () {
+  if (!/FitKrasnalApp/.test(navigator.userAgent)) return;
+  const key = "fk_native_reload:" + location.href;
+  try {
+    if (window.Capacitor) { sessionStorage.removeItem(key); return; }
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+    location.replace(location.href);
+  } catch (e) { /* brak sessionStorage — nie pętlimy */ }
+})();
+</script>
 </body>
 </html>

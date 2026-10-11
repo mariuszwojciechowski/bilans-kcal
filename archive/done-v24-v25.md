@@ -6,6 +6,138 @@ Pełne wpisy przeniesione z [DONE.md](../DONE.md), gdzie został indeks.
 
 ---
 
+## Infrastruktura forka na GCP + porządki po audycie przed publikacją (25.6.1)
+
+- **Terraform (`deploy/terraform/`):** API, konto usługi VM tylko z `aiplatform.user`
+  i `logging.logWriter` (bez kluczy), firewall 80/443 + SSH wyłącznie z zakresu IAP,
+  e2-micro Shielded z OS Login, statyczny IP, bucket APK (UBLA, blokada dostępu
+  publicznego, `objectViewer` per e-mail), sekret OAuth w Secret Manager z IAM dla SA.
+  Stan lokalny, tfvars i notatki obok konfiguracji, w `.gitignore`.
+- **Konfiguracja z GCP, nie z dysku:** allowlista logowania w metadanych VM
+  (`deploy/fetch-metadata-env.sh` jako `ExecStartPre`), klient OAuth ładowany
+  `deploy/load-oauth-secret.sh`. `setup-vm.sh` sparametryzowany (`FIT_DOMAIN`,
+  `FIT_REPO_URL` — pusty zostawia istniejący origin), jawne domyślne
+  `FIT_KRASNAL_LLM=auto` i `FIT_KRASNAL_VERTEX_LOCATION=global` zamiast pustych.
+- **Vertex:** `gemini-3.5-flash` nie istnieje w `europe-west1` (2026-10-08), działa
+  pod `global`; fork używa `global`. `/prywatnosc`: region „wybrany przez operatora
+  (domyślnie UE)" zamiast twardego „w UE"; usunięty martwy fallback daty noty.
+- **Po audycie:** job `deploy` w workflow tylko dla repo upstreamu (forki: same
+  testy), `*.jks`/`*.keystore` w `.gitignore`, `apk_bucket_name` bez domyślnej
+  wartości, cudzysłowy w etykietach Mermaid, podziękowanie w README.
+
+## Logowanie Google wewnątrz powłoki Android + klient OAuth w Secret Manager (25.6.0)
+
+- **Problem:** Capacitor otwierał `accounts.google.com` w zewnętrznej
+  przeglądarce (`Bridge.launchIntent` → `ACTION_VIEW` dla hosta spoza
+  `allowNavigation`), więc sesja po OIDC lądowała w Chrome, nie w aplikacji.
+  Fix: `accounts.google.com` w `server.allowNavigation` (`capacitor.config.ts`);
+  bump Y, bo zmienia się miejsce logowania. Zweryfikowane na telefonie
+  z prawdziwym klientem: hasło → zgoda → callback → sesja w WebView →
+  zdjęcie z galerii → Vertex (`gemini-2.5-flash`; 3.5-flash zwracał 404
+  w `europe-west1` 2026-10-08, patrz deploy/README.md).
+- **UA bez zmian:** test na telefonie (DevTools, prawdziwy UA WebView „; wv",
+  klient „Web application") doszedł do kroku z hasłem bez
+  `disallowed_useragent` — `overrideUserAgent` zostaje jako opisane w README
+  obejście na wypadek blokady; docelowo Chrome Custom Tabs + deep link.
+  Koszt `allowNavigation`: Google dostaje kanał `androidBridge` (README).
+- **Sekret OAuth:** `google_secret_manager_secret` + IAM `secretAccessor` dla
+  konta VM w Terraformie (zaimportowane, plan bez zmian, `prevent_destroy`);
+  wersję (2 linie env) dodaje operator w konsoli — kreator w `deploy/README.md`.
+- **`deploy/load-oauth-secret.sh`:** gcloud → plik tymczasowy 0600, walidacja
+  kształtu (2 linie, każdy klucz raz, bez białych znaków), podmiana linii
+  w `/etc/fit-krasnal/env` z zachowaniem `root:fitkrasnal 640`, restart;
+  wartości nie trafiają do zmiennych ani na terminal.
+- **Statystyki:** bez nowych zdarzeń — adopcję pokazuje istniejące
+  `login_google` na `/usage`, funkcjonowanie powłoki `native_app_open`.
+
+## Utwardzenie publicznych interfejsów (25.5.0)
+
+- **`app/middleware.py`** (czyste ASGI, bez nowych frameworków), wpinane przez
+  `main.install_hardening()` — ta sama funkcja buduje stos w testach
+  (`tests/test_hardening.py`).
+- **Nagłówki:** `X-Content-Type-Options: nosniff`, `Referrer-Policy:
+  same-origin`, `X-Frame-Options: DENY`, `Permissions-Policy: camera=(self),
+  geolocation=()`, HSTS rok + subdomeny tylko poza DEBUG, CSP `default-src
+  'self'` z `'unsafe-inline'` dla skryptów/stylów (cały JS siedzi w
+  szablonach), `form-action 'self' https://accounts.google.com`. Szablony nie
+  ładują nic z CDN, więc nic więcej nie trzeba było otwierać.
+- **CSRF:** żądania nie-GET/HEAD/OPTIONS z `Sec-Fetch-Site` innym niż
+  `same-origin`/`none` albo z `Origin`/`Referer` o innym hoście niż `Host` →
+  403 JSON. Bez tych nagłówków (curl, testy) przepuszczamy — sesja jest i tak
+  `SameSite=Lax`. Powłoka Android ładuje stronę z hosta API, więc przechodzi.
+- **Host i sesja:** `TrustedHostMiddleware` z `FIT_KRASNAL_ALLOWED_HOSTS`
+  (domyślnie `*`); ciasteczko sesji jawnie `max_age` 14 dni, dalej
+  `https_only=not DEBUG`, `SameSite=Lax`.
+- **Zdjęcie:** limit 15 → 8 MB; `BodyLimitMiddleware` odrzuca po
+  `Content-Length` zanim multipart zostanie wczytany, a endpoint czyta
+  najwyżej limit+1 bajtów.
+
+## Gemini przez Vertex AI z konta serwera (backend `vertex`) (25.4.0)
+
+- **Po co:** VM na GCP ma konto usługi z `roles/aiplatform.user` — Gemini
+  wołany przez Vertex AI z Application Default Credentials, bez kluczy API
+  użytkownika ani operatora.
+- **Wybór backendu (`meal_vision.pick_backend`):** `FIT_KRASNAL_LLM` =
+  `auto|claude|gemini|vertex`; w `auto`: klucz Gemini usera → `gemini`,
+  inaczej `vertex` gdy jest `FIT_KRASNAL_VERTEX_PROJECT`, inaczej klucz z env,
+  inaczej `claude`. `llm_configured()` w vertex zwraca True bez klucza.
+- **Klient:** `gemini_client(backend, key)` → `genai.Client(vertexai=True,
+  project=…, location=FIT_KRASNAL_VERTEX_LOCATION lub "europe-west1")` albo
+  `genai.Client(api_key=…)`; `_estimate_gemini` przyjmuje `client` (testy
+  z atrapą, bez sieci).
+- **UI:** `/settings` i zakładka Ustawienia w `mobile.html` chowają pole klucza
+  Gemini i pokazują „Szacowanie działa przez konto serwera (Vertex AI)".
+- **Prywatność:** `/prywatnosc` — nowy odbiorca Google Cloud Vertex AI
+  (zdjęcia/opisy posiłków, region UE, tylko gdy operator włączy tryb vertex);
+  wersja noty podniesiona już w 25.3.0 (2026-09-16).
+
+## Logowanie przez Google (OIDC, authlib) z allowlistą e-maili (25.3.0)
+
+- **Kontekst:** fork dla jednego testera na własnym projekcie GCP, bez kodu
+  zaproszenia. `FIT_KRASNAL_AUTH` = `password` (domyślnie, jak dotąd) | `oidc`
+  | `both`; `FIT_KRASNAL_GOOGLE_CLIENT_ID/_SECRET`, `FIT_KRASNAL_ALLOWED_EMAILS`,
+  `FIT_KRASNAL_PUBLIC_URL` (adres zwrotny `<PUBLIC_URL>/auth/google/callback`).
+- **Router `app/routers/oidc.py`:** `GET /auth/google` (authorization code +
+  PKCE S256, `state`/`nonce` w sesji przez authlib), `GET /auth/google/callback`
+  (ID token weryfikuje authlib: issuer, audience, exp, nonce; wymagany
+  `email_verified`). E-mail spoza allowlisty → 403 „Konto nieuprawnione", nic
+  nie powstaje.
+- **Konto:** nowa kolumna `User.google_sub` (migracja addytywna + unikalny
+  indeks); dopasowanie najpierw po `sub`, potem po e-mailu (stare konto
+  z hasłem dostaje `sub`). Konto z Google ma `password_hash=None` i nigdy nie
+  wchodzi hasłem. W trybie `oidc` `POST /login` i oba `/register` → 404,
+  `/login` pokazuje tylko „Zaloguj przez Google".
+- **Statystyki:** zdarzenie `login_google` w `usage.EVENTS` (obok `login`),
+  widoczne na `/usage`. Testy `tests/test_oidc.py` z atrapą klienta authlib.
+- **Prywatność:** `/prywatnosc` — nowy odbiorca (Google: e-mail i identyfikator
+  konta przy logowaniu), `PRIVACY_VERSION` → 2026-09-16 (ponowna zgoda).
+  `deploy/README.md` — sekcja „Wariant GCP z logowaniem Google" bez realnych
+  wartości.
+
+## Most natywny w `mobile.html` dla powłoki Android (Capacitor) (25.2.0–25.2.2)
+
+- **Kontekst:** `android-app/` (Capacitor) ładuje `https://fit.krasnal.cc/mobile`
+  w WebView i wstrzykuje `window.Capacitor`. Cała obsługa siedzi w jednej
+  sekcji „most natywny" w `mobile.html`; `NATIVE = false` w przeglądarce =
+  zero zmian w UI. Po POST → 303 → GET WebView gubi mostek, więc przy UA
+  `FitKrasnalApp` bez `window.Capacitor` strona raz się przeładowuje
+  (flaga w `sessionStorage`; też w `login.html`/`register.html`) (25.2.2).
+- **Zdjęcie:** w trybie natywnym `<input type=file>` znika, są przyciski
+  „Zrób zdjęcie" / „Z galerii" (`Camera.getPhoto`, base64 → Blob jpeg,
+  miniatura + „usuń"); `estimate()` wysyła ten Blob tym samym polem `photo`,
+  bez `downscale()`; `resetAddForm()` go czyści.
+- **Wibracje:** `Haptics.impact({style:'Light'})` po zapisie posiłku i wagi,
+  no-op bez pluginu. **Health Connect:** przycisk „Kroki z Health Connect"
+  w Krokach tylko gdy plugin `capacitor-health` (`Plugins.HealthPlugin`)
+  istnieje; `isHealthAvailable` → `requestHealthPermissions(READ_STEPS)` →
+  `queryAggregated(steps, bucket day)` od lokalnej północy do następnej,
+  suma → istniejący `POST /api/day/{day}/steps` (25.2.1).
+- **Statystyki:** nowe zdarzenia `native_app_open` (raz przy starcie),
+  `photo_native_camera`, `photo_native_gallery`, `steps_health_connect`
+  w `usage.EVENTS` — widać na `/usage` w „top zdarzeń". Test w `test_usage.py`.
+- **Prywatność:** `privacy.html` bez zmian — zdjęcia idą do LLM pod istniejącą
+  zgodą, kroki to istniejące dane; żaden nowy odbiorca danych.
+
 ## Integracja ze Strava — dla użytkowników bez Garmina (25.0.0, e102d2f)
 
 **Implementacja:** Nowy provider Strava (`app/providers/strava.py`) z OAuth v3

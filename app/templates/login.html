@@ -36,6 +36,10 @@
   .banner { padding: 10px 14px; border-radius: 8px; font-size: 14px; }
   .banner.err { background: rgba(220,53,69,.12); }
   a { color: var(--green-med); }
+  a.google { display: block; text-align: center; text-decoration: none; padding: 9px 10px;
+             border-radius: 6px; border: 1px solid var(--stone); color: var(--ink);
+             font-weight: 600; margin-top: 10px; }
+  .or { text-align: center; margin: 12px 0 0; }
 </style>
 </head>
 <body>
@@ -49,6 +53,7 @@
 
   <section class="card">
     <h2>Logowanie</h2>
+    {% if auth_mode != "oidc" %}
     <form method="post" action="/login">
       <label for="email">E-mail</label>
       <input type="email" id="email" name="email" required autocomplete="username" autofocus>
@@ -56,13 +61,36 @@
       <input type="password" id="password" name="password" required autocomplete="current-password">
       <button class="primary" type="submit">Zaloguj</button>
     </form>
+    {% endif %}
+    {% if auth_mode in ("oidc", "both") %}
+    {% if auth_mode == "both" %}<p class="muted or">albo</p>{% endif %}
+    <a class="google" href="/auth/google">Zaloguj przez Google</a>
+    {% endif %}
+    {% if auth_mode != "oidc" %}
     <p class="muted" style="margin-bottom:0">
       Nie masz konta? <a href="/register">Zarejestruj się</a> (potrzebny kod zaproszenia).
     </p>
+    {% else %}
+    <p class="muted" style="margin-bottom:0">Dostęp mają tylko zaproszone konta Google.</p>
+    {% endif %}
   </section>
   <p class="muted" style="text-align:center;font-size:12px">
     <a href="/prywatnosc">Prywatność</a> · Kontakt: <a href="mailto:krasnal@krasnal.cc">krasnal@krasnal.cc</a>
   </p>
 </main>
+<script>
+// Powłoka Android (UA „FitKrasnalApp"): po nawigacji formularzem (POST → 303 → GET)
+// WebView ładuje stronę bez mostka Capacitora — jednorazowy reload go przywraca.
+(function () {
+  if (!/FitKrasnalApp/.test(navigator.userAgent)) return;
+  const key = "fk_native_reload:" + location.href;
+  try {
+    if (window.Capacitor) { sessionStorage.removeItem(key); return; }
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+    location.replace(location.href);
+  } catch (e) { /* brak sessionStorage — nie pętlimy */ }
+})();
+</script>
 </body>
 </html>

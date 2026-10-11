@@ -56,6 +56,9 @@ Uwaga: nowy odbiorca danych = bump `PRIVACY_VERSION` i ponowna zgoda testerów.
 części per producent: Polar, Fitbit/Google, Whoop, Oura, Apple, Health
 Connect, dodatki (Withings). Zanim cokolwiek zaczniesz — ankieta wśród
 testerów, kto co nosi; API producentów weryfikuj na starcie każdej części.
+Kroki z Health Connect czyta już przycisk PoC w `mobile.html`; waga z Health
+Connect jest tylko zadeklarowana (uprawnienie `READ_WEIGHT` w manifeście, kodu
+czytającego brak).
 
 ## „Usuń moje dane i konto" w Ustawieniach (6/10)
 
@@ -71,7 +74,10 @@ listy (kasowanie konta, czyszczenie historii) — nie implementuj ich osobno.
 implementacji, tylko listą warunków wejścia (token urządzenia zamiast
 ciasteczka, Health Connect/HealthKit, kasowanie konta, nazwa pakietu,
 formularze sklepowe). Dopóki pilot działa na `/mobile` jako PWA, nie jest
-na ścieżce krytycznej.
+na ścieżce krytycznej. Istnieje działający PoC powłoki Capacitor
+([android-app/README.md](android-app/README.md)) — PoC i testowy APK używają
+identyfikatora `cc.krasnal.fit`. Wybór **Flutter vs Capacitor** i ostateczna
+nazwa pakietu zostają decyzją autora.
 
 ## Prawdziwe „zapomniałem hasła" (mailem) (8/10)
 
@@ -94,5 +100,7 @@ który zapomni hasła, dopóki nie ma resetu mailem.
 
 Zadanie administracyjne, bez kodu: identyfikator aplikacji (np.
 `pl.fitkrasnal.app` / `cc.krasnal.fit`) do rezerwacji **zanim** cokolwiek
-pójdzie do sklepów — w Google Play nie da się go później zmienić. Wybór
-zapisz tutaj i w [deploy/README.md](deploy/README.md).
+pójdzie do sklepów — w Google Play nie da się go później zmienić. PoC powłoki
+Capacitor i testowy APK ([android-app/README.md](android-app/README.md)) używają
+już `cc.krasnal.fit` — to robocza wartość PoC, nie rozstrzygnięcie. Ostateczny
+wybór należy do autora; zapisz go tutaj i w [deploy/README.md](deploy/README.md).

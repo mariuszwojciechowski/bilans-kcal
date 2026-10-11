@@ -97,6 +97,15 @@ def _migrate(engine) -> None:
         if user_cols and "password_hash" not in user_cols:
             conn.execute(text("ALTER TABLE user ADD COLUMN password_hash VARCHAR"))
             conn.commit()
+        if user_cols and "google_sub" not in user_cols:
+            # Logowanie Google (OIDC): istniejące konta zostają z NULL i dopasują
+            # się po e-mailu przy pierwszym logowaniu Google (wtedy sub się zapisze).
+            conn.execute(text("ALTER TABLE user ADD COLUMN google_sub VARCHAR"))
+            conn.commit()
+            conn.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ix_user_google_sub ON user(google_sub)"
+            ))
+            conn.commit()
 
         meal_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(meal)"))]
         if meal_cols and "external_id" not in meal_cols:

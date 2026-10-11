@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import auth
-from ..config import INVITE_CODE, PRIVACY_VERSION
+from ..config import AUTH_MODE, INVITE_CODE, PRIVACY_VERSION
 from ..db import db_session
 from ..deps import STATIC_DIR, templates
 from ..models import User
@@ -20,6 +20,7 @@ LOGIN_ERRORS = {
     "bad": "Nieprawidłowy e-mail lub hasło.",
     "locked": (f"Za dużo nieudanych prób. Odczekaj "
                f"{auth.LOCKOUT_S // 60} minut i spróbuj ponownie."),
+    "google": "Logowanie przez Google nie powiodło się. Spróbuj ponownie.",
 }
 REGISTER_ERRORS = {
     "invite": "Nieprawidłowy kod zaproszenia.",
@@ -39,8 +40,16 @@ def _auth_page(request: Request, template: str, errors: dict, error: str | None)
         {
             "error": errors.get(error) if error else None,
             "has_logo": (STATIC_DIR / "logo.png").exists(),
+            "auth_mode": AUTH_MODE,
         },
     )
+
+
+def _password_routes_enabled() -> None:
+    """W trybie `oidc` hasła nie ma: formularze POST /login i /register → 404,
+    jakby ich nie było (nie 403 — nie ma po co ogłaszać, że istnieją)."""
+    if AUTH_MODE == "oidc":
+        raise HTTPException(404)
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -51,11 +60,15 @@ def login_page(request: Request, error: str | None = None):
 @router.post("/login")
 def login_submit(request: Request, email: str = Form(...), password: str = Form(...),
                  db: Session = Depends(db_session)):
+    _password_routes_enabled()
     email = email.strip().lower()
     if auth.is_locked_out(email):
         return RedirectResponse("/login?error=locked", status_code=303)
     user = db.scalar(select(User).where(User.email == email))
-    if user is None or not auth.verify_password(password, user.password_hash):
+    # Konto bez hasła (założone przez Google) nigdy nie wchodzi hasłem —
+    # verify_password(…, None) i tak zwraca False, ale niech to będzie jawne.
+    if (user is None or user.password_hash is None
+            or not auth.verify_password(password, user.password_hash)):
         auth.note_failed_login(email)
         return RedirectResponse("/login?error=bad", status_code=303)
     auth.reset_failed_login(email)
@@ -66,6 +79,7 @@ def login_submit(request: Request, email: str = Form(...), password: str = Form(
 
 @router.get("/register", response_class=HTMLResponse)
 def register_page(request: Request, error: str | None = None):
+    _password_routes_enabled()
     if not INVITE_CODE:
         raise HTTPException(503, "Rejestracja jest wyłączona.")
     return _auth_page(request, "register.html", REGISTER_ERRORS, error)
@@ -76,6 +90,7 @@ def register_submit(request: Request, email: str = Form(...), password: str = Fo
                     password2: str = Form(...), invite_code: str = Form(...),
                     consent_llm_photos: bool = Form(False),
                     db: Session = Depends(db_session)):
+    _password_routes_enabled()
     if not INVITE_CODE:
         raise HTTPException(503, "Rejestracja jest wyłączona.")
     ip = auth.client_ip(request)

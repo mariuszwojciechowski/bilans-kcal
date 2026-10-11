@@ -28,5 +28,5 @@ for i in $(seq 1 20); do
 done
 
 echo "BŁĄD: aplikacja nie odpowiedziała w 20 s" >&2
-sudo /bin/systemctl status fit-krasnal --no-pager | tail -20 >&2
+systemctl status fit-krasnal --no-pager | tail -20 >&2
 exit 1

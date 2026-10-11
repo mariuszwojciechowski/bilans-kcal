@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Fit Krasnal</string>
+    <string name="title_activity_main">Fit Krasnal</string>
+    <string name="package_name">cc.krasnal.fit</string>
+    <string name="custom_url_scheme">cc.krasnal.fit</string>
+</resources>

@@ -16,6 +16,9 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String, unique=True)
     password_hash: Mapped[str | None] = mapped_column(String)
+    # Identyfikator konta Google (claim `sub`) przy logowaniu OIDC — stały,
+    # w przeciwieństwie do e-maila; None dla kont z hasłem.
+    google_sub: Mapped[str | None] = mapped_column(String, unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

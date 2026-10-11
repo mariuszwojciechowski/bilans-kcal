@@ -10,6 +10,7 @@
 | `plans/<slug>.md` | gdy realizujesz konkretny punkt z TODO |
 | [DONE.md](DONE.md) | indeks zrobionych; **nie czytaj `archive/` całego** — wyciągnij sekcję: `awk '/^## <fragment>/,/^## /' archive/<plik>.md`, szukaj przez `grep -rn "<fraza>" archive/` |
 | [README.md](README.md) | co to za produkt (dla człowieka) |
+| [ARCHITEKTURA.md](ARCHITEKTURA.md) | gdy szukasz, **gdzie coś żyje albo co woła co**: żądanie→middleware→router→serwis→model, gdzie zapadają decyzje (auth, LLM, provider, kolejka), tabele „co czyta co" (env, `EVENTS`, `/api/*`), most natywny, wdrożenie |
 | [VERSIONING.md](VERSIONING.md) | jak podnieść `VERSION` (X/Y/Z) |
 | [deploy/README.md](deploy/README.md) | wdrożenie, VM, onboarding testera |
 | [WYMAGANIA.md](WYMAGANIA.md) | **dokument historyczny** (sprzed multi-user) — tylko gdy szukasz pierwotnego kontraktu; nie aktualizuj |
@@ -27,14 +28,21 @@ to część „done", nie opcjonalny krok.
 - Deploy: `git push` na `main` → GitHub Actions → SSH na VM (`deploy/deploy.sh`)
   → restart systemd. **Czerwony pytest = brak deploya. Nie ma staging'u:
   regresja w main = regresja u testerów.**
+- **Fork** (to repo) dokłada: logowanie Google (OIDC) i Gemini przez Vertex AI
+  za flagami env (domyślnie zachowanie upstreamu), utwardzenie publicznych
+  interfejsów (**zawsze włączone**, bez flagi) i powłokę Android — mapa w
+  [ARCHITEKTURA.md](ARCHITEKTURA.md).
 
 ## Struktura repo (tylko rzeczy nieoczywiste)
 
 - `app/main.py` — `FastAPI()`, sesja, `/static`, startup (migracje, kolejka),
   globalny handler 401 → `/login`, `include_router` dla `app/routers/*`.
-- `app/routers/` — tematycznie: `auth` (+`/prywatnosc`), `profile` (+`/api/sync`),
-  `day`, `meals` (+kolejka offline, zapisane posiłki), `dashboard` (`/` i
-  `/mobile`), `settings`, `transfer`, `trends`, `usage` (admin), `pwa`.
+- `app/middleware.py` — utwardzenie (nagłówki, CSRF, limit zdjęcia), wpinane
+  przez `main.install_hardening`; kolejność stosu w ARCHITEKTURA.md.
+- `app/routers/` — tematycznie: `auth` (+`/prywatnosc`), `oidc` (logowanie
+  Google, fork), `profile` (+`/api/sync`), `day`, `meals` (+kolejka offline,
+  zapisane posiłki), `dashboard` (`/` i `/mobile`), `settings`, `transfer`,
+  `trends`, `usage` (admin), `pwa`.
 - `app/deps.py` — `templates`, `STATIC_DIR`, `require_llm_consent`,
   `require_admin`. **Importuje FastAPI**, więc serwisy nie mogą z niego brać nic
   (dlatego `humanize_ago` mieszka w `services/timeago.py`).
@@ -42,6 +50,8 @@ to część „done", nie opcjonalny krok.
   domenowym (`day.DayReportUnavailable` → router mapuje na 409), nigdy
   `HTTPException`. Pilnuje tego `tests/test_day_trends_services.py`.
   Jedno źródło prawdy per temat: `day.day_report`, `trends.payload`.
+  `meal_vision.pick_backend` wybiera `claude` | `gemini` | `vertex` (fork:
+  Gemini z konta serwera GCP, bez kluczy API).
 - `app/templates/` — `mobile.html` to **jedyny widok aplikacji** (responsive,
   SPA-lite na `/api/*`); osobno server-rendered `settings.html`, `trends.html`,
   `login/register`, `privacy.html`, `usage.html`.
@@ -51,6 +61,13 @@ to część „done", nie opcjonalny krok.
   `adopt_local_user.py`, `start_backend.sh`, `stop_backend.sh`.
 - `tests/conftest.py` ustawia `FIT_KRASNAL_DEBUG=1` (bez tego `TestClient`
   gubi ciasteczka `Secure`).
+- `android-app/` — powłoka Android (Capacitor, PoC) na zdalny `/mobile`;
+  [android-app/README.md](android-app/README.md).
+- `deploy/terraform/` — infrastruktura GCP; `terraform.tfvars`, stan i
+  `NOTES.local.md` ignorowane przez `deploy/terraform/.gitignore`.
+- `deploy/load-oauth-secret.sh` (Secret Manager → `/etc/fit-krasnal/env`) i
+  `deploy/fetch-metadata-env.sh` (metadane VM → `/run/fit-krasnal/env`) —
+  diagram wdrożenia w ARCHITEKTURA.md.
 
 ## Konwencje
 

@@ -45,7 +45,7 @@
   <a class="nav" href="/">← Wróć do aplikacji</a></header>
 <main>
 
-<p class="muted">Wersja noty: <code>{{ privacy_version if privacy_version else "2026-09-03" }}</code></p>
+<p class="muted">Wersja noty: <code>{{ privacy_version }}</code></p>
 
 <p>Fit Krasnal jest pilotażową aplikacją do liczenia bilansu kalorycznego,
 prowadzoną przez jedną osobę dla grupy kilkunastu testero-znajomych. Ta
@@ -71,6 +71,13 @@ bo skala pilota tego nie wymaga. Jeśli coś jest niejasne, napisz:
 <ul>
   <li><b>Konto:</b> e-mail i hasło (zahaszowane — nikt, w tym administrator,
     nie widzi Twojego hasła w postaci jawnej).</li>
+  <li><b>Logowanie przez Google (tylko jeśli operator instancji je włączył):</b>
+    zamiast hasła aplikacja dostaje od Google Twój adres e-mail i stały
+    identyfikator konta Google, po którym rozpoznaje Cię przy kolejnych
+    logowaniach. Google dowiaduje się wtedy, że logujesz się do tej aplikacji
+    — to jedyna informacja, jaka trafia do Google w tym kroku. Hasła do Google
+    aplikacja nigdy nie widzi. Wpuszczane są wyłącznie adresy z listy
+    ustalonej przez operatora.</li>
   <li><b>Profil:</b> rok urodzenia, płeć, wzrost, styl życia, cel wagi —
     wyłącznie do liczenia zapotrzebowania kalorycznego i norm makroskładników.
     Nie zbieramy pełnej daty urodzenia — rok wystarcza.</li>
@@ -89,7 +96,8 @@ bo skala pilota tego nie wymaga. Jeśli coś jest niejasne, napisz:
 <h2 id="llm">Zdjęcia i opisy posiłków — wysyłka do zewnętrznego modelu (LLM)</h2>
 <p>Żeby oszacować kalorie ze zdjęcia albo opisu, aplikacja wysyła je do
 zewnętrznego modelu językowego — <b>Google Gemini</b> albo <b>Anthropic
-Claude</b>, w zależności od tego, jaki klucz API wkleisz w Ustawieniach.
+Claude</b>, w zależności od tego, jaki klucz API wkleisz w Ustawieniach
+(albo do Gemini przez Vertex AI z konta serwera — patrz niżej).
 To jedyne miejsce, gdzie Twoje dane wychodzą poza tę aplikację. Bez Twojej
 wyraźnej zgody (przełącznik w Ustawieniach) ta ścieżka jest wyłączona —
 możesz zamiast tego wpisywać wartości ręcznie albo korzystać z „moich
@@ -99,7 +107,7 @@ przez konto administratora. Co ważne dla oceny ryzyka:</p>
 <ul>
   <li><b>Anthropic (Claude):</b> zgodnie z warunkami handlowymi API,
     Anthropic nie trenuje modeli na danych klientów przesłanych przez API
-    (sprawdzone {{ privacy_version if privacy_version else "2026-09-03" }}
+    (sprawdzone {{ privacy_version }}
     na podstawie <a href="https://www.anthropic.com/legal/commercial-terms" target="_blank">warunków komercyjnych Anthropic</a>).</li>
   <li><b>Google Gemini API — płatny poziom:</b> Google nie używa promptów
     ani odpowiedzi do ulepszania swoich produktów (czyli też do trenowania).</li>
@@ -110,11 +118,19 @@ przez konto administratora. Co ważne dla oceny ryzyka:</p>
     Szwajcarii i Wielkiej Brytanii (czyli m.in. w Polsce) obowiązują te
     same zasady jak na poziomie płatnym, również na darmowym kluczu —
     dane nie są używane do trenowania (sprawdzone
-    {{ privacy_version if privacy_version else "2026-09-03" }} na podstawie
+    {{ privacy_version }} na podstawie
     <a href="https://ai.google.dev/gemini-api/terms" target="_blank">warunków API Gemini</a>).
     Jeżeli korzystasz z aplikacji spoza tego regionu, sprawdź te warunki
     dla swojej lokalizacji.</li>
 </ul>
+<p><b>Wariant „Vertex AI" (tylko jeśli operator instancji go włączył):</b>
+zamiast Twojego klucza zdjęcia i opisy posiłków idą do modelu Gemini przez
+<b>Google Cloud Vertex AI</b> z konta serwera, w regionie wybranym przez operatora instancji (domyślnie
+w Unii Europejskiej; przy endpoincie <code>global</code> Google nie gwarantuje regionu).
+Google Cloud przetwarza je jako podwykonawca operatora i zgodnie z warunkami
+Vertex AI nie używa ich do trenowania modeli. W Ustawieniach zobaczysz wtedy
+informację „Szacowanie działa przez konto serwera (Vertex AI)" zamiast pola
+na klucz. Zgoda (przełącznik w Ustawieniach) obowiązuje tak samo.</p>
 <p class="muted">Te ustalenia mogą się zmienić — jeśli dostawcy zmienią
 zasady, postaramy się zaktualizować tę notę i podniesiemy jej wersję (co poprosi
 ponownie o zgodę).</p>

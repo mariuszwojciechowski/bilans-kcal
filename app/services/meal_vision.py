@@ -8,6 +8,8 @@ Backend wymienny (FIT_KRASNAL_LLM = auto | claude | gemini):
 - gemini — Google AI Studio (GEMINI_API_KEY / GOOGLE_API_KEY; ma darmowy tier,
   z kaskadą modeli od najlepszego do najbardziej wydajnego limitami — patrz
   config.GEMINI_MODELS i _estimate_gemini).
+- vertex — ten sam Gemini przez Vertex AI z konta serwera (ADC), bez kluczy;
+  wybierany w auto, gdy jest FIT_KRASNAL_VERTEX_PROJECT i user nie ma klucza.
 W trybie auto wybierany jest gemini, jeśli jego klucz jest ustawiony, inaczej claude."""
 
 import base64
@@ -18,7 +20,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from ..config import GEMINI_MODELS, LLM_BACKEND, VISION_MODEL
+from ..config import GEMINI_MODELS, LLM_BACKEND, VERTEX_LOCATION, VERTEX_PROJECT, VISION_MODEL
 from . import crypto
 
 logger = logging.getLogger(__name__)
@@ -85,6 +87,8 @@ def classify_error(exc: Exception) -> str:
     """Krótka kategoria błędu do wyświetlenia nad kolejką (PendingMeal
     .last_error_kind) — rozróżnia sprawy, które użytkownik może naprawić
     (klucz), od przejściowych (limit/przeciążenie), gdzie trzeba tylko czekać."""
+    if isinstance(exc, MealVisionNotConfigured):
+        return "no_key"       # brak klucza albo projektu Vertex — do naprawy przez usera/operatora
     text = str(exc)
     if "API_KEY_INVALID" in text or "API key not valid" in text:
         return "invalid_key"
@@ -103,17 +107,25 @@ def _env_anthropic_key() -> str | None:
 
 def pick_backend(gemini_key: str | None = None, anthropic_key: str | None = None) -> str:
     """Wybór backendu. Wybór wg config (LLM_BACKEND) jest globalny.
-    W trybie auto: gemini, jeśli podany klucz Gemini (albo w env — fallback)."""
-    if LLM_BACKEND in ("claude", "gemini"):
+    W trybie auto: gemini przy kluczu użytkownika; potem vertex, gdy jest
+    projekt (konto serwera, bez kluczy); potem gemini z klucza w env; inaczej claude."""
+    if LLM_BACKEND in ("claude", "gemini", "vertex"):
         return LLM_BACKEND
-    if gemini_key or _env_gemini_key():
+    if gemini_key:
+        return "gemini"
+    if VERTEX_PROJECT:
+        return "vertex"
+    if _env_gemini_key():
         return "gemini"
     return "claude"
 
 
 def llm_configured(gemini_key: str | None = None, anthropic_key: str | None = None) -> bool:
-    """Czy jest sens próbować wywołania LLM (jakikolwiek klucz)."""
-    if pick_backend(gemini_key, anthropic_key) == "gemini":
+    """Czy jest sens próbować wywołania LLM (klucz albo konto serwera w vertex)."""
+    backend = pick_backend(gemini_key, anthropic_key)
+    if backend == "vertex":
+        return bool(VERTEX_PROJECT)   # ADC konta serwera — klucz zbędny, ale projekt musi być
+    if backend == "gemini":
         return bool(gemini_key or _env_gemini_key())
     return bool(anthropic_key or _env_anthropic_key())
 
@@ -131,8 +143,10 @@ def estimate_from_photo(image_bytes: bytes, ext: str, note: str | None = None,
     prompt = "Oszacuj wartości odżywcze posiłku ze zdjęcia." + (
         f" Uwaga użytkownika: {note}" if note else ""
     )
-    if pick_backend(gemini_key, anthropic_key) == "gemini":
-        return _estimate_gemini(prompt, image_bytes, media_type, api_key=gemini_key)
+    backend = pick_backend(gemini_key, anthropic_key)
+    if backend in ("gemini", "vertex"):
+        return _estimate_gemini(prompt, image_bytes, media_type,
+                                client=gemini_client(backend, gemini_key))
     return _estimate_claude(prompt, image_bytes, media_type, api_key=anthropic_key)
 
 
@@ -140,8 +154,9 @@ def estimate_from_text(description: str,
                         gemini_key: str | None = None,
                         anthropic_key: str | None = None) -> tuple[MealEstimate, str]:
     prompt = f"Oszacuj wartości odżywcze posiłku: {description}"
-    if pick_backend(gemini_key, anthropic_key) == "gemini":
-        return _estimate_gemini(prompt, api_key=gemini_key)
+    backend = pick_backend(gemini_key, anthropic_key)
+    if backend in ("gemini", "vertex"):
+        return _estimate_gemini(prompt, client=gemini_client(backend, gemini_key))
     return _estimate_claude(prompt, api_key=anthropic_key)
 
 
@@ -194,24 +209,42 @@ def _estimate_claude(
     return estimate, VISION_MODEL
 
 
-# ── Backend: Gemini (Google AI Studio, darmowy tier) ──────────────────────
+# ── Backend: Gemini (Google AI Studio z kluczem albo Vertex AI z ADC) ─────
 
-def _estimate_gemini(
-    prompt: str, image_bytes: bytes | None = None, media_type: str | None = None,
-    api_key: str | None = None,
-) -> tuple[MealEstimate, str]:
+def gemini_client(backend: str = "gemini", api_key: str | None = None):
+    """Klient google-genai: `vertex` → Vertex AI z Application Default Credentials
+    konta serwera (projekt/region z env, bez klucza); inaczej klucz API.
+    Oba tryby dostają per-model timeout (PER_MODEL_TIMEOUT_S z upstreamu) — zawieszone
+    wywołanie nie może trzymać workera kolejki ani wątku żądania."""
+    from google import genai
+    from google.genai import types
+
+    http_options = types.HttpOptions(timeout=PER_MODEL_TIMEOUT_S * 1000)  # ms
+    if backend == "vertex":
+        if not VERTEX_PROJECT:
+            raise MealVisionNotConfigured(
+                "Tryb vertex wymaga FIT_KRASNAL_VERTEX_PROJECT (projekt GCP z Vertex AI)."
+            )
+        return genai.Client(vertexai=True, project=VERTEX_PROJECT, location=VERTEX_LOCATION,
+                            http_options=http_options)
     key = api_key or _env_gemini_key()
     if not key:
         raise MealVisionNotConfigured(
             "Brak klucza Gemini — ustaw GEMINI_API_KEY (darmowy klucz: aistudio.google.com)."
         )
-    from google import genai
+    return genai.Client(api_key=key, http_options=http_options)
+
+
+def _estimate_gemini(
+    prompt: str, image_bytes: bytes | None = None, media_type: str | None = None,
+    api_key: str | None = None, client=None,
+) -> tuple[MealEstimate, str]:
+    if client is None:
+        # pick_backend, nie goły LLM_BACKEND: w auto z VERTEX_PROJECT i kluczem w env
+        # klient bez tego cicho spadłby z Vertex na klucz API.
+        client = gemini_client("vertex" if pick_backend(api_key) == "vertex" else "gemini", api_key)
     from google.genai import types
 
-    client = genai.Client(
-        api_key=key,
-        http_options=types.HttpOptions(timeout=PER_MODEL_TIMEOUT_S * 1000),  # ms
-    )
     contents: list = []
     if image_bytes is not None:
         contents.append(types.Part.from_bytes(data=image_bytes, mime_type=media_type))
