@@ -120,12 +120,17 @@ PUBLIC_URL = os.getenv("FIT_KRASNAL_PUBLIC_URL", _BASE_URL).rstrip("/")
 #   both — oba sposoby na stronie logowania.
 # Allowlist e-maili (małe litery, po przecinku) — konto spoza listy dostaje 403
 # i nic nie jest tworzone. Pusta lista w trybie oidc/both = nikt nie wejdzie.
+# `*` na liście = otwarta rejestracja: wchodzi każdy zweryfikowany e-mail Google,
+# ale nowych kont przybywa najwyżej do FIT_KRASNAL_MAX_USERS (osłona przed
+# zapchaniem maszyny). Istniejące konta logują się zawsze.
 AUTH_MODE = os.getenv("FIT_KRASNAL_AUTH", "password").strip().lower() or "password"
 GOOGLE_CLIENT_ID = os.getenv("FIT_KRASNAL_GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("FIT_KRASNAL_GOOGLE_CLIENT_SECRET")
 ALLOWED_EMAILS = frozenset(
     e.strip().lower() for e in os.getenv("FIT_KRASNAL_ALLOWED_EMAILS", "").split(",") if e.strip()
 )
+ALLOW_ANY_EMAIL = "*" in ALLOWED_EMAILS
+MAX_USERS = int(os.getenv("FIT_KRASNAL_MAX_USERS", "20"))
 
 # RODO: wersja noty informacyjnej (/prywatnosc) i zgody na LLM/Strava. Zgoda w
 # starszej wersji liczy się do CONSENT_DEADLINE (consent.effective), potem trzeba

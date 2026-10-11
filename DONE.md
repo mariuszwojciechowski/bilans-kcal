@@ -16,6 +16,7 @@ w komunikacie commita, nie tutaj.
 
 ## Scalenie z upstreamem — [archive/done-v27-upstream-merge.md](archive/done-v27-upstream-merge.md)
 
+- Logowanie Google: otwarta rejestracja (`*` w `ALLOWED_EMAILS`) z limitem kont `FIT_KRASNAL_MAX_USERS` = 20 (27.2.0)
 - Scalenie forka bobert-bag-bounty: powłoka Android, logowanie Google, Vertex, utwardzenie (27.0.0–27.1.2)
 - Scalenie z upstreamem (18 commitów, 27.0.0)
 

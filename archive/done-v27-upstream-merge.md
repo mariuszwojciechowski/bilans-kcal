@@ -2,6 +2,16 @@
 
 Najnowsze u góry.
 
+## Logowanie Google: otwarta rejestracja z limitem kont (27.2.0)
+
+- `FIT_KRASNAL_ALLOWED_EMAILS=*` wpuszcza każdy zweryfikowany e-mail Google;
+  jawna lista działa jak dotąd.
+- Osłona: `FIT_KRASNAL_MAX_USERS` (domyślnie 20) — po przekroczeniu nowe konta
+  dostają 403 „brak wolnych miejsc", istniejące logują się zawsze.
+- Konto z Google omija kod zaproszenia i nie ma checkboxa zgody (do 31.12.2026
+  brak decyzji nie blokuje szacowania). Nota `/prywatnosc` bez zmian — do decyzji
+  przy włączeniu na produkcji.
+
 ## Scalenie forka bobert-bag-bounty (27.0.0–27.1.2)
 
 - Scalony fork `5005879`: powłoka Android (Capacitor), logowanie Google za

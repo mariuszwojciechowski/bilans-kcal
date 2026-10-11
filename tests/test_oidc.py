@@ -159,3 +159,44 @@ def test_password_mode_has_no_google_routes(client, monkeypatch):
     assert "Zaloguj przez Google" not in page.text and 'action="/login"' in page.text
     assert client.get("/auth/google").status_code == 404
     assert client.get("/auth/google/callback?code=c&state=s").status_code == 404
+
+
+def _open_mode(monkeypatch, max_users):
+    monkeypatch.setattr(oidc, "ALLOW_ANY_EMAIL", True)
+    monkeypatch.setattr(oidc, "MAX_USERS", max_users)
+
+
+def test_open_mode_lets_any_verified_email_in(client, monkeypatch):
+    _open_mode(monkeypatch, 20)
+    _use(monkeypatch, _claims(email="obcy@example.org", sub="sub-x"))
+    r = client.get("/auth/google/callback?code=c&state=s")
+    assert r.status_code == 303 and r.headers["location"] == "/"
+    with client.session_factory() as db:
+        assert db.scalar(select(User).where(User.email == "obcy@example.org")) is not None
+
+
+def test_open_mode_still_requires_verified_email(client, monkeypatch):
+    _open_mode(monkeypatch, 20)
+    _use(monkeypatch, _claims(email="obcy@example.org", verified=False))
+    r = client.get("/auth/google/callback?code=c&state=s")
+    assert r.status_code == 403
+
+
+def test_open_mode_stops_creating_accounts_at_limit_but_existing_log_in(client, monkeypatch):
+    _open_mode(monkeypatch, 1)
+    _use(monkeypatch, _claims(email="pierwszy@example.org", sub="s1"))
+    assert client.get("/auth/google/callback?code=c&state=s").status_code == 303   # konto nr 1
+    client.post("/logout")
+    _use(monkeypatch, _claims(email="drugi@example.org", sub="s2"))
+    r = client.get("/auth/google/callback?code=c&state=s")
+    assert r.status_code == 403 and "zamknięta" in r.text
+    with client.session_factory() as db:
+        assert db.scalar(select(User).where(User.email == "drugi@example.org")) is None
+    _use(monkeypatch, _claims(email="pierwszy@example.org", sub="s1"))               # istniejące wchodzi
+    assert client.get("/auth/google/callback?code=c&state=s").status_code == 303
+
+
+def test_explicit_allowlist_is_not_limited_by_max_users(client, monkeypatch):
+    monkeypatch.setattr(oidc, "MAX_USERS", 0)                                        # limit dotyczy tylko trybu otwartego
+    _use(monkeypatch, _claims())
+    assert client.get("/auth/google/callback?code=c&state=s").status_code == 303

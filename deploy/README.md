@@ -286,7 +286,8 @@ wartości nie ma w repo, wszystko przez zmienne środowiskowe w
 | `FIT_KRASNAL_PUBLIC_URL` | publiczny adres aplikacji, np. `https://fit-<ip>.sslip.io` |
 | `FIT_KRASNAL_AUTH` | `oidc` (tylko Google) albo `both` (Google + hasło) |
 | `FIT_KRASNAL_GOOGLE_CLIENT_ID` / `_SECRET` | klient OAuth 2.0 „Web application" z Google Cloud Console |
-| `FIT_KRASNAL_ALLOWED_EMAILS` | lista e-maili (małe litery, po przecinku), którym wolno się zalogować |
+| `FIT_KRASNAL_ALLOWED_EMAILS` | lista e-maili (małe litery, po przecinku), którym wolno się zalogować przez Google. `*` = otwarta rejestracja (każdy zweryfikowany e-mail Google) |
+| `FIT_KRASNAL_MAX_USERS` | domyślnie 20; przy `*` nowe konta Google nie powstają, gdy kont jest już tyle (istniejące wchodzą). Przy jawnej liście nie obowiązuje |
 | `FIT_KRASNAL_ALLOWED_HOSTS` | lista hostów akceptowanych w nagłówku `Host` (domyślnie `*`) |
 | `FIT_KRASNAL_VERTEX_PROJECT` / `_LOCATION` | Gemini przez Vertex AI z konta serwera (ADC), bez kluczy API. Kod domyślnie `europe-west1`; **najnowsze modele (np. `gemini-3.5-flash`) bywają dostępne tylko pod `global`** — fork używa `global`. Nota `/prywatnosc` upstreamu mówi o regionie UE; operator, który wybiera `global`, powinien ją dopasować |
 | `FIT_KRASNAL_GEMINI_MODEL` | model Gemini (kod domyślnie `gemini-3.5-flash`). Obserwacja 2026-10-08: w `europe-west1` ten model zwracał `404 Publisher model … was not found`, pod `global` działa; `gemini-2.5-flash` działa w obu. Proces WWW przy błędzie LLM po cichu odkłada posiłek do kolejki — treść błędu zobaczysz w `journalctl -u fit-krasnal-queue`. Gdy model zwraca 404: najpierw `FIT_KRASNAL_VERTEX_LOCATION=global`, potem dopiero starszy model |

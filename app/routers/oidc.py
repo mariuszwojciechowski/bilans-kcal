@@ -12,12 +12,12 @@ nie zaloguje się hasłem.
 """
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .. import auth
-from ..config import (ALLOWED_EMAILS, AUTH_MODE, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
-                      PUBLIC_URL)
+from ..config import (ALLOW_ANY_EMAIL, ALLOWED_EMAILS, AUTH_MODE, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+                      MAX_USERS, PUBLIC_URL)
 from ..db import db_session
 from ..deps import STATIC_DIR, templates
 from ..models import User
@@ -56,6 +56,16 @@ def _redirect_uri() -> str:
     return f"{PUBLIC_URL}/auth/google/callback"
 
 
+def _full(request: Request) -> HTMLResponse:
+    """403 gdy otwarta rejestracja osiągnęła limit kont (istniejące konta wchodzą)."""
+    return templates.TemplateResponse(
+        request, "login.html",
+        {"error": "Rejestracja jest chwilowo zamknięta — brak wolnych miejsc.",
+         "has_logo": (STATIC_DIR / "logo.png").exists(), "auth_mode": AUTH_MODE},
+        status_code=403,
+    )
+
+
 def _denied(request: Request) -> HTMLResponse:
     """403 bez tworzenia konta i bez zdradzania, które adresy są na liście."""
     return templates.TemplateResponse(
@@ -89,7 +99,7 @@ async def google_callback(request: Request, db: Session = Depends(db_session)):
     email = str(claims.get("email") or "").strip().lower()
     if not email or not claims.get("email_verified"):
         return _denied(request)
-    if email not in ALLOWED_EMAILS:
+    if not ALLOW_ANY_EMAIL and email not in ALLOWED_EMAILS:
         return _denied(request)
 
     sub = str(claims["sub"])
@@ -97,6 +107,8 @@ async def google_callback(request: Request, db: Session = Depends(db_session)):
     if user is None:
         user = db.scalar(select(User).where(User.email == email))
         if user is None:
+            if ALLOW_ANY_EMAIL and db.scalar(select(func.count(User.id))) >= MAX_USERS:
+                return _full(request)
             user = User(email=email, password_hash=None, google_sub=sub)
             db.add(user)
         else:
