@@ -77,7 +77,8 @@ formularze sklepowe). Dopóki pilot działa na `/mobile` jako PWA, nie jest
 na ścieżce krytycznej. Istnieje działający PoC powłoki Capacitor
 ([android-app/README.md](android-app/README.md)) — PoC i testowy APK używają
 identyfikatora `cc.krasnal.fit`. Wybór **Flutter vs Capacitor** i ostateczna
-nazwa pakietu zostają decyzją autora.
+nazwa pakietu zostają decyzją autora — pytania w
+[TODECIDE.md](TODECIDE.md) „Pozostałości po forku".
 
 ## Prawdziwe „zapomniałem hasła" (mailem) (8/10)
 
@@ -103,4 +104,5 @@ Zadanie administracyjne, bez kodu: identyfikator aplikacji (np.
 pójdzie do sklepów — w Google Play nie da się go później zmienić. PoC powłoki
 Capacitor i testowy APK ([android-app/README.md](android-app/README.md)) używają
 już `cc.krasnal.fit` — to robocza wartość PoC, nie rozstrzygnięcie. Ostateczny
-wybór należy do autora; zapisz go tutaj i w [deploy/README.md](deploy/README.md).
+wybór należy do autora (pytanie w [TODECIDE.md](TODECIDE.md) „Pozostałości po
+forku"); zapisz go tutaj i w [deploy/README.md](deploy/README.md).

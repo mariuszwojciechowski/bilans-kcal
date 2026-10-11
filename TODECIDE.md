@@ -91,3 +91,24 @@ naprawy pomyłki.
   więc „force 30 dni" to setki requestów wobec 100/15 min u Stravy.
 - Aktywności wielodobowe (ultra) lądują w dniu startu z absurdalnym wydatkiem
   doby — do zapisania jako znany limit.
+
+---
+
+## Pozostałości po forku (od 2026-10-09)
+
+Pytania z wycofanego planu `publikacja-i-przekazanie.md`; bez odpowiedzi,
+rekomendacja w nawiasie tam, gdzie była.
+
+- **Flutter czy Capacitor** jako docelowa aplikacja mobilna? Działa PoC
+  Capacitora ([android-app/README.md](android-app/README.md)).
+- **Nazwa pakietu:** zostaje `cc.krasnal.fit` (użyta w PoC i testowym APK)?
+  W Google Play nie da się jej później zmienić.
+- **Health Connect: waga.** Manifest i `android-app/README.md` obiecują
+  `READ_WEIGHT`, ale `mobile.html` czyta tylko kroki. Zaimplementować (~1 h,
+  wzorzec jak kroki → istniejący POST wagi) czy wyciąć obietnicę
+  (rekomendacja forka: wyciąć, dopóki nie wybrano stosu mobilnego).
+- **Czy przenieść produkcję na setup z Terraforma** (`deploy/terraform/`)?
+  W tym wariancie port 22 jest tylko z IAP, więc deploy z GitHub Actions
+  przestaje działać bez świadomego otwarcia SSH dla GitHuba.
+- **Logowanie Google w WebView czy w Chrome Custom Tabs?** (Google ogranicza
+  OAuth w osadzonych WebView.)

@@ -16,18 +16,17 @@ kodu zaproszenia do rejestracji; szczegóły wdrożenia w [deploy/README.md](dep
 
 **Kontakt:** [krasnal@krasnal.cc](mailto:krasnal@krasnal.cc).
 
-## Fork
+## Opcjonalne funkcje
 
-To publiczny fork. Dokłada logowanie Google (OIDC) i Gemini przez Vertex AI
-(konto serwera, bez kluczy API) — oba za flagami środowiskowymi, domyślnie
-zachowanie upstreamu; utwardzenie publicznych interfejsów (nagłówki, CSP,
-CSRF, limit zdjęcia) działa zawsze, bez flagi; do tego powłoka Android
-(Capacitor, PoC). Topologia i tabele
+Logowanie Google (OIDC) i Gemini przez Vertex AI (konto serwera, bez kluczy
+API) są za flagami środowiskowymi — produkcja działa na domyślnych
+(logowanie hasłem, brak Vertex). Utwardzenie publicznych interfejsów
+(nagłówki, CSP, CSRF, limit zdjęcia 8 MB) działa zawsze, bez flagi. Jest też
+powłoka Android (Capacitor, PoC). Topologia i tabele
 „co czyta co": [ARCHITEKTURA.md](ARCHITEKTURA.md); wdrożenie GCP:
 [deploy/README.md](deploy/README.md); powłoka: [android-app/README.md](android-app/README.md).
 
-Rzeczy forka ponad upstream (powłoka Android, logowanie Google, Vertex AI,
-utwardzenie, Terraform) zbudował [pepsi133](https://github.com/pepsi133)
+Powłokę Android, logowanie Google, Vertex AI, utwardzenie i Terraform zbudował [pepsi133](https://github.com/pepsi133)
 (rzeglen@gmail.com) — podziękowanie, bez żadnych praw czy roszczeń.
 
 ## Architektura (MVP)

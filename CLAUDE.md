@@ -28,10 +28,14 @@ to część „done", nie opcjonalny krok.
 - Deploy: `git push` na `main` → GitHub Actions → SSH na VM (`deploy/deploy.sh`)
   → restart systemd. **Czerwony pytest = brak deploya. Nie ma staging'u:
   regresja w main = regresja u testerów.**
-- **Fork** (to repo) dokłada: logowanie Google (OIDC) i Gemini przez Vertex AI
-  za flagami env (domyślnie zachowanie upstreamu), utwardzenie publicznych
-  interfejsów (**zawsze włączone**, bez flagi) i powłokę Android — mapa w
-  [ARCHITEKTURA.md](ARCHITEKTURA.md).
+- Funkcje opcjonalne za flagami env: logowanie Google (OIDC, `FIT_KRASNAL_AUTH`)
+  i Gemini przez Vertex AI (`FIT_KRASNAL_VERTEX_PROJECT`). **Produkcja działa
+  na domyślnych** (logowanie hasłem, bez Vertex). Jest też powłoka Android
+  (`android-app/`) — mapa w [ARCHITEKTURA.md](ARCHITEKTURA.md).
+- **`app/middleware.py` (CSP, CSRF po origin, filtr Host, limit body 8 MB) jest
+  aktywny na produkcji, bez flagi.** Dodanie zewnętrznego hosta (skrypt, cel
+  formularza, przekierowanie OAuth) oznacza aktualizację `CSP` — inaczej
+  przeglądarka zablokuje to po cichu (przykład: `form-action` dla Stravy).
 
 ## Struktura repo (tylko rzeczy nieoczywiste)
 
@@ -40,7 +44,7 @@ to część „done", nie opcjonalny krok.
 - `app/middleware.py` — utwardzenie (nagłówki, CSRF, limit zdjęcia), wpinane
   przez `main.install_hardening`; kolejność stosu w ARCHITEKTURA.md.
 - `app/routers/` — tematycznie: `auth` (+`/prywatnosc`), `oidc` (logowanie
-  Google, fork), `profile` (+`/api/sync`), `day`, `meals` (+kolejka offline,
+  Google), `profile` (+`/api/sync`), `day`, `meals` (+kolejka offline,
   zapisane posiłki), `dashboard` (`/` i `/mobile`), `settings`, `transfer`,
   `trends`, `usage` (admin), `pwa`.
 - `app/deps.py` — `templates`, `STATIC_DIR`, `require_llm_consent`,
@@ -50,7 +54,7 @@ to część „done", nie opcjonalny krok.
   domenowym (`day.DayReportUnavailable` → router mapuje na 409), nigdy
   `HTTPException`. Pilnuje tego `tests/test_day_trends_services.py`.
   Jedno źródło prawdy per temat: `day.day_report`, `trends.payload`.
-  `meal_vision.pick_backend` wybiera `claude` | `gemini` | `vertex` (fork:
+  `meal_vision.pick_backend` wybiera `claude` | `gemini` | `vertex` (`vertex`:
   Gemini z konta serwera GCP, bez kluczy API).
 - `app/templates/` — `mobile.html` to **jedyny widok aplikacji** (responsive,
   SPA-lite na `/api/*`); osobno server-rendered `settings.html`, `trends.html`,
