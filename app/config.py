@@ -131,7 +131,7 @@ ALLOWED_EMAILS = frozenset(
 # starszej wersji liczy się do CONSENT_DEADLINE (consent.effective), potem trzeba
 # potwierdzić nową — bumpować tylko przy realnej zmianie treści noty, nie przy
 # każdej literówce. Wersja = data wdrożenia noty (ustawiana tuż przed pushem).
-PRIVACY_VERSION = os.getenv("FIT_KRASNAL_PRIVACY_VERSION", "2026-10-XX")
+PRIVACY_VERSION = os.getenv("FIT_KRASNAL_PRIVACY_VERSION", "2026-10-11")
 # Do kiedy zgoda w starszej wersji noty jeszcze działa (baner prosi o
 # potwierdzenie); po tej dacie bramka wymaga zgody w bieżącej wersji.
 CONSENT_DEADLINE = date(2026, 12, 31)
