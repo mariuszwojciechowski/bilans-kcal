@@ -122,12 +122,59 @@ def test_withdraw_consent_deletes_pending_queue(client, monkeypatch):
     db.close()
 
 
-def test_consent_in_older_privacy_version_counts_as_no_consent(client, monkeypatch):
-    _register(client, consent_checked=True)
+def _bump_privacy_version(monkeypatch, deadline=None):
     monkeypatch.setattr("app.services.consent.PRIVACY_VERSION", "2099-01-01")
     monkeypatch.setattr("app.routers.settings.PRIVACY_VERSION", "2099-01-01")
+    if deadline is not None:
+        monkeypatch.setattr("app.config.CONSENT_DEADLINE", deadline)
+        monkeypatch.setattr("app.routers.settings.CONSENT_DEADLINE", deadline)
+
+
+def _stub_llm(monkeypatch):
+    def _fake_estimate(*a, **kw):
+        return MealEstimate(
+            description="jajecznica",
+            items=[MealItem(name="jajko", mass_g=60, kcal=90, protein_g=7,
+                            fat_g=6.5, carbs_g=0.5, confidence="high")],
+            assumptions=[], kcal_min=80, kcal_max=100,
+        ), "gemini-3.5-flash"
+
+    monkeypatch.setattr("app.services.meal_vision.llm_configured", lambda *a, **kw: True)
+    monkeypatch.setattr("app.services.meal_vision.estimate_from_text", _fake_estimate)
+
+
+def test_consent_in_older_privacy_version_after_deadline_counts_as_no_consent(client, monkeypatch):
+    _register(client, consent_checked=True)
+    _bump_privacy_version(monkeypatch, deadline=date(2000, 1, 1))
     r = client.get("/api/settings")
     assert r.json()["consent_llm_photos"] is False
+    assert client.post("/api/meals/text", data={"description": "jajecznica"}).status_code == 409
+
+
+def test_older_consent_before_deadline_still_works_and_asks_to_reconfirm(client, monkeypatch):
+    _register(client, consent_checked=True)
+    _bump_privacy_version(monkeypatch, deadline=date(2999, 1, 1))
+    _stub_llm(monkeypatch)
+    j = client.get("/api/settings").json()
+    assert j["consent_llm_photos"] is True and j["consent_reconfirm"] is True
+    assert client.post("/api/meals/text", data={"description": "jajecznica"}).status_code == 200
+
+
+def test_withdrawn_older_consent_is_409_even_before_deadline(client, monkeypatch):
+    _register(client, consent_checked=True)
+    _bump_privacy_version(monkeypatch, deadline=date(2999, 1, 1))
+    assert client.post("/api/settings/consent", json={"granted": False}).status_code == 200
+    j = client.get("/api/settings").json()
+    assert j["consent_llm_photos"] is False and j["consent_reconfirm"] is False
+    assert client.post("/api/meals/text", data={"description": "jajecznica"}).status_code == 409
+
+
+def test_granting_again_clears_reconfirm(client, monkeypatch):
+    _register(client, consent_checked=True)
+    _bump_privacy_version(monkeypatch, deadline=date(2999, 1, 1))
+    assert client.post("/api/settings/consent", json={"granted": True}).status_code == 200
+    j = client.get("/api/settings").json()
+    assert j["consent_llm_photos"] is True and j["consent_reconfirm"] is False
 
 
 def test_transfer_export_never_contains_llm_keys(client):

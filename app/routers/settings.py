@@ -271,7 +271,7 @@ def api_get_settings(db: Session = Depends(db_session),
                      user: User = Depends(auth.current_user)):
     stored = settings_service.all_settings(db, user.id)
     keys = settings_service.get_llm_keys(db, user.id)
-    consent_row = consent_service.current(db, user.id)
+    consent_row = consent_service.effective(db, user.id)
     strava_consent = consent_service.current(db, user.id, consent_service.STRAVA)
     today = date.today()
     return {
@@ -284,6 +284,9 @@ def api_get_settings(db: Session = Depends(db_session),
         "strava_consent_granted": strava_consent is not None,
         "lifestyle_options": lifestyle_options(),
         "consent_llm_photos": consent_row is not None,
+        # zgoda ze starszej wersji noty w okresie przejściowym — baner prosi o potwierdzenie
+        "consent_reconfirm": (consent_row is not None
+                              and consent_service.current(db, user.id) is None),
         "consent_granted_at": consent_row.granted_at.isoformat() if consent_row else None,
         "privacy_version": PRIVACY_VERSION,
         "consent_deadline": CONSENT_DEADLINE.isoformat(),

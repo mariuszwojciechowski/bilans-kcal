@@ -2,11 +2,12 @@
 (Google Gemini / Anthropic). Zgoda jest per-wersja noty (PRIVACY_VERSION) —
 zmiana treści noty unieważnia stare zgody bez usuwania ich historii."""
 
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .. import config
 from ..config import PRIVACY_VERSION
 from ..models import Consent, User
 
@@ -15,9 +16,27 @@ STRAVA = "strava"
 
 
 def has_consent(db: Session, user_id: int, kind: str = LLM_PHOTOS) -> bool:
-    """Aktywna zgoda w BIEŻĄCEJ wersji noty. Zgoda z poprzedniej wersji liczy
-    się jak brak zgody — treść noty się zmieniła, trzeba zdecydować na nowo."""
-    return current(db, user_id, kind) is not None
+    """Czy wolno wysyłać dane: zgoda w bieżącej wersji noty albo — do
+    CONSENT_DEADLINE — niewycofana zgoda w dowolnej starszej (okres przejściowy)."""
+    return effective(db, user_id, kind) is not None
+
+
+def effective(db: Session, user_id: int, kind: str = LLM_PHOTOS,
+              today: date | None = None) -> Consent | None:
+    """Zgoda, która dziś obowiązuje: `current`, a gdy jej brak i termin jeszcze
+    nie minął — najnowsza niewycofana zgoda w dowolnej wersji. Wycofanie zawsze
+    wygrywa (wycofane wiersze nigdy nie wchodzą do wyniku)."""
+    row = current(db, user_id, kind)
+    if row is not None:
+        return row
+    if (today or date.today()) > config.CONSENT_DEADLINE:
+        return None
+    return db.scalar(
+        select(Consent)
+        .where(Consent.user_id == user_id, Consent.kind == kind,
+               Consent.withdrawn_at.is_(None))
+        .order_by(Consent.granted_at.desc())
+    )
 
 
 def current(db: Session, user_id: int, kind: str = LLM_PHOTOS) -> Consent | None:

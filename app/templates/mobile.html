@@ -1582,7 +1582,7 @@ function applyConsentUi(settings) {
 
   const banner = document.getElementById("consent-banner");
   if (banner) {
-    if (granted) {
+    if (granted && !settings.consent_reconfirm) {
       banner.style.display = "none";
     } else {
       const [y, m, d] = (settings.consent_deadline || "").split("-");
@@ -1596,11 +1596,11 @@ function applyConsentUi(settings) {
   const statusEl = document.getElementById("s-consent-status");
   if (statusEl) {
     statusEl.textContent = granted
-      ? `udzielona${settings.consent_granted_at ? " · " + settings.consent_granted_at.slice(0, 10).split("-").reverse().join(".") : ""}`
+      ? `udzielona${settings.consent_granted_at ? " · " + settings.consent_granted_at.slice(0, 10).split("-").reverse().join(".") : ""}${settings.consent_reconfirm ? " (poprzednia wersja noty) — potwierdź" : ""}`
       : "brak";
   }
   const btn = document.getElementById("s-consent-btn");
-  if (btn) btn.textContent = granted ? "Wycofaj zgodę" : "Włącz zgodę";
+  if (btn) btn.textContent = granted && !settings.consent_reconfirm ? "Wycofaj zgodę" : "Włącz zgodę";
 }
 
 async function toggleConsent() {

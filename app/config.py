@@ -127,12 +127,14 @@ ALLOWED_EMAILS = frozenset(
     e.strip().lower() for e in os.getenv("FIT_KRASNAL_ALLOWED_EMAILS", "").split(",") if e.strip()
 )
 
-# RODO: wersja noty informacyjnej (/prywatnosc) i zgody na LLM/Strava. Zmiana wersji
-# unieważnia istniejące zgody (consent.has_consent porównuje wersje) — bumpować
-# tylko przy realnej zmianie treści noty, nie przy każdej literówce.
-PRIVACY_VERSION = os.getenv("FIT_KRASNAL_PRIVACY_VERSION", "2026-09-16")
-# Termin dla istniejących testerów (baner, potem bramka) — data wdrożenia + 14 dni.
-CONSENT_DEADLINE = date(2026, 9, 17)
+# RODO: wersja noty informacyjnej (/prywatnosc) i zgody na LLM/Strava. Zgoda w
+# starszej wersji liczy się do CONSENT_DEADLINE (consent.effective), potem trzeba
+# potwierdzić nową — bumpować tylko przy realnej zmianie treści noty, nie przy
+# każdej literówce. Wersja = data wdrożenia noty (ustawiana tuż przed pushem).
+PRIVACY_VERSION = os.getenv("FIT_KRASNAL_PRIVACY_VERSION", "2026-10-XX")
+# Do kiedy zgoda w starszej wersji noty jeszcze działa (baner prosi o
+# potwierdzenie); po tej dacie bramka wymaga zgody w bieżącej wersji.
+CONSENT_DEADLINE = date(2026, 12, 31)
 
 
 def ensure_dirs() -> None:
