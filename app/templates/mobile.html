@@ -1252,6 +1252,7 @@ async function estimate() {
     resetAddForm();
     msg.textContent = "";
   } catch (e) {
+    if (e.status === 413) track("photo_too_large");  // limit 8 MB — liczymy, czy komuś przeszkadza
     if (e.network) {
       track(e.stage === "upload" ? "photo_net_upload" : "photo_net_wait");
       msg.textContent = e.stage === "upload"

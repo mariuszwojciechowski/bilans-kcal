@@ -53,6 +53,8 @@ EVENTS: set[str] = {
     "native_app_open", "photo_native_camera", "photo_native_gallery", "steps_health_connect",
     # Photo estimate diagnostics (client-side stage where the request failed).
     "photo_resize_fail", "photo_net_upload", "photo_net_wait", "photo_slow",
+    # Serwer odrzucił zdjęcie jako za duże (limit body 8 MB, middleware).
+    "photo_too_large",
 }
 
 # Forecast snapshots taken before this local hour count as "morning".
