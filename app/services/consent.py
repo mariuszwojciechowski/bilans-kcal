@@ -17,8 +17,20 @@ STRAVA = "strava"
 
 def has_consent(db: Session, user_id: int, kind: str = LLM_PHOTOS) -> bool:
     """Czy wolno wysyłać dane: zgoda w bieżącej wersji noty albo — do
-    CONSENT_DEADLINE — niewycofana zgoda w dowolnej starszej (okres przejściowy)."""
-    return effective(db, user_id, kind) is not None
+    CONSENT_DEADLINE — okres przejściowy (starsza zgoda lub brak decyzji)."""
+    return effective(db, user_id, kind) is not None or in_grace(db, user_id, kind)
+
+
+def in_grace(db: Session, user_id: int, kind: str = LLM_PHOTOS,
+             today: date | None = None) -> bool:
+    """Okres przejściowy dla szacowania LLM: do CONSENT_DEADLINE nikt, kto nie
+    podjął decyzji (brak jakiegokolwiek wpisu), nie jest blokowany. Wycofanie
+    jest decyzją i blokuje zawsze. Tylko LLM — zgoda Stravy działa jak dotąd."""
+    if kind != LLM_PHOTOS or (today or date.today()) > config.CONSENT_DEADLINE:
+        return False
+    return db.scalar(
+        select(Consent.id).where(Consent.user_id == user_id, Consent.kind == kind)
+    ) is None
 
 
 def effective(db: Session, user_id: int, kind: str = LLM_PHOTOS,

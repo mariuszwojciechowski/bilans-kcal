@@ -1578,8 +1578,9 @@ function applyConsentUi(settings) {
   const granted = !!settings.consent_llm_photos;
   const fields = document.getElementById("add-llm-fields");
   const hint = document.getElementById("add-llm-hint");
-  if (fields) fields.style.display = granted ? "" : "none";
-  if (hint) hint.style.display = granted ? "none" : "";
+  const usable = granted || !!settings.consent_grace;  // okres przejściowy: brak decyzji nie blokuje
+  if (fields) fields.style.display = usable ? "" : "none";
+  if (hint) hint.style.display = usable ? "none" : "";
 
   const banner = document.getElementById("consent-banner");
   if (banner) {

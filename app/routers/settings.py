@@ -285,6 +285,8 @@ def api_get_settings(db: Session = Depends(db_session),
         "lifestyle_options": lifestyle_options(),
         "consent_llm_photos": consent_row is not None,
         # zgoda ze starszej wersji noty w okresie przejściowym — baner prosi o potwierdzenie
+        # brak decyzji + okres przejściowy: szacowanie działa, baner prosi o zgodę
+        "consent_grace": consent_row is None and consent_service.in_grace(db, user.id),
         "consent_reconfirm": (consent_row is not None
                               and consent_service.current(db, user.id) is None),
         "consent_granted_at": consent_row.granted_at.isoformat() if consent_row else None,

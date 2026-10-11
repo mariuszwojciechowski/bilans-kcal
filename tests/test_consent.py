@@ -73,7 +73,8 @@ def test_register_with_checkbox_grants_consent(client):
     assert r.json()["consent_llm_photos"] is True
 
 
-def test_meal_text_without_consent_is_409(client):
+def test_meal_text_without_consent_after_deadline_is_409(client, monkeypatch):
+    monkeypatch.setattr("app.config.CONSENT_DEADLINE", date(2000, 1, 1))
     _register(client, consent_checked=False)
     r = client.post("/api/meals/text", data={"description": "jajecznica"})
     assert r.status_code == 409
@@ -169,6 +170,25 @@ def test_withdrawn_older_consent_is_409_even_before_deadline(client, monkeypatch
     assert client.post("/api/meals/text", data={"description": "jajecznica"}).status_code == 409
 
 
+def test_no_decision_before_deadline_is_not_blocked(client, monkeypatch):
+    """Okres przejściowy: kto nie podjął decyzji (brak wpisu), może szacować."""
+    _register(client, consent_checked=False)
+    monkeypatch.setattr("app.config.CONSENT_DEADLINE", date(2999, 1, 1))
+    _stub_llm(monkeypatch)
+    j = client.get("/api/settings").json()
+    assert j["consent_llm_photos"] is False and j["consent_grace"] is True
+    assert client.post("/api/meals/text", data={"description": "jajecznica"}).status_code == 200
+
+
+def test_withdrawn_without_prior_decision_is_blocked_before_deadline(client, monkeypatch):
+    """Wycofanie to decyzja — blokuje także w okresie przejściowym."""
+    _register(client, consent_checked=True)
+    monkeypatch.setattr("app.config.CONSENT_DEADLINE", date(2999, 1, 1))
+    client.post("/api/settings/consent", json={"granted": False})
+    assert client.get("/api/settings").json()["consent_grace"] is False
+    assert client.post("/api/meals/text", data={"description": "jajecznica"}).status_code == 409
+
+
 def test_granting_again_clears_reconfirm(client, monkeypatch):
     _register(client, consent_checked=True)
     _bump_privacy_version(monkeypatch, deadline=date(2999, 1, 1))
@@ -220,6 +240,7 @@ def test_process_queue_skips_without_consent(tmp_path, monkeypatch):
     user_id = db.scalar(select(User.id))
     meal_queue.enqueue(db, user_id, date.today(), time(12, 0), description="kanapka")
     db.close()
+    monkeypatch.setattr("app.config.CONSENT_DEADLINE", date(2000, 1, 1))  # po okresie przejściowym
 
     result = meal_queue.process_queue(user_id)
     assert result == {"processed": 0, "failed": 0}
