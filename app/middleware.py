@@ -15,11 +15,13 @@ from starlette.responses import JSONResponse
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
+# form-action dotyczy też przekierowań po wysłaniu formularza: POST → 302 poza
+# serwis (Google, Strava) musi mieć tu swój host, inaczej przeglądarka go zablokuje.
 CSP = (
     "default-src 'self'; img-src 'self' data: blob:; "
     "script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
     "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; "
-    "form-action 'self' https://accounts.google.com"
+    "form-action 'self' https://accounts.google.com https://www.strava.com"
 )
 
 

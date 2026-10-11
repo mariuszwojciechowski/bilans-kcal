@@ -38,6 +38,8 @@ def test_security_headers_present_and_hsts_only_outside_debug():
     assert r.headers["permissions-policy"] == "camera=(self), geolocation=()"
     assert r.headers["content-security-policy"] == CSP
     assert "frame-ancestors 'none'" in CSP and "https://accounts.google.com" in CSP
+    # POST /settings/strava/connect odpowiada 302 na strava.com — form-action musi to dopuścić
+    assert "https://www.strava.com" in CSP
     assert "strict-transport-security" not in r.headers
     r = _mini(debug=False).get("/ping")
     assert r.headers["strict-transport-security"] == "max-age=31536000; includeSubDomains"
