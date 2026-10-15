@@ -75,6 +75,13 @@ to część „done", nie opcjonalny krok.
 
 ## Konwencje
 
+**Rozwijamy tylko `/mobile`** (decyzja właściciela 2026-10-15): każdy nowy
+element funkcjonalności ląduje w `mobile.html` i działa przez `/api/*` —
+użytkownik ma mieć wszystko w jednym widoku aplikacji. Strony server-rendered
+(`settings.html`, `trends.html`, login/rejestracja, `usage.html`) są
+utrzymywane (bugfixy, zgodność z notą prywatności), ale **nie rozwijamy ich**.
+Nowa funkcja tylko na stronie server-rendered = niezgodna z tą zasadą.
+
 **Auth per request:** każdy route z danymi usera ma
 `user: User = Depends(auth.current_user)`. Bez sesji: 401 dla `/api/*`,
 303 na `/login` dla stron. `local_user()` została usunięta — nie wracaj do niej.
