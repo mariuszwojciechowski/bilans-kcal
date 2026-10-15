@@ -4,8 +4,13 @@ reset hasła. Jeden mail = jeden POST na API (httpx, bez SDK).
 Bez `FIT_KRASNAL_RESEND_KEY` nic nie wychodzi na świat: link resetu
 ląduje w logu, żeby dało się przetestować przepływ lokalnie i na VM.
 Konfiguracja konta/DNS: deploy/README.md, sekcja „Resend".
+
+Mail zostaje w plain tekście (dostarczalność > szata graficzna);
+„ikona krasnala" to jednolinijkowe kaomoji, bo wielolinijkowe ASCII-art
+rozjeżdża proporcjonalna czcionka Gmaila.
 """
 import logging
+import random
 
 import httpx
 
@@ -43,16 +48,33 @@ def _send(to: str, subject: str, text: str) -> bool:
     return True
 
 
+# Grzeczne krasnalowe mądrości do maila resetu (żartobliwe, ale bez
+# przekleństw — w odróżnieniu od quips.json do panelu „Dodaj posiłek").
+_KRASNAL = "( ˘ω˘ )ノ"
+_KRASNAL_WISDOM = (
+    "Małe kroki też wydeptują ścieżkę przez las. Krasnal osobiście sprawdzał.",
+    "Nie musisz być szybki jak zając. Wytrwały jak krasnal zupełnie wystarczy.",
+    "Bilans to jak kapelusz: jak go nie pilnujesz, wiatr go zabiera.",
+    "Warzywa, woda, spacer i sen. Reszta to dekoracje.",
+    "Lepiej zjeść łyżkę za mało niż talerz za dużo. Reguła leśnie sprawdzona.",
+    "Każdy zapisany posiłek to kamyk na krasnalowym kopcu. Buduj codziennie.",
+    "Wszystkie diety zaczynają się w poniedziałek. Twoja może od następnej minuty.",
+    "Cierpliwość to zbroja krasnala — i przy redukcji działa najlepiej.",
+)
+
+
 def send_password_reset(to: str, url: str) -> bool:
     """Mail z jednorazowym linkiem resetu hasła."""
     text = (
-        "Cześć!\n"
+        f"{_KRASNAL}  Cześć!\n"
         "\n"
         "Ktoś poprosił o reset hasła do Fit Krasnal. Jeśli to nie Ty — "
         "zignoruj tego maila, nic się nie stanie.\n"
         "\n"
         "Link ustawia nowe hasło (ważny 60 minut, działa raz):\n"
         f"{url}\n"
+        "\n"
+        f'Krasnalowa mądrość na dziś: "{random.choice(_KRASNAL_WISDOM)}"\n'
         "\n"
         "Serdecznie pozdrawiam,\n"
         "\n"

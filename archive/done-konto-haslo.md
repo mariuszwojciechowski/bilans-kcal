@@ -1,6 +1,17 @@
-# Done — konto: hasła (27.3.0–28.0.1)
+# Done — konto: hasła (27.3.0–28.0.4)
 
 Najnowsze u góry.
+
+## Mail resetu: krasnalowe akcenty (28.0.2–28.0.4)
+
+- Poprawki po oględzie realnego maila przez właściciela: „nowe hasło"
+  (było „nowy"), podpis „Serdecznie pozdrawiam," + TAB + „Fit Krasnal".
+- „Ikona krasnala" w plain tekście = jednolinijkowe kaomoji — ASCII-art
+  rozjeżdża proporcjonalna czcionka Gmaila; HTML odpada świadomie
+  (dostarczalność i filtry antyspamowe > szata graficzna).
+- Losowa grzeczna „krasnalowa mądrość" z osobnej listy w `mail.py`
+  (quips.json zostaje niecenzuralnym korpusem panelu „Dodaj posiłek");
+  `tests/test_mail.py` pilnuje kształtu maila i grzeczności cytatów.
 
 ## Klucz API Resend w Secret Manager (28.0.1)
 

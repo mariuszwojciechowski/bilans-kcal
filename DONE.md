@@ -16,6 +16,7 @@ w komunikacie commita, nie tutaj.
 
 ## Konto: hasła — [archive/done-konto-haslo.md](archive/done-konto-haslo.md)
 
+- Mail resetu: poprawki treści, kaomoji-ikona krasnala, losowe grzeczne mądrości (28.0.2–28.0.4)
 - Klucz API Resend w Secret Manager: loader ładuje dowolne klucze env, kontener w Terraformie (28.0.1)
 - „Nie pamiętam hasła" — reset mailem przez Resend: tokeny SHA-256, TTL 60 min, anti-enumeracja, nota prywatności + ponowna zgoda (28.0.0)
 - Zmiana hasła w /mobile: karta w Ustawieniach mobilnych + `POST /api/settings/password` (27.4.0)
