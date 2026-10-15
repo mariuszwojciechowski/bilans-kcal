@@ -78,6 +78,14 @@ bo skala pilota tego nie wymaga. Jeśli coś jest niejasne, napisz:
     — to jedyna informacja, jaka trafia do Google w tym kroku. Hasła do Google
     aplikacja nigdy nie widzi. Wpuszczane są wyłącznie adresy z listy
     ustalonej przez operatora.</li>
+  <li><b>Reset hasła mailem:</b> jeśli poprosisz o link resetu hasła,
+    wysyłamy go na adres e-mail podany w formularzu — tego maila realizuje
+    zewnętrzna usługa <b>Resend</b> (resend.com), która widzi adresy nadawcy
+    i odbiorcy oraz treść tego jednego maila z linkiem. Resend nie dostaje
+    żadnych innych danych z Twojego konta. Sam link zawiera jednorazowy
+    token, który trzymamy w bazie wyłącznie jako nieodwracalny skrót
+    kryptograficzny (SHA-256) — z bazy nie da się odtworzyć linku. To jedyny
+    rodzaj maili, jakie aplikacja wysyła.</li>
   <li><b>Profil:</b> rok urodzenia, płeć, wzrost, styl życia, cel wagi —
     wyłącznie do liczenia zapotrzebowania kalorycznego i norm makroskładników.
     Nie zbieramy pełnej daty urodzenia — rok wystarcza.</li>
@@ -181,6 +189,8 @@ sekrety) nie są w repozytorium — leżą wyłącznie na serwerze, opisane wyż
   <li><b>Logi serwera:</b> do 30 dni.</li>
   <li><b>Statystyki użycia (pod pseudonimem):</b> 180 dni, potem kasowane
     automatycznie.</li>
+  <li><b>Tokeny resetu hasła:</b> ważne 60 minut, jednorazowe; wygasłe i
+    wykorzystane są trwale kasowane przy kolejnym żądaniu resetu.</li>
 </ul>
 
 <h2 id="prawa">Twoje prawa</h2>

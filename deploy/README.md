@@ -367,6 +367,44 @@ payload, w którym brakuje którejś linii, ale nie wykryje literówki w wartoś
    skryptu do `/usr/local/sbin` + uruchomienie). Test:
    `<FIT_KRASNAL_PUBLIC_URL>/login` → „Zaloguj przez Google".
 
+## Wysyłka maili: Resend (reset hasła)
+
+Mail z linkiem resetu hasła (i na razie tylko on) wysyła
+[Resend](https://resend.com) — SMTP na e2-micro nie wchodzi w grę
+(żądania idą HTTPS-em 443 na `api.resend.com`). Free tier: 100 maili/dzień,
+3000/mies. — przy pilotach zapas.
+
+1. **Konto i domena.** https://resend.com → *Sign up*; dashboard → *Domains*
+   → *Add Domain* → `krasnal.cc`, region **eu-west-1**. Resend wypisze
+   rekordy DNS — dodaj je w Cloudflare **jedną linijką każdy** (wklejanie
+   z linijki dashboardu potrafi urwać znak nowej linii w środku klucza DKIM;
+   weryfikacja utknie na „pending"):
+   - TXT na `krasnal.cc` (SPF), `v=spf1 include:resend.com ~all`,
+   - TXT na `resend._domainkey` (DKIM), długi klucz `p=MII…` jedną linią,
+   - CNAME `rsend` i `send` → `…forge.rmta.net` (szara chmura — bez proxy),
+   - TXT na `_dmarc`: `v=DMARC1; p=none`.
+
+   Sprawdzenie od autorytatywnego DNS (omija cache resolvera):
+   `dig @tara.ns.cloudflare.com resend._domainkey.krasnal.cc TXT +short`.
+2. **API key.** *API Keys* → *Create API Key* → nazwa `fit-krasnal-prod`,
+   uprawnienia **Sending access**. Klucz `re_…` kopiuje się tylko raz —
+   do `/etc/fit-krasnal/env` jako `FIT_KRASNAL_RESEND_KEY=…` (nikt inny go
+   nie potrzebuje), potem `systemctl restart fit-krasnal`. Opcjonalnie
+   `FIT_KRASNAL_MAIL_FROM` (domyślnie `Fit Krasnal <noreply@krasnal.cc>`).
+   Docelowo klucz powinien leżeć w Secret Manager i ładować się jak OAuth
+   (rozszerzenie `deploy/load-oauth-secret.sh`) — na razie jest wpisany
+   ręcznie w env na VM, więc **przy odtworzeniu VM z Terraforma trzeba go
+   wpisać ponownie**.
+3. **Definicja „gotowe".** Domena *Verified* w dashboardzie + w Gmailu
+   („Pokaż oryginał") `SPF: PASS` i `DKIM: PASS` dla krasnal.cc. Test
+   dostarczalności: mail-tester.com (cel ≥ 9/10). **Dopóki domena nie ma
+   zielonego statusu w dashboardzie, Resend odrzuca wysyłkę** (403
+   „domain is not verified") — mail znika po cichu, jedyny ślad to wpis
+   w logu (`journalctl -u fit-krasnal`).
+
+Bez `FIT_KRASNAL_RESEND_KEY` aplikacja działa normalnie: formularz resetu
+istnieje, a link resetu zamiast mailem idzie do logu serwera (dev/test).
+
 ## Onboarding testera
 
 1. Wejdź na `https://fit.krasnal.cc` (przez basic_auth Caddy, dopóki nie

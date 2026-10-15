@@ -123,6 +123,8 @@ env (np. z `setup-vm.sh`) **nadpisuje** domyślną, nie przywraca jej.
 | `FIT_KRASNAL_SECRET_KEY` | `SECRET_KEY` | podpis ciasteczka sesji | `main.py`, `services/crypto.py`, `services/usage.py` |
 | `FIT_KRASNAL_DEBUG` | `DEBUG` | dev po http (ciasteczko bez HTTPS) | `main.py`, `services/crypto.py`, `services/usage.py` |
 | `FIT_KRASNAL_INVITE_CODE` | `INVITE_CODE` | kod zaproszenia do rejestracji | `routers/auth.py` |
+| `FIT_KRASNAL_RESEND_KEY` | `RESEND_API_KEY` | klucz API Resend (mail z linkiem resetu hasła; brak = link tylko w logach) | `services/mail.py` |
+| `FIT_KRASNAL_MAIL_FROM` | `MAIL_FROM` | nadawca maili (domyślnie `Fit Krasnal <noreply@krasnal.cc>`) | `services/mail.py` |
 | `FIT_KRASNAL_ENC_KEY` | `ENC_KEY` | klucz Fernet sekretów usera | `main.py`, `services/crypto.py` |
 | `FIT_KRASNAL_LLM` | `LLM_BACKEND` | wybór backendu LLM | `services/meal_vision.py` |
 | `FIT_KRASNAL_VERTEX_PROJECT` | `VERTEX_PROJECT` | projekt GCP dla Vertex AI | `services/meal_vision.py` |
@@ -138,7 +140,7 @@ env (np. z `setup-vm.sh`) **nadpisuje** domyślną, nie przywraca jej.
 | `FIT_KRASNAL_STRAVA_CLIENT_SECRET` | `STRAVA_CLIENT_SECRET` | OAuth Stravy | `routers/settings.py`, `providers/strava.py` |
 | `FIT_KRASNAL_STRAVA_REDIRECT_URI` | `STRAVA_REDIRECT_URI` | adres zwrotny Stravy | `routers/settings.py`, `providers/strava.py` |
 | `FIT_KRASNAL_BASE_URL` | `_BASE_URL` | baza adresów (fallback) | wyprowadza `STRAVA_REDIRECT_URI`, `PUBLIC_URL` |
-| `FIT_KRASNAL_PUBLIC_URL` | `PUBLIC_URL` | publiczny adres (zwrot OAuth Google) | `routers/oidc.py` |
+| `FIT_KRASNAL_PUBLIC_URL` | `PUBLIC_URL` | publiczny adres (zwrot OAuth Google, baza linku resetu hasła) | `routers/oidc.py`, `routers/auth.py` |
 | `FIT_KRASNAL_AUTH` | `AUTH_MODE` | `password` \| `oidc` \| `both` | `routers/auth.py`, `routers/oidc.py` |
 | `FIT_KRASNAL_GOOGLE_CLIENT_ID` | `GOOGLE_CLIENT_ID` | klient OAuth Google | `routers/oidc.py` |
 | `FIT_KRASNAL_GOOGLE_CLIENT_SECRET` | `GOOGLE_CLIENT_SECRET` | klient OAuth Google | `routers/oidc.py` |
@@ -163,8 +165,9 @@ Serwer woła `usage_service.bump(...)`; klient woła `track(event)` →
 
 | Zdarzenie | Emisja |
 |---|---|
-| `login` | `routers/auth.py` (POST /login) |
+| `login`, `password_reset_request`, `password_reset_done` | `routers/auth.py` (POST /login; reset mailem — request tylko gdy mail poszedł) |
 | `login_google` | `routers/oidc.py:google_callback` |
+| `password_change` | `routers/settings.py` (formularz i `POST /api/settings/password`) |
 | `profile_save`, `sync_manual` | `routers/profile.py` |
 | `weight_manual`, `steps_set`, `day_view`, `activity_add`, `activity_delete` | `routers/day.py` (`day_view` = każde `GET /api/day/{day}`, nie odsłona) |
 | `meal_photo`, `meal_text`, `meal_save_*`, `meal_delete`, `queue_delete`, `queue_process`, `saved_meal_create`, `saved_meal_use` | `routers/meals.py` (`meal_save_{source}` — `source` nadaje klient w `saveDraft`) |
