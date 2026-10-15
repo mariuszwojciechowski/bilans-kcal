@@ -45,6 +45,7 @@ EVENTS: set[str] = {
     "profile_save", "goal_save", "lifestyle_save",
     "trends_view", "trends_7", "trends_30", "trends_90", "trends_180",
     "login", "login_google", "password_change",
+    "password_reset_request", "password_reset_done",
     "day_view",
     "tab_today", "tab_add", "tab_activities", "tab_trends", "tab_settings",
     "manual_open", "saved_meals_open", "photo_pick",
