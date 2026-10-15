@@ -56,6 +56,6 @@ def send_password_reset(to: str, url: str) -> bool:
         "\n"
         "Serdecznie pozdrawiam,\n"
         "\n"
-        "Fit Krasnal\n"
+        "\tFit Krasnal\n"
     )
     return _send(to, "Fit Krasnal — reset hasła", text)
