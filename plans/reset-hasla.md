@@ -55,7 +55,70 @@ a loguje link resetu; testy lecą na mocku)
    (jednorazowość), TTL wygaśnięcie, throttle, sukces → hasło działa,
    konto Google (bez hasła) — reset ustawia pierwsze hasło, tryb `oidc` → 404.
 
-## Okazałe ograniczenia
+## Runbook: konto Resend i DNS (dla właściciela, poza kodem)
+
+**Krok 0 — konto.** https://resend.com → „Sign up" (e-mail albo GitHub).
+Free tier: 100 maili/dzień, 3000/mies. — przy pilotach zapas. Kreditówka
+nie jest wymagana na start.
+
+**Krok 1 — domena.** Dashboard → „Domains" → „Add Domain" → `krasnal.cc`
+(jeśli pyta o region: **eu-west-1**, Irlandia — dane w EU). Resend wypisze
+rekordy DNS do dodania w strefie `krasnal.cc` (tam, gdzie trzymasz DNS —
+registrar/Cloudflare):
+
+- SPF: TXT na `krasnal.cc`, wartość w rodzaju `v=spf1 include:resend.com ~all`,
+- DKIM: TXT na `resend._domainkey.krasnal.cc`, długi klucz `p=MII…`,
+- ewentualnie DMARC: TXT na `_dmarc.krasnal.cc`, `v=DMARC1; p=none`.
+
+**Wklejaj dokładnie to, co pokazuje dashboard** — wartości są per konto
+i Resend bywa zmieniał format (kiedyś `include:amazonses.com`). Wróć
+do dashboardu → „Verify" — zielony status zwykle w ~15 min.
+
+**Krok 2 — API key.** Dashboard → „API Keys" → „Create API Key" →
+nazwa `fit-krasnal-prod`, uprawnienia **Sending access** (nie full).
+Kopiuj `re_…` od razu — pokaże się tylko raz. Klucz nigdy nie idzie do
+repo, commitów ani czatu — tylko do Secret Managera.
+
+**Krok 3 — test ręczny (zanim cokolwiek ruszy w appce).** Z dowolnej
+maszyny z `curl`:
+
+```bash
+curl -X POST 'https://api.resend.com/emails' \
+  -H 'Authorization: Bearer re_TWOJ_KLUCZ' \
+  -H 'Content-Type: application/json' \
+  -d '{"from":"Fit Krasnal <noreply@krasnal.cc>","to":["TWOJ@EMAIL"],
+       "subject":"Test Resend","text":"Test wysylki resetu hasla z krasnal.cc"}'
+```
+
+- 200 + `"id":"…"` = klucz i domena działają,
+- w Gmailu: „Pokaż oryginał" → mają być `SPF: PASS` i `DKIM: PASS`
+  **dla krasnal.cc** — bez tego nie włączamy,
+- punktowe sprawdzenie antyspamowe: wejdź na mail-tester.com, skopiuj
+  pokazany tam jednorazowy adres, wyślij na niego drugi mail — cel to 9–10/10.
+
+**Krok 4 — klucz na produkcję.** Do GCP (przeżyje odtworzenie VM):
+
+```bash
+printf 'FIT_KRASNAL_RESEND_KEY=re_TWOJ_KLUCZ' \
+  | gcloud secrets create fit-krasnal-resend --data-file=-
+```
+
+Na VM dziś najszybciej ręcznie (plik jest 0600 root, tam już leżą inne
+sekrety), potem restart:
+
+```bash
+echo 'FIT_KRASNAL_RESEND_KEY=re_TWOJ_KLUCZ' >> /etc/fit-krasnal/env
+systemctl restart fit-krasnal
+```
+
+Docelowo (zadanie implementacji): rozszerzyć `deploy/load-oauth-secret.sh`
+o ten sekret, żeby leciał z Secret Managera jak OAuth, nie ręcznie.
+
+**Krok 5 — definicja „gotowe" po stronie ownera:** domena „Verified"
+w dashboardzie + SPF/DKIM PASS w Gmailu + mail-tester ≥9. Wtedy mówimy
+o włączeniu wysyłki na produkcji (razem z notą prywatności).
+
+## Znane ograniczenia
 
 - e2-micro: wyłącznie HTTPS 443 do `api.resend.com` — żadnych portów SMTP.
 - Mail zawsze PL, bez śledzenia otwarć (nie włączamy open-trackingu Resend).
