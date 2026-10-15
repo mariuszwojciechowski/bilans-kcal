@@ -86,16 +86,6 @@ Nie jest planem implementacji, tylko listą warunków wejścia; dopóki pilot
 działa na `/mobile` jako PWA, nie jest na ścieżce krytycznej. Pozostałe
 pytania: [TODECIDE.md](TODECIDE.md) „Pozostałości po forku".
 
-## „Nie pamiętam hasła" — reset mailem przez Resend (8/10)
-
-→ [plans/reset-hasla.md](plans/reset-hasla.md). **Decyzja (2026-10-15):
-Resend**, nadawca `noreply@krasnal.cc` (odpadły: Gmail SMTP, Amazon SES).
-Tokeny jednorazowe (hash w bazie, TTL 60 min, anti-enumeracja), strony
-resetu server-rendered przy `/login` — przed sesją nie ma `/mobile`.
-Kod nie blokuje się na konto Resend (bez klucza: log z linkiem, testy
-na mocku); end-to-end wymaga po stronie właściciela: DNS (SPF/DKIM/DMARC)
-+ API key w Secret Manager + test deliverability.
-
 ## Nazwa pakietu i domena pod wydanie mobilne (1/10) — WYMAGANIA.md §10.3
 
 Zadanie administracyjne, bez kodu: identyfikator aplikacji (np.

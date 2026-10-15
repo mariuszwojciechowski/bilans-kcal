@@ -1,6 +1,26 @@
-# Done — konto: hasła (27.3.0–27.4.0)
+# Done — konto: hasła (27.3.0–28.0.0)
 
 Najnowsze u góry.
+
+## „Nie pamiętam hasła" — reset mailem przez Resend (28.0.0)
+
+- Decyzja właściciela 2026-10-15: kanał **Resend** (darmowy tier 100
+  maili/dzień), nadawca `noreply@krasnal.cc`, region eu-west-1 —
+  odpadły Gmail SMTP („via gmail.com") i Amazon SES (IAM/SNS na e2-micro).
+- Trasy przy `/login` (server-rendered — przed sesją nie ma `/mobile`):
+  formularz → `POST /password-reset/request` (anti-enumeracja: zawsze
+  `?sent=1`), `GET/POST /password-reset/{token}`; w trybie `oidc` → 404.
+- Token 32 B w bazie tylko jako SHA-256, TTL 60 min, jednorazowy atomowym
+  UPDATE-em, throttle 3 żądania/h na e-mail; `peek` nie zużywa (skanery
+  linków), reset unieważnia wszystkie tokeny usera i zdejmuje lockout login.
+- Nota `/prywatnosc`: nowy odbiorca Resend + retencja tokenów —
+  `PRIVACY_VERSION` 2026-10-15 (ponowna zgoda testerów); statystyki
+  `password_reset_request` / `password_reset_done` na `/usage`.
+- Runbook konta Resend (DNS, API key, definicja „gotowe") przeniesiony do
+  [deploy/README.md](../deploy/README.md) „Wysyłka maili"; 13 testów
+  w `tests/test_password_reset.py`. **Klucz wsadzony ręcznie w env na VM —
+  przy odtworzeniu VM z Terraforma trzeba wpisać ponownie** (docelowo
+  Secret Manager jak OAuth).
 
 ## Zmiana hasła w widoku /mobile (27.4.0)
 
