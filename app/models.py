@@ -56,6 +56,23 @@ class Consent(Base):
     withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
+class PasswordResetToken(Base):
+    """Jednorazowy token resetu hasła („Nie pamiętasz hasła?" na /login).
+    W bazie leży wyłącznie SHA-256 tokenu — wyciek bazy nie daje działających
+    linków. Token żyje do `expires_at` (60 min, patrz services/password_reset)
+    i zużywa się przez `used_at`; wiersze sprząta serwis przy okazji żądań."""
+
+    __tablename__ = "password_reset_token"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime)
+    # UTC, jak reszta znaczników czasu (strefa VM to UTC)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class WeightLog(Base):
     __tablename__ = "weight_log"
     __table_args__ = (UniqueConstraint("user_id", "date"),)

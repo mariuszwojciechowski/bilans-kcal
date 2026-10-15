@@ -114,6 +114,12 @@ STRAVA_REDIRECT_URI = os.getenv("FIT_KRASNAL_STRAVA_REDIRECT_URI",
 # zwrotnych OAuth. Dla wdrożenia GCP z sslip.io np. https://fit-<ip>.sslip.io.
 PUBLIC_URL = os.getenv("FIT_KRASNAL_PUBLIC_URL", _BASE_URL).rstrip("/")
 
+# Mailing transakcyjny (reset hasła) przez Resend — https://resend.com.
+# Pusty klucz = wysyłka wyłączona: link resetu trafia wtedy do logów
+# (dev/test; runbook konfiguracji: deploy/README.md, sekcja „Resend").
+RESEND_API_KEY = os.getenv("FIT_KRASNAL_RESEND_KEY", "").strip()
+MAIL_FROM = os.getenv("FIT_KRASNAL_MAIL_FROM", "Fit Krasnal <noreply@krasnal.cc>")
+
 # Logowanie przez Google (OIDC, authlib). Tryb:
 #   password (domyślnie) — tylko e-mail + hasło, jak dotąd,
 #   oidc — tylko „Zaloguj przez Google" (POST /login i /register → 404),
@@ -136,7 +142,7 @@ MAX_USERS = int(os.getenv("FIT_KRASNAL_MAX_USERS", "20"))
 # starszej wersji liczy się do CONSENT_DEADLINE (consent.effective), potem trzeba
 # potwierdzić nową — bumpować tylko przy realnej zmianie treści noty, nie przy
 # każdej literówce. Wersja = data wdrożenia noty (ustawiana tuż przed pushem).
-PRIVACY_VERSION = os.getenv("FIT_KRASNAL_PRIVACY_VERSION", "2026-10-11")
+PRIVACY_VERSION = os.getenv("FIT_KRASNAL_PRIVACY_VERSION", "2026-10-15")
 # Do kiedy zgoda w starszej wersji noty jeszcze działa (baner prosi o
 # potwierdzenie); po tej dacie bramka wymaga zgody w bieżącej wersji.
 CONSENT_DEADLINE = date(2026, 12, 31)
