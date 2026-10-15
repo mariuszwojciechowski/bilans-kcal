@@ -1,6 +1,17 @@
-# Done — konto: hasła (27.3.0)
+# Done — konto: hasła (27.3.0–27.4.0)
 
 Najnowsze u góry.
+
+## Zmiana hasła w widoku /mobile (27.4.0)
+
+- Pierwsza funkcja pod nową zasadą „rozwijamy tylko /mobile" (CLAUDE.md,
+  decyzja właściciela 2026-10-15): karta „Hasło" w Ustawieniach mobilnych,
+- `POST /api/settings/password` (JSON, błędy 400 z `detail`) — walidacja
+  wspólna z formularzem `/settings/password` przez `_password_change_problem`
+  / `_apply_password_change`, więc oba UI nie mogą się rozjechać,
+- `/api/settings` dokłada `has_password` i `password_enabled` — mobile wie,
+  czy pokazać pole „obecne hasło" (konto z Google: „Ustaw hasło") i czy
+  karta w ogóle istnieje (tryb `oidc`: znika, POST → 404).
 
 ## Zmiana hasła w Ustawieniach (27.3.0)
 

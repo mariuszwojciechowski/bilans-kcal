@@ -16,6 +16,7 @@ w komunikacie commita, nie tutaj.
 
 ## Konto: hasła — [archive/done-konto-haslo.md](archive/done-konto-haslo.md)
 
+- Zmiana hasła w /mobile: karta w Ustawieniach mobilnych + `POST /api/settings/password` (27.4.0)
 - Zmiana hasła w Ustawieniach: karta + `POST /settings/password`; konta Google ustawiają pierwsze hasło; `password_change` w statystykach (27.3.0)
 - Skrypt serwerowy `scripts/reset_password.py <email>` — hasło przez `getpass`, nie w historii basha (27.3.0)
 
