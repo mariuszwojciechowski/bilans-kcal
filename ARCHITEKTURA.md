@@ -274,11 +274,14 @@ flowchart TD
     end
     meta[Metadane VM: fit-krasnal-allowed-emails] -->|fetch-metadata-env.sh| env2
     sm[Secret Manager: fit-krasnal-oauth] -->|load-oauth-secret.sh| env1
+    sm2[Secret Manager: fit-krasnal-resend-key] -->|load-oauth-secret.sh| env1
 ```
 
 `fit-krasnal.service` woła przed startem `deploy/fetch-metadata-env.sh`
-(allowlista z metadanych → `/run/fit-krasnal/env`). Klient OAuth wczytuje
-`deploy/load-oauth-secret.sh` (Secret Manager → `/etc/fit-krasnal/env`). Timer
+(allowlista z metadanych → `/run/fit-krasnal/env`). Klient OAuth i klucz
+API Resend (maile z linkiem resetu hasła) wczytuje
+`deploy/load-oauth-secret.sh` (Secret Manager → `/etc/fit-krasnal/env`;
+klucze jako argumenty, domyślnie para OAuth). Timer
 `fit-krasnal-queue.timer` (`OnCalendar=*:0/1`) woła
 `scripts/process_meal_queue.py` → `meal_queue.process_queue`.
 
@@ -297,6 +300,8 @@ google_storage_bucket.apk                         prywatny bucket na APK
 google_storage_bucket_iam_member.apk_viewers      objectViewer dla apk_viewers
 google_secret_manager_secret.oauth                pusty sekret OAuth (prevent_destroy)
 google_secret_manager_secret_iam_member.oauth_vm_accessor  secretAccessor dla konta VM
+google_secret_manager_secret.resend               pusty sekret klucza Resend (prevent_destroy)
+google_secret_manager_secret_iam_member.resend_vm_accessor  secretAccessor dla konta VM
 ```
 
 ## Czego nie ma / świadome długi

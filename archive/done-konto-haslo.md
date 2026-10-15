@@ -1,6 +1,24 @@
-# Done — konto: hasła (27.3.0–28.0.0)
+# Done — konto: hasła (27.3.0–28.0.1)
 
 Najnowsze u góry.
+
+## Klucz API Resend w Secret Manager (28.0.1)
+
+- Zamknięcie długu z 28.0.0 (klucz ręcznie w env na VM): kontener
+  `fit-krasnal-resend-key` + `secretAccessor` dla konta VM w Terraformie
+  (`resend_secret_name`), wersję z jedną linią `FIT_KRASNAL_RESEND_KEY=…`
+  dodaje operator w konsoli GCP — wartość nigdy nie trafia do repo, stanu
+  Terraforma ani na terminal.
+- `deploy/load-oauth-secret.sh` uogólniony na dowolne klucze env (argumenty;
+  bez nich — domyślna para OAuth, więc komendy z outputów terraform
+  i instalacja na VM bez zmian). Alternacja BRE zachowana jak w oryginale:
+  zwykły `|` w BRE GNU grepa jest literalny i dublowałby linie
+  przy ponownym ładowaniu.
+- Na VM: `load-oauth-secret fit-krasnal-resend-key FIT_KRASNAL_RESEND_KEY`
+  — podmienia też ręcznie wpisaną linię (idempotentny); po odtworzeniu VM
+  z Terraforma wystarczy output `resend_secret_load_command`.
+- Przetestowany atrapami gcloud/systemctl: ładowanie, idempotencja, rotacja,
+  odrzucenia (nadmiarowa linia, zły charset, duplikat klucza).
 
 ## „Nie pamiętam hasła" — reset mailem przez Resend (28.0.0)
 

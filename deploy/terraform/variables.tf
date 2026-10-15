@@ -84,3 +84,9 @@ variable "oauth_secret_name" {
   type        = string
   default     = "fit-krasnal-oauth"
 }
+
+variable "resend_secret_name" {
+  description = "Nazwa sekretu w Secret Manager z kluczem API Resend do maili z linkiem resetu hasła (payload: jedna linia FIT_KRASNAL_RESEND_KEY=…). Wersję dodaje operator, nie Terraform."
+  type        = string
+  default     = "fit-krasnal-resend-key"
+}

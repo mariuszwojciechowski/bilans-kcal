@@ -186,3 +186,32 @@ resource "google_secret_manager_secret_iam_member" "oauth_vm_accessor" {
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.vm.email}"
 }
+
+# ── Klucz API Resend w Secret Manager ───────────────────────────────────
+# Ten sam wzorzec co klient OAuth: kontener + uprawnienie dla konta VM
+# w Terraformie, WERSJĘ (jedna linia FIT_KRASNAL_RESEND_KEY=re_…) dodaje
+# operator ręcznie (deploy/README.md, „Wysyłka maili"), żeby wartość nigdy
+# nie trafiła do stanu Terraforma. Komenda do VM: output
+# `resend_secret_load_command`.
+resource "google_secret_manager_secret" "resend" {
+  secret_id = var.resend_secret_name
+
+  replication {
+    auto {}
+  }
+
+  # Wersję z kluczem dodaje operator ręcznie — `terraform destroy` nie może
+  # jej skasować po cichu; jak przy sekrecie OAuth: zmiana nazwy/replikacji
+  # wymaga świadomego usunięcia tego bloku, zmiana etykiety — `terraform state mv`.
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_secret_manager_secret_iam_member" "resend_vm_accessor" {
+  secret_id = google_secret_manager_secret.resend.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.vm.email}"
+}

@@ -331,6 +331,12 @@ Nie wypisuj zawartości sekretu na terminal (`cat`, `gcloud … access` bez
 przekierowania); sprawdzaj obecność, nie wartości:
 `sudo grep -c '^FIT_KRASNAL_GOOGLE_CLIENT_\(ID\|SECRET\)=.' /etc/fit-krasnal/env` → `2`.
 
+Ten sam skrypt ładuje **dowolne** sekrety w formacie linii env: po nazwie
+sekretu podaj klucze, które ma zawierać (bez argumentów — domyślna para
+OAuth, jak wyżej). Tak ładuje się np. klucz API Resend:
+`sudo /usr/local/sbin/load-oauth-secret fit-krasnal-resend-key FIT_KRASNAL_RESEND_KEY`
+— patrz sekcja „Wysyłka maili: Resend".
+
 Sekret ma `prevent_destroy`: zmiana jego nazwy albo replikacji wymaga
 świadomego usunięcia tego bloku (stare wersje przepadają), zmiana etykiety
 zasobu w HCL — `terraform state mv`.
@@ -386,15 +392,26 @@ Mail z linkiem resetu hasła (i na razie tylko on) wysyła
 
    Sprawdzenie od autorytatywnego DNS (omija cache resolvera):
    `dig @tara.ns.cloudflare.com resend._domainkey.krasnal.cc TXT +short`.
-2. **API key.** *API Keys* → *Create API Key* → nazwa `fit-krasnal-prod`,
-   uprawnienia **Sending access**. Klucz `re_…` kopiuje się tylko raz —
-   do `/etc/fit-krasnal/env` jako `FIT_KRASNAL_RESEND_KEY=…` (nikt inny go
-   nie potrzebuje), potem `systemctl restart fit-krasnal`. Opcjonalnie
-   `FIT_KRASNAL_MAIL_FROM` (domyślnie `Fit Krasnal <noreply@krasnal.cc>`).
-   Docelowo klucz powinien leżeć w Secret Manager i ładować się jak OAuth
-   (rozszerzenie `deploy/load-oauth-secret.sh`) — na razie jest wpisany
-   ręcznie w env na VM, więc **przy odtworzeniu VM z Terraforma trzeba go
-   wpisać ponownie**.
+2. **API key → Secret Manager.** *API Keys* → *Create API Key* → nazwa
+   `fit-krasnal-prod`, uprawnienia **Sending access**. Klucz `re_…`
+   (kopiuje się tylko raz, nikt inny go nie potrzebuje) trafia do Secret
+   Manager jako sekret `fit-krasnal-resend-key` — kontener i uprawnienie
+   dla konta VM tworzy Terraform (`var.resend_secret_name`), wersję dodaje
+   operator: konsola GCP → *Secret Manager* → `fit-krasnal-resend-key` →
+   *Add new version*, z zawartością **jednej linii**
+   `FIT_KRASNAL_RESEND_KEY=re_…` (przeglądarka, bez ruszania lokalnego
+   logowania gcloud). Na VM ładuje go ten sam loader co klienta OAuth
+   (podmienia też ręcznie wpisaną linię, jest idempotentny):
+
+   ```bash
+   sudo install -o root -g root -m 0755 /opt/fit-krasnal/deploy/load-oauth-secret.sh /usr/local/sbin/load-oauth-secret   # jeśli jeszcze nie zainstalowany
+   sudo /usr/local/sbin/load-oauth-secret fit-krasnal-resend-key FIT_KRASNAL_RESEND_KEY
+   ```
+
+   Po odtworzeniu VM z Terraforma wystarczy komenda z outputu
+   `resend_secret_load_command` — klucz, w odróżnieniu od ręcznego wpisu
+   w env, nie przepada. Opcjonalnie `FIT_KRASNAL_MAIL_FROM` w env na VM
+   (domyślnie `Fit Krasnal <noreply@krasnal.cc>`).
 3. **Definicja „gotowe".** Domena *Verified* w dashboardzie + w Gmailu
    („Pokaż oryginał") `SPF: PASS` i `DKIM: PASS` dla krasnal.cc. Test
    dostarczalności: mail-tester.com (cel ≥ 9/10). **Dopóki domena nie ma

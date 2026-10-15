@@ -39,3 +39,8 @@ output "oauth_secret_load_command" {
   description = "Do uruchomienia na VM: kopiuje loader poza checkout (root-owned) i pobiera klienta OAuth z Secret Manager (gcloud z konta usługi VM), podmienia linie w /etc/fit-krasnal/env i restartuje usługę. Nie wypisuje wartości sekretu."
   value       = "sudo install -o root -g root -m 0755 /opt/fit-krasnal/deploy/load-oauth-secret.sh /usr/local/sbin/load-oauth-secret && sudo /usr/local/sbin/load-oauth-secret ${google_secret_manager_secret.oauth.secret_id}"
 }
+
+output "resend_secret_load_command" {
+  description = "Do uruchomienia na VM: tym samym loaderem pobiera klucz API Resend z Secret Manager i podmienia linię w /etc/fit-krasnal/env (też ręcznie wpisaną), restartuje usługę. Nie wypisuje wartości sekretu."
+  value       = "sudo /usr/local/sbin/load-oauth-secret ${google_secret_manager_secret.resend.secret_id} FIT_KRASNAL_RESEND_KEY"
+}
