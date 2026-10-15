@@ -25,6 +25,20 @@ Hotfix zrobiony (DONE.md „Testy: «dziś» ze strefy użytkownika…"); zosta�
 - **Deterministyczny zegar w testach** (4/10): autouse fixture zamrażająca
   czas przez `clock.now_utc()` po przepięciu `sync`/`calibration`/`usage`.
 
+## Czekające deprecacje przed przyszłym upgrade'em Pythona (3/10)
+
+Suita skrzypi 712 warningami — to cztery klasy deprecacji, żadna nie blokuje,
+ale `datetime.utcnow()` jest **usunięte w Pythonie 3.15+**, więc upgrade
+z 3.13 padnie na failure, nie na warning:
+
+- `datetime.utcnow()` → strefowo-świadome `datetime.now(UTC)`: `meal_queue`,
+  `sync`, `consent`, `transfer`, `routers/meals`, `timeago` + kilka miejsc
+  w testach. Naturalnie zbiega się z punktem „Deterministyczny zegar
+  w testach" (zamrażanie też przejdzie przez `clock.now_utc()`) — robić razem.
+- `@app.on_event("startup")` (`app/main.py`) → lifespan handlers (FastAPI).
+- SADeprecation: kolumna `Meal.time` tapowana jako `Time` vs `or_`
+  (`models.py:145,190`) — do weryfikacji przy okazji.
+
 ## Braki względem WYMAGANIA.md (audyt 2026-09-03)
 
 Moduły M1–M11 zrobione. Otwarte tylko trzy wymogi, każdy ma punkt niżej:
