@@ -51,9 +51,11 @@ def send_password_reset(to: str, url: str) -> bool:
         "Ktoś poprosił o reset hasła do Fit Krasnal. Jeśli to nie Ty — "
         "zignoruj tego maila, nic się nie stanie.\n"
         "\n"
-        "Link ustawia nowy hasło (ważny 60 minut, działa raz):\n"
+        "Link ustawia nowe hasło (ważny 60 minut, działa raz):\n"
         f"{url}\n"
         "\n"
-        "— Krasnal\n"
+        "Serdecznie pozdrawiam,\n"
+        "\n"
+        "Fit Krasnal\n"
     )
     return _send(to, "Fit Krasnal — reset hasła", text)
