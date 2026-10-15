@@ -145,3 +145,90 @@ def test_password_change_bumps_usage(client):
         UsageDaily.event == "password_change")).all()
     assert rows and rows[0].count == 1
     db.close()
+
+
+# ── JSON API dla widoku /mobile (SPA) ──────────────────────────────────────
+
+def _api_change(client, old=OLD, new=NEW, new2=None):
+    return client.post("/api/settings/password", json={
+        "old_password": old,
+        "new_password": new,
+        "password2": new2 if new2 is not None else new,
+    })
+
+
+def test_api_change_password_happy_path(client):
+    _register(client)
+    resp = _api_change(client)
+    assert resp.status_code == 200 and resp.json() == {"ok": True}
+
+    db = client.session_factory()
+    assert auth.verify_password(NEW, db.scalars(select(User)).one().password_hash)
+    db.close()
+
+
+def test_api_change_password_errors_are_400_with_detail(client):
+    """Błędy wracają jako `detail` (mobile pokazuje go pod formularzem)."""
+    _register(client)
+    bad_old = _api_change(client, old="zle")
+    assert bad_old.status_code == 400
+    assert "obecne hasło" in bad_old.json()["detail"]
+
+    mismatch = client.post("/api/settings/password", json={
+        "old_password": OLD, "new_password": NEW, "password2": "inne1234",
+    })
+    assert "identyczne" in mismatch.json()["detail"]
+
+    short = client.post("/api/settings/password", json={
+        "old_password": OLD, "new_password": "krotkie", "password2": "krotkie",
+    })
+    assert "za krótkie" in short.json()["detail"]
+
+    db = client.session_factory()
+    assert auth.verify_password(OLD, db.scalars(select(User)).one().password_hash)
+    db.close()
+
+
+def test_api_settings_reports_password_state(client):
+    """/api/settings mówi /mobile, jaką kartę hasła pokazać."""
+    _register(client)
+    got = client.get("/api/settings").json()
+    assert got["has_password"] is True and got["password_enabled"] is True
+
+    db = client.session_factory()
+    db.scalars(select(User)).one().password_hash = None   # konto z Google
+    db.commit()
+    db.close()
+
+    assert client.get("/api/settings").json()["has_password"] is False
+
+
+def test_api_password_hidden_in_oidc_mode(client, monkeypatch):
+    _register(client)
+    monkeypatch.setattr("app.routers.settings.AUTH_MODE", "oidc")
+
+    resp = client.get("/api/settings")
+    assert resp.json()["password_enabled"] is False
+    assert _api_change(client).status_code == 404
+
+
+def test_api_google_account_sets_first_password(client):
+    """Konto z Google ustawia pierwsze hasło bez pola obecnego."""
+    _register(client)
+
+    db = client.session_factory()
+    db.scalars(select(User)).one().password_hash = None
+    db.commit()
+    db.close()
+
+    resp = client.post("/api/settings/password",
+                       json={"new_password": NEW, "password2": NEW})
+    assert resp.status_code == 200
+
+    db = client.session_factory()
+    assert auth.verify_password(NEW, db.scalars(select(User)).one().password_hash)
+    db.close()
+
+    client.post("/logout")
+    assert client.post("/login", data={"email": "tester@example.com",
+                                       "password": NEW}).headers["location"] == "/"

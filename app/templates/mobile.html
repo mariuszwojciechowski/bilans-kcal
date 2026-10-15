@@ -476,6 +476,20 @@
   </section>
   {% endif %}
 
+  <section class="card" id="password-section" style="display:none">
+    <h2 id="s-pw-title">Hasło</h2>
+    <div id="s-pw-old-row" style="display:none">
+      <input type="password" id="s-pw-old" placeholder="Obecne hasło"
+             autocomplete="current-password" style="margin-bottom:6px">
+    </div>
+    <input type="password" id="s-pw-new" placeholder="Nowe hasło (min. 8 znaków)"
+           autocomplete="new-password" style="margin-bottom:6px">
+    <input type="password" id="s-pw-new2" placeholder="Powtórz nowe hasło"
+           autocomplete="new-password">
+    <button class="ghost" id="s-pw-btn" onclick="savePassword()">Zmień hasło</button>
+    <p class="muted" id="s-pw-msg" style="margin:6px 0 0"></p>
+  </section>
+
   <section class="card">
     <h2>Konto</h2>
     <p class="muted">Kontakt: <a href="mailto:krasnal@krasnal.cc">krasnal@krasnal.cc</a></p>
@@ -1566,6 +1580,7 @@ async function renderSettings() {
     }
     applyConsentUi(settings);
     applySourceFromSettings(settings);
+    applyPasswordUi(settings);
     status.textContent = "";
     _settingsLoaded = true;
   } catch(e) {
@@ -1679,6 +1694,48 @@ async function saveLlmKey() {
   }
   btn.disabled = false;
   setTimeout(() => btn.textContent = "Zapisz klucz", 2500);
+}
+
+/* ── zmiana hasła ── */
+function applyPasswordUi(settings) {
+  const section = document.getElementById("password-section");
+  if (!section) return;
+  // tryb oidc: hasła w ogóle nie ma — karta znika, jak cała reszta haseł w appce
+  if (settings.password_enabled === false) { section.style.display = "none"; return; }
+  section.style.display = "";
+  const has = !!settings.has_password;
+  document.getElementById("s-pw-old-row").style.display = has ? "" : "none";
+  document.getElementById("s-pw-title").textContent = has ? "Hasło" : "Ustaw hasło";
+  document.getElementById("s-pw-btn").textContent = has ? "Zmień hasło" : "Ustaw hasło";
+}
+
+async function savePassword() {
+  const btn = document.getElementById("s-pw-btn");
+  const msg = document.getElementById("s-pw-msg");
+  const oldRow = document.getElementById("s-pw-old-row");
+  const new1 = document.getElementById("s-pw-new").value;
+  const new2 = document.getElementById("s-pw-new2").value;
+  if (!new1 || new1 !== new2) {
+    msg.textContent = new1 !== new2 ? "Nowe hasła nie są identyczne." : "Podaj nowe hasło.";
+    return;
+  }
+  btn.disabled = true; btn.textContent = "Zapisuję…";
+  msg.textContent = "";
+  try {
+    await apiJson("/api/settings/password", {
+      old_password: oldRow.style.display === "none" ? "" : document.getElementById("s-pw-old").value,
+      new_password: new1,
+      password2: new2,
+    });
+    ["s-pw-old", "s-pw-new", "s-pw-new2"].forEach(id => document.getElementById(id).value = "");
+    msg.textContent = "Zapisano ✓";
+    _settingsLoaded = false;   // has_password może się zmienić (konto Google) — odśwież UI
+    await renderSettings();    // ustawia też tekst przycisku na nowo
+  } catch(e) {
+    msg.textContent = e.detail || e.message || "Nie udało się zmienić hasła.";
+    btn.disabled = false;
+    btn.textContent = oldRow.style.display === "none" ? "Ustaw hasło" : "Zmień hasło";
+  }
 }
 
 /* ── AKTYWNOŚCI ── */

@@ -144,23 +144,35 @@ def settings_goal(target_weight_kg: float = Form(...), db: Session = Depends(db_
     return RedirectResponse("/settings?saved=1", status_code=303)
 
 
+def _password_change_problem(user: User, old_password: str,
+                             new_password: str, password2: str) -> str | None:
+    """Wspólna walidacja dla formularza /settings i JSON-a /mobile.
+    Zwraca kod błędu (klucz PASSWORD_ERRORS) albo None, gdy wszystko gra."""
+    if (user.password_hash is not None
+            and not auth.verify_password(old_password, user.password_hash)):
+        return "bad_password"
+    return auth.password_problem(new_password, password2)
+
+
+def _apply_password_change(db: Session, user: User, new_password: str) -> None:
+    user.password_hash = auth.hash_password(new_password)
+    db.commit()
+    usage_service.bump(db, user.id, "password_change")
+
+
 @router.post("/settings/password")
 def settings_password(old_password: str = Form(""), new_password: str = Form(...),
                       password2: str = Form(...), db: Session = Depends(db_session),
                       user: User = Depends(auth.current_user)):
-    """Zmiana hasła z Ustawień. Konto założone przez Google (bez hasła)
-    może tu ustawić pierwsze — wtedy pole „obecne hasło" nie istnieje."""
+    """Zmiana hasła z klasycznej strony /settings. Konto założone przez Google
+    (bez hasła) może tu ustawić pierwsze — wtedy pole „obecne hasło" nie
+    istnieje. Właściwy UI użytkownika jest w /mobile (POST /api/settings/password)."""
     if AUTH_MODE == "oidc":
         raise HTTPException(404)  # jak auth._password_routes_enabled: hasła nie ma
-    if (user.password_hash is not None
-            and not auth.verify_password(old_password, user.password_hash)):
-        return RedirectResponse("/settings?error=bad_password", status_code=303)
-    problem = auth.password_problem(new_password, password2)
+    problem = _password_change_problem(user, old_password, new_password, password2)
     if problem:
         return RedirectResponse(f"/settings?error={problem}", status_code=303)
-    user.password_hash = auth.hash_password(new_password)
-    db.commit()
-    usage_service.bump(db, user.id, "password_change")
+    _apply_password_change(db, user, new_password)
     return RedirectResponse("/settings?saved=1", status_code=303)
 
 
@@ -326,6 +338,10 @@ def api_get_settings(db: Session = Depends(db_session),
         "privacy_version": PRIVACY_VERSION,
         "consent_deadline": CONSENT_DEADLINE.isoformat(),
         "consent_deadline_passed": today > CONSENT_DEADLINE,
+        # karta hasła w /mobile: czy konto ma hasło (False = konto z Google,
+        # formularz ustawia pierwsze) i czy hasła w ogóle są w tym trybie
+        "has_password": user.password_hash is not None,
+        "password_enabled": AUTH_MODE != "oidc",
     }
 
 
@@ -362,4 +378,25 @@ def api_save_llm(data: LlmKeysIn, background: BackgroundTasks,
         settings_service.set_setting(db, user.id, "anthropic_api_key", data.anthropic_api_key.strip())
     usage_service.bump(db, user.id, "llm_key_save")
     background.add_task(meal_queue.process_queue, user.id)
+    return {"ok": True}
+
+
+class PasswordChangeIn(BaseModel):
+    old_password: str = ""       # puste przy ustawianiu pierwszego hasła (konto Google)
+    new_password: str
+    password2: str
+
+
+@router.post("/api/settings/password")
+def api_settings_password(data: PasswordChangeIn, db: Session = Depends(db_session),
+                          user: User = Depends(auth.current_user)):
+    """Zmiana hasła z widoku /mobile (SPA). Walidacja wspólna z formularzem
+    /settings/password; błędy wracają jako `detail` z kodem 400."""
+    if AUTH_MODE == "oidc":
+        raise HTTPException(404)
+    problem = _password_change_problem(user, data.old_password,
+                                       data.new_password, data.password2)
+    if problem:
+        raise HTTPException(400, PASSWORD_ERRORS[problem])
+    _apply_password_change(db, user, data.new_password)
     return {"ok": True}
