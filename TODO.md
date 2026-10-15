@@ -78,17 +78,6 @@ Link resetu na e-mail: tabela tokenów, szablon maila, wysyłka (Gmail SMTP
 relay albo usługa), SPF/DKIM na `krasnal.cc`, test że nie ląduje w spamie.
 Większość pracy poza kodem appki.
 
-## Zmiana hasła z poziomu Ustawień (2/10)
-
-Karta w `/settings` (stare / nowe / powtórz) + `POST /settings/password` na
-`auth.verify_password` i `auth.hash_password`, wzorzec błędów jak w rejestracji.
-
-## Skrypt na serwerze do resetu hasła (1/10)
-
-`scripts/reset_password.py <email>` wzorem `scripts/adopt_local_user.py` —
-pyta o hasło w terminalu (żeby nie trafiło do historii bash). Dla testera,
-który zapomni hasła, dopóki nie ma resetu mailem.
-
 ## Nazwa pakietu i domena pod wydanie mobilne (1/10) — WYMAGANIA.md §10.3
 
 Zadanie administracyjne, bez kodu: identyfikator aplikacji (np.

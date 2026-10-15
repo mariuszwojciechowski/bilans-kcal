@@ -14,6 +14,11 @@ początek odpowiedniego pliku w `archive/` (najnowsze u góry). Format wpisu
 w archiwum: tytuł + **maksymalnie 5 punktów**; szczegóły implementacji zostają
 w komunikacie commita, nie tutaj.
 
+## Konto: hasła — [archive/done-konto-haslo.md](archive/done-konto-haslo.md)
+
+- Zmiana hasła w Ustawieniach: karta + `POST /settings/password`; konta Google ustawiają pierwsze hasło; `password_change` w statystykach (27.3.0)
+- Skrypt serwerowy `scripts/reset_password.py <email>` — hasło przez `getpass`, nie w historii basha (27.3.0)
+
 ## Scalenie z upstreamem — [archive/done-v27-upstream-merge.md](archive/done-v27-upstream-merge.md)
 
 - Logowanie Google: otwarta rejestracja (`*` w `ALLOWED_EMAILS`) z limitem kont `FIT_KRASNAL_MAX_USERS` = 20 (27.2.0)
