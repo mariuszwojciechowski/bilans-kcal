@@ -110,6 +110,27 @@
   {% endif %}
 </section>
 
+{% if auth_mode != "oidc" %}
+<section class="card">
+  <h2>{{ "Zmiana hasła" if has_password else "Ustaw hasło" }}</h2>
+  <form method="post" action="/settings/password">
+    {% if has_password %}
+    <label>Obecne hasło</label>
+    <input name="old_password" type="password" required autocomplete="current-password">
+    {% else %}
+    <p class="muted" style="margin-top:0">Twoje konto loguje się przez Google — możesz
+    dodatkowo ustawić hasło, żeby wchodzić też e-mailem i hasłem.</p>
+    {% endif %}
+    <label>Nowe hasło</label>
+    <input name="new_password" type="password" required minlength="8" autocomplete="new-password">
+    <label>Powtórz nowe hasło</label>
+    <input name="password2" type="password" required minlength="8" autocomplete="new-password">
+    <button class="primary" style="margin-top:10px">{{ "Zmień hasło" if has_password else "Ustaw hasło" }}</button>
+    <p class="muted">Min. 8 znaków. Zmiana nie wylogowuje pozostałych urządzeń.</p>
+  </form>
+</section>
+{% endif %}
+
 <section class="card">
   <h2>Styl życia (zakresy makroskładników)</h2>
   <form method="post" action="/settings/lifestyle">

@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .. import auth
-from ..config import ADMIN_EMAIL, CONSENT_DEADLINE, PRIVACY_VERSION, STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_REDIRECT_URI
+from ..config import ADMIN_EMAIL, AUTH_MODE, CONSENT_DEADLINE, PRIVACY_VERSION, STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_REDIRECT_URI
 from ..db import db_session
 from ..deps import STATIC_DIR, templates
 from ..models import DailySummary, PendingMeal, User, UserProfile
@@ -25,6 +25,15 @@ from ..services.macros import lifestyle_options
 from ..services.timeago import humanize_ago
 
 router = APIRouter()
+
+# Kody błędów formularza hasła → czytelny tekst na banerze /settings
+# (poza nimi `error` pokazuje nazwę wyjątku, jak dotychczas).
+PASSWORD_ERRORS = {
+    "bad_password": "nieprawidłowe obecne hasło",
+    "mismatch": "nowe hasła nie są identyczne",
+    "short": f"nowe hasło za krótkie (min. {auth.MIN_PASSWORD_LEN} znaków)",
+    "long": f"nowe hasło za długie (max {auth.MAX_PASSWORD_BYTES} bajtów)",
+}
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -65,7 +74,10 @@ def settings_page(request: Request, db: Session = Depends(db_session),
             "consent_granted": consent_row is not None,
             "consent_granted_at": consent_row.granted_at if consent_row else None,
             "privacy_version": PRIVACY_VERSION,
-            "saved": saved, "mfa": mfa, "error": error,
+            "saved": saved, "mfa": mfa,
+            "error": PASSWORD_ERRORS.get(error, error) if error else None,
+            "has_password": user.password_hash is not None,
+            "auth_mode": AUTH_MODE,
             "has_logo": (STATIC_DIR / "logo.png").exists(),
         },
     )
@@ -129,6 +141,26 @@ def settings_goal(target_weight_kg: float = Form(...), db: Session = Depends(db_
     profile.target_weight_kg = target_weight_kg
     db.commit()
     usage_service.bump(db, user.id, "goal_save")
+    return RedirectResponse("/settings?saved=1", status_code=303)
+
+
+@router.post("/settings/password")
+def settings_password(old_password: str = Form(""), new_password: str = Form(...),
+                      password2: str = Form(...), db: Session = Depends(db_session),
+                      user: User = Depends(auth.current_user)):
+    """Zmiana hasła z Ustawień. Konto założone przez Google (bez hasła)
+    może tu ustawić pierwsze — wtedy pole „obecne hasło" nie istnieje."""
+    if AUTH_MODE == "oidc":
+        raise HTTPException(404)  # jak auth._password_routes_enabled: hasła nie ma
+    if (user.password_hash is not None
+            and not auth.verify_password(old_password, user.password_hash)):
+        return RedirectResponse("/settings?error=bad_password", status_code=303)
+    problem = auth.password_problem(new_password, password2)
+    if problem:
+        return RedirectResponse(f"/settings?error={problem}", status_code=303)
+    user.password_hash = auth.hash_password(new_password)
+    db.commit()
+    usage_service.bump(db, user.id, "password_change")
     return RedirectResponse("/settings?saved=1", status_code=303)
 
 
