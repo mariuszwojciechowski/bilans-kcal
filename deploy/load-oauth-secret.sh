@@ -1,29 +1,38 @@
 #!/usr/bin/env bash
-# Wczytuje klienta OAuth Google z Secret Manager do /etc/fit-krasnal/env
-# i restartuje usługę. Uruchamiać na VM jako root; gcloud działa tam z konta
-# usługi VM (bez logowania), projekt bierze z serwera metadanych.
+# Wczytuje sekret z Secret Manager do /etc/fit-krasnal/env i restartuje usługę.
+# Uruchamiać na VM jako root; gcloud działa tam z konta usługi VM (bez
+# logowania), projekt bierze z serwera metadanych.
 #
 #   sudo install -o root -g root -m 0755 deploy/load-oauth-secret.sh /usr/local/sbin/load-oauth-secret
-#   sudo /usr/local/sbin/load-oauth-secret [nazwa-sekretu]   # domyślnie fit-krasnal-oauth
+#   sudo /usr/local/sbin/load-oauth-secret [nazwa-sekretu] [KLUCZ...]
+#     domyślnie: fit-krasnal-oauth FIT_KRASNAL_GOOGLE_CLIENT_ID FIT_KRASNAL_GOOGLE_CLIENT_SECRET
+#     klucz Resend: fit-krasnal-resend-key FIT_KRASNAL_RESEND_KEY
 #
 # Root uruchamia KOPIĘ spoza checkoutu, bo /opt/fit-krasnal należy do
 # użytkownika usługi (git pull) — skrypt z checkoutu mógłby zostać podmieniony.
 #
-# Payload wersji sekretu to dokładnie dwie linie (nic więcej):
+# Payload wersji sekretu to dokładnie tyle linii, ile podano KLUCZY (nic
+# więcej), każda w formacie KLUCZ=<znaki [A-Za-z0-9._-]>; np. dla klienta OAuth:
 #   FIT_KRASNAL_GOOGLE_CLIENT_ID=...
 #   FIT_KRASNAL_GOOGLE_CLIENT_SECRET=...
 # Wartości nigdy nie trafiają do zmiennej powłoki ani na stdout/stderr:
 # gcloud (tylko z poświadczeń serwera metadanych, bez ~/.config/gcloud roota)
 # pisze prosto do pliku tymczasowego 0600 na tmpfs, skrypt sprawdza tylko
-# kształt (2 linie, każdy klucz raz, znaki [A-Za-z0-9._-]) i dopiero wtedy
-# podmienia stare linie w pliku env. Nie uruchamiać pod `bash -x`.
+# kształt i dopiero wtedy podmienia stare linie w pliku env. Nie uruchamiać
+# pod `bash -x`.
 set -euo pipefail
 
 SECRET_NAME="${1:-fit-krasnal-oauth}"
+if [ "$#" -gt 0 ]; then shift; fi
+if [ "$#" -eq 0 ]; then
+  set -- FIT_KRASNAL_GOOGLE_CLIENT_ID FIT_KRASNAL_GOOGLE_CLIENT_SECRET
+fi
+NKEYS="$#"
+OLDIFS="$IFS"; IFS='|'; joined="$*"; IFS="$OLDIFS"
+EXCL="${joined//|/\\|}"   # K1\|K2 — alternacja BRE (GNU grep na VM), jak w pierwotnym skrypcie
+KEYS="${joined//|/, }"    # K1, K2 — do komunikatów
 ENV_FILE="${ENV_FILE:-/etc/fit-krasnal/env}"
 SERVICE="${SERVICE:-fit-krasnal}"
-KEY_ID="FIT_KRASNAL_GOOGLE_CLIENT_ID"
-KEY_SECRET="FIT_KRASNAL_GOOGLE_CLIENT_SECRET"
 
 [ "$(id -u)" -eq 0 ] || { echo "uruchom jako root (sudo)" >&2; exit 1; }
 [ -f "$ENV_FILE" ] || { echo "brak $ENV_FILE" >&2; exit 1; }
@@ -47,18 +56,23 @@ CLOUDSDK_CONFIG="$gcloud_cfg" gcloud secrets versions access latest \
 [ -s "$payload" ] && [ -n "$(tail -c1 "$payload")" ] && printf '\n' >> "$payload"
 
 count() { grep -c "$1" "$2" || [ $? -eq 1 ]; }   # 0 trafień → "0", błąd odczytu → exit
-VAL='[A-Za-z0-9._-]\+'   # ID: …apps.googleusercontent.com, sekret: GOCSPX-…; wyklucza cudzysłowy i autokorektę
+VAL='[A-Za-z0-9._-]\+'   # ID: …apps.googleusercontent.com, sekret: GOCSPX-…, Resend: re_…; wyklucza cudzysłowy i autokorektę
 lines="$(wc -l < "$payload")"
-id_ok="$(count "^${KEY_ID}=${VAL}$" "$payload")"
-secret_ok="$(count "^${KEY_SECRET}=${VAL}$" "$payload")"
-if [ "$lines" != "2" ] || [ "$id_ok" != "1" ] || [ "$secret_ok" != "1" ]; then
-  echo "sekret $SECRET_NAME: oczekiwano dokładnie 2 linii ${KEY_ID}=… i ${KEY_SECRET}=… (znaki [A-Za-z0-9._-]);" \
-       "jest linii: $lines, ID: $id_ok, SECRET: $secret_ok — nic nie zmieniam" >&2
+shape_ok=1
+for key in "$@"; do
+  hits="$(count "^${key}=${VAL}$" "$payload")"
+  if [ "$hits" != "1" ]; then
+    echo "sekret $SECRET_NAME: linii ${key}=… jest $hits (oczekiwano 1) — nic nie zmieniam" >&2
+    shape_ok=0
+  fi
+done
+if [ "$shape_ok" -ne 1 ] || [ "$lines" -ne "$NKEYS" ]; then
+  echo "sekret $SECRET_NAME: oczekiwano dokładnie $NKEYS linii: $KEYS (znaki [A-Za-z0-9._-]); jest linii: $lines — nic nie zmieniam" >&2
   exit 1
 fi
 
 rc=0
-grep -v "^\(${KEY_ID}\|${KEY_SECRET}\)=" "$ENV_FILE" > "$new" || rc=$?
+grep -v "^\(${EXCL}\)=" "$ENV_FILE" > "$new" || rc=$?
 [ "$rc" -le 1 ] || { echo "grep na $ENV_FILE zwrócił $rc" >&2; exit 1; }
 [ -s "$new" ] && [ -n "$(tail -c1 "$new")" ] && printf '\n' >> "$new"
 cat "$payload" >> "$new"
@@ -66,7 +80,7 @@ chown --reference="$ENV_FILE" "$new"
 chmod --reference="$ENV_FILE" "$new"
 mv -f "$new" "$ENV_FILE"
 
-echo "linie ID/SECRET w $ENV_FILE: $(count "^\(${KEY_ID}\|${KEY_SECRET}\)=." "$ENV_FILE") (oczekiwane 2)"
+echo "linie $KEYS w $ENV_FILE: $(count "^\(${EXCL}\)=." "$ENV_FILE") (oczekiwane $NKEYS)"
 systemctl restart "$SERVICE"
 sleep 2
 systemctl is-active --quiet "$SERVICE" || { echo "usługa $SERVICE nie działa po restarcie — journalctl -u $SERVICE" >&2; exit 1; }
