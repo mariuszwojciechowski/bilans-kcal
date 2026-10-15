@@ -412,6 +412,22 @@ Mail z linkiem resetu hasła (i na razie tylko on) wysyła
    `resend_secret_load_command` — klucz, w odróżnieniu od ręcznego wpisu
    w env, nie przepada. Opcjonalnie `FIT_KRASNAL_MAIL_FROM` w env na VM
    (domyślnie `Fit Krasnal <noreply@krasnal.cc>`).
+
+   **Na obecnej produkcji (2026-10-15) sekret powstał bez Terraforma** —
+   Terraform nigdy nie był aplikowany do projektu (firewalle są
+   default-only), a API Secret Managera było wyłączone. Zrobiono
+   imperatywnie (projekt `project-be074ebf-0ef2-4d55-979`):
+   `gcloud services enable secretmanager.googleapis.com`, potem
+   `gcloud secrets create fit-krasnal-resend-key --replication-policy=automatic`
+   oraz `add-iam-policy-binding` (`secretAccessor`) dla konta usługi VM.
+   Wartość przeniesiono rurą z env VM (bez wyświetlania):
+   `gcloud compute ssh … --command "sudo grep '^FIT_KRASNAL_RESEND_KEY=' /etc/fit-krasnal/env" | gcloud secrets versions add fit-krasnal-resend-key --data-file=-`.
+   Konta VM **wymaga scope'a `cloud-platform`** — konsolowe defaulty
+   nie czytają sekretów (`ACCESS_TOKEN_SCOPE_INSUFFICIENT`); zmiana scope
+   = stop VM → `set-service-account --scopes cloud-platform` → start.
+   Gdyby Terraform był kiedyś aplikowany, najpierw zaimportować sekret
+   (inaczej apply polegnie na „already exists"):
+   `terraform import google_secret_manager_secret.resend projects/763371777047/secrets/fit-krasnal-resend-key`.
 3. **Definicja „gotowe".** Domena *Verified* w dashboardzie + w Gmailu
    („Pokaż oryginał") `SPF: PASS` i `DKIM: PASS` dla krasnal.cc. Test
    dostarczalności: mail-tester.com (cel ≥ 9/10). **Dopóki domena nie ma

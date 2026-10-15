@@ -19,6 +19,11 @@ Najnowsze u góry.
   z Terraforma wystarczy output `resend_secret_load_command`.
 - Przetestowany atrapami gcloud/systemctl: ładowanie, idempotencja, rotacja,
   odrzucenia (nadmiarowa linia, zły charset, duplikat klucza).
+- Na produkcji (2026-10-15): API Secret Manager świeżo włączony, sekret
+  i `secretAccessor` utworzone gcloud-em (Terraform nigdy nie aplikowany —
+  komendy import w deploy/README), scope VM →`cloud-platform` (stop/start
+  za zgodą właściciela), wartość przeniesiona rurą VM→Secret Manager bez
+  wyświetlania.
 
 ## „Nie pamiętam hasła" — reset mailem przez Resend (28.0.0)
 

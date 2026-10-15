@@ -123,7 +123,7 @@ env (np. z `setup-vm.sh`) **nadpisuje** domyślną, nie przywraca jej.
 | `FIT_KRASNAL_SECRET_KEY` | `SECRET_KEY` | podpis ciasteczka sesji | `main.py`, `services/crypto.py`, `services/usage.py` |
 | `FIT_KRASNAL_DEBUG` | `DEBUG` | dev po http (ciasteczko bez HTTPS) | `main.py`, `services/crypto.py`, `services/usage.py` |
 | `FIT_KRASNAL_INVITE_CODE` | `INVITE_CODE` | kod zaproszenia do rejestracji | `routers/auth.py` |
-| `FIT_KRASNAL_RESEND_KEY` | `RESEND_API_KEY` | klucz API Resend (mail z linkiem resetu hasła; brak = link tylko w logach) | `services/mail.py` |
+| `FIT_KRASNAL_RESEND_KEY` | `RESEND_API_KEY` | klucz API Resend (mail z linkiem resetu hasła; brak = link tylko w logach) — na VM ładuje go `load-oauth-secret.sh` z Secret Managera (sekret `fit-krasnal-resend-key`) | `services/mail.py` |
 | `FIT_KRASNAL_MAIL_FROM` | `MAIL_FROM` | nadawca maili (domyślnie `Fit Krasnal <noreply@krasnal.cc>`) | `services/mail.py` |
 | `FIT_KRASNAL_ENC_KEY` | `ENC_KEY` | klucz Fernet sekretów usera | `main.py`, `services/crypto.py` |
 | `FIT_KRASNAL_LLM` | `LLM_BACKEND` | wybór backendu LLM | `services/meal_vision.py` |
